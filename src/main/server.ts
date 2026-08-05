@@ -9,7 +9,7 @@ export const SERVER_PORT = 47800;
 
 let server: ServerType | undefined;
 
-export function startServer(): void {
+function buildApp(): Hono {
   const app = new Hono();
 
   app.get("/api/health", (c) => c.json({ ok: true }));
@@ -20,7 +20,20 @@ export function startServer(): void {
     return c.json({ ok: true });
   });
 
+  return app;
+}
+
+export function startServer(attempt = 0): void {
+  const app = buildApp();
   server = serve({ fetch: app.fetch, port: SERVER_PORT, hostname: "127.0.0.1" });
+  // Dev watch-restarts overlap with the old instance for a moment; retry
+  // until the previous process releases the port.
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE" && attempt < 10) {
+      server?.close();
+      setTimeout(() => startServer(attempt + 1), 500);
+    }
+  });
 }
 
 export function stopServer(): void {

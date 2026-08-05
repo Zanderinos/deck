@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConvMessage, IndexProgress, SearchHit } from "../../../main/indexer.js";
+import type { GithubHit, RepoHit } from "../../../main/providers.js";
 import { openTerminalTab } from "../lib/bus.js";
 
 function ago(ts: number | null): string {
@@ -30,6 +31,33 @@ function Snippet({ text }: { text: string }) {
   );
 }
 
+function FallbackHeader({
+  label,
+  state,
+  count,
+  onFetch,
+}: {
+  label: string;
+  state: unknown;
+  count?: number;
+  onFetch: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-between border-t border-edge px-2.5 pb-1 pt-2">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-dim/70">
+        {label}
+        {count != null ? ` · ${count}` : ""}
+      </span>
+      {state === undefined && (
+        <button onClick={onFetch} className="text-[10px] text-accent hover:underline">
+          search →
+        </button>
+      )}
+      {state === null && <span className="text-[10px] text-dim">searching…</span>}
+    </div>
+  );
+}
+
 export function SearchView() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -45,6 +73,8 @@ export function SearchView() {
   }, []);
 
   useEffect(() => {
+    setRepoHits(undefined);
+    setGhHits(undefined);
     const t = setTimeout(() => {
       if (!query.trim()) {
         setHits([]);
@@ -54,6 +84,20 @@ export function SearchView() {
     }, 150);
     return () => clearTimeout(t);
   }, [query]);
+
+  // Fallback tiers, fetched on demand so gh rate limits and big repo greps
+  // only run when asked for. `undefined` = not fetched yet, `null` = loading.
+  const [repoHits, setRepoHits] = useState<RepoHit[] | null | undefined>();
+  const [ghHits, setGhHits] = useState<GithubHit[] | null | undefined>();
+
+  const fetchRepos = () => {
+    setRepoHits(null);
+    void window.deck.search.repos(query).then(setRepoHits);
+  };
+  const fetchGithub = () => {
+    setGhHits(null);
+    void window.deck.search.github(query).then(setGhHits);
+  };
 
   // One row per session, keeping its best-ranked hit.
   const grouped = useMemo(() => {
@@ -115,6 +159,54 @@ export function SearchView() {
               </div>
             </button>
           ))}
+
+          {query.trim() !== "" && (
+            <>
+              <FallbackHeader
+                label="Repos"
+                state={repoHits}
+                count={repoHits?.length}
+                onFetch={fetchRepos}
+              />
+              {repoHits?.map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() =>
+                    openTerminalTab({ cwd: h.file.slice(0, h.file.lastIndexOf("/")) })
+                  }
+                  title="Open a terminal at this file's directory"
+                  className="block w-full rounded-md px-2.5 py-1.5 text-left hover:bg-edge/60"
+                >
+                  <div className="truncate font-mono text-[11px] text-ink">
+                    {h.file.replace(`${h.root}/`, "")}:{h.line}
+                  </div>
+                  <div className="truncate font-mono text-[10px] text-dim">{h.text}</div>
+                </button>
+              ))}
+
+              <FallbackHeader
+                label="GitHub"
+                state={ghHits}
+                count={ghHits?.length}
+                onFetch={fetchGithub}
+              />
+              {ghHits?.map((h, i) => (
+                <button
+                  key={i}
+                  onClick={() => window.open(h.url)}
+                  title="Open on GitHub"
+                  className="block w-full rounded-md px-2.5 py-1.5 text-left hover:bg-edge/60"
+                >
+                  <div className="truncate text-[11px] text-ink">
+                    <span className="text-dim">{h.kind === "pr" ? "PR" : "issue"}</span> {h.title}
+                  </div>
+                  <div className="truncate text-[10px] text-dim">
+                    {h.repository}#{h.number} · {h.state.toLowerCase()}
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">

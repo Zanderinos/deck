@@ -1,6 +1,22 @@
 import { ipcMain, type WebContents } from "electron";
 import pty, { type IPty } from "node-pty";
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
+import { getSettings } from "./settings.js";
+
+function expandHome(p: string): string {
+  return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
+}
+
+function startCwd(requested?: string): string {
+  for (const candidate of [requested, getSettings().defaultCwd]) {
+    if (!candidate) continue;
+    const dir = expandHome(candidate);
+    if (fs.existsSync(dir)) return dir;
+  }
+  return os.homedir();
+}
 
 interface Term {
   proc: IPty;
@@ -27,7 +43,7 @@ export function registerPtyIpc(): void {
       name: "xterm-256color",
       cols: 80,
       rows: 24,
-      cwd: opts.cwd ?? os.homedir(),
+      cwd: startCwd(opts.cwd),
       env: {
         ...process.env,
         TERM_PROGRAM: "deck",

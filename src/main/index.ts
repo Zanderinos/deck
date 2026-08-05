@@ -8,6 +8,7 @@ import {
   shell,
   Tray,
 } from "electron";
+import fs from "node:fs";
 import path from "node:path";
 import type { DeckSettings } from "../shared/settings.js";
 import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
@@ -18,8 +19,9 @@ import {
   sessionMessages,
   startIndexer,
 } from "./indexer.js";
+import { searchGithub, searchRepos } from "./providers.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
-import { startServer } from "./server.js";
+import { startServer, stopServer } from "./server.js";
 import { listSessions, onSessionsChanged } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
@@ -27,8 +29,24 @@ let win: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let registeredHotkey: string | undefined;
 
-// Single instance: a second `deck` just summons the existing window.
-if (!app.requestSingleInstanceLock()) {
+// Surface main-process crashes instead of dying silently.
+function logFatal(kind: string, err: unknown): void {
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath("userData"), "deck-main.log"),
+      `${new Date().toISOString()} ${kind}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+    );
+  } catch {
+    // nothing left to do
+  }
+}
+process.on("uncaughtException", (err) => logFatal("uncaught", err));
+process.on("unhandledRejection", (err) => logFatal("unhandled-rejection", err));
+
+// Single instance: a second `deck` just summons the existing window. Dev-mode
+// watch restarts race on the lock and would kill the fresh instance, so the
+// lock only applies to packaged builds.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => showWindow());
@@ -127,6 +145,8 @@ app.whenReady().then(() => {
   ipcMain.handle("index:progress", () => getIndexProgress());
   ipcMain.handle("search:query", (_e, q: string) => searchConversations(q));
   ipcMain.handle("search:session", (_e, id: string) => sessionMessages(id));
+  ipcMain.handle("search:repos", (_e, q: string) => searchRepos(q));
+  ipcMain.handle("search:github", (_e, q: string) => searchGithub(q));
   onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("hooks:installed", () => hooksInstalled());
@@ -148,4 +168,9 @@ app.whenReady().then(() => {
 // deck lives in the tray; closing the window must not quit the app.
 app.on("window-all-closed", () => {});
 
-app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("will-quit", () => {
+  // An instance that aborts before ready (e.g. a dev restart race) must not
+  // touch globalShortcut — Electron throws pre-ready.
+  if (app.isReady()) globalShortcut.unregisterAll();
+  stopServer();
+});

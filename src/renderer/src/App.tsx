@@ -124,6 +124,38 @@ function SettingsView({
           }
         }}
       />
+
+      <label className="mt-4 block text-xs text-dim">New terminals start in</label>
+      <input
+        placeholder="~"
+        className="mt-1 w-full rounded-md border border-edge bg-panel px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
+        defaultValue={settings.defaultCwd}
+        onBlur={async (e) => {
+          const v = e.target.value.trim() || "~";
+          if (v !== settings.defaultCwd) {
+            onChange(await window.deck.updateSettings({ defaultCwd: v }));
+          }
+        }}
+      />
+
+      <label className="mt-4 block text-xs text-dim">
+        Repo roots — directories searched by the repos fallback (one per line)
+      </label>
+      <textarea
+        rows={3}
+        placeholder="~/www"
+        className="mt-1 w-full resize-none rounded-md border border-edge bg-panel px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
+        defaultValue={settings.repoRoots.join("\n")}
+        onBlur={async (e) => {
+          const roots = e.target.value
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (roots.join("\n") !== settings.repoRoots.join("\n")) {
+            onChange(await window.deck.updateSettings({ repoRoots: roots }));
+          }
+        }}
+      />
     </div>
   );
 }
