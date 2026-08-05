@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0c0c0e;
+  --color-panel: #131316;
+  --color-edge: #26262b;
+  --color-ink: #e6e6e9;
+  --color-dim: #8a8a93;
+  --color-accent: #7aa2f7;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* The hiddenInset title bar leaves the top strip draggable. */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.drag-region button,
+.drag-region input {
+  -webkit-app-region: no-drag;
+}
