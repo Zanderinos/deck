@@ -116,7 +116,25 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
       if (startAt >= page.total || page.issues.length === 0) break;
     }
 
-    const cache: BoardCache = { boardName: board.name, columns, issues, at: Date.now() };
+    // The issue endpoint also returns the kanban backlog, which does not
+    // belong on the board (it inflates the first column). Subtract it.
+    const backlog = new Set<string>();
+    for (let startAt = 0; startAt < 2000; ) {
+      const page = await request<AgileIssuePage>(
+        `/rest/agile/1.0/board/${c.boardId}/backlog?startAt=${startAt}&maxResults=100&fields=status`,
+      );
+      for (const i of page.issues) backlog.add(i.key);
+      startAt += page.issues.length;
+      if (startAt >= page.total || page.issues.length === 0) break;
+    }
+    const boardIssues = issues.filter((i) => !backlog.has(i.key));
+
+    const cache: BoardCache = {
+      boardName: board.name,
+      columns,
+      issues: boardIssues,
+      at: Date.now(),
+    };
     kvSet(CACHE_KEY, cache);
     for (const cb of listeners) cb(cache);
     return cache;
