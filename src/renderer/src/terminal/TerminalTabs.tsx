@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { onOpenTerminalTab } from "../lib/bus.js";
 import { SessionsPanel } from "./SessionsPanel.js";
 import { TerminalPane } from "./TerminalPane.js";
 
@@ -43,6 +44,8 @@ export function TerminalTabs() {
   }, []);
 
   useEffect(() => window.deck.term.onExit((id) => closeTab(id, false)), [closeTab]);
+
+  useEffect(() => onOpenTerminalTab((detail) => void newTab(detail)), [newTab]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

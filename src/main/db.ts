@@ -20,6 +20,33 @@ const migrations: string[] = [
     started_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS indexed_files (
+    path TEXT PRIMARY KEY,
+    offset INTEGER NOT NULL,
+    mtime INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS conv_sessions (
+    session_id TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    cwd TEXT,
+    title TEXT,
+    started_at INTEGER,
+    last_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS conv_messages (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    ts INTEGER,
+    text TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_conv_messages_session ON conv_messages(session_id);
+  CREATE VIRTUAL TABLE IF NOT EXISTS conv_fts USING fts5(
+    text, content='conv_messages', content_rowid='id', tokenize='porter unicode61'
+  );
+  CREATE TRIGGER IF NOT EXISTS conv_messages_ai AFTER INSERT ON conv_messages BEGIN
+    INSERT INTO conv_fts(rowid, text) VALUES (new.id, new.text);
+  END;`,
 ];
 
 export function openDb(): Database.Database {

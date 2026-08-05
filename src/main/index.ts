@@ -11,6 +11,13 @@ import {
 import path from "node:path";
 import type { DeckSettings } from "../shared/settings.js";
 import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
+import {
+  getIndexProgress,
+  onIndexProgress,
+  searchConversations,
+  sessionMessages,
+  startIndexer,
+} from "./indexer.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { startServer } from "./server.js";
 import { listSessions, onSessionsChanged } from "./sessions.js";
@@ -115,6 +122,11 @@ function createTray(): void {
 app.whenReady().then(() => {
   registerPtyIpc();
   startServer();
+  startIndexer();
+  onIndexProgress((p) => win?.webContents.send("index:progress", p));
+  ipcMain.handle("index:progress", () => getIndexProgress());
+  ipcMain.handle("search:query", (_e, q: string) => searchConversations(q));
+  ipcMain.handle("search:session", (_e, id: string) => sessionMessages(id));
   onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("hooks:installed", () => hooksInstalled());

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
@@ -6,6 +7,16 @@ const api = {
   getSettings: (): Promise<DeckSettings> => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: Partial<DeckSettings>): Promise<DeckSettings> =>
     ipcRenderer.invoke("settings:update", patch),
+  search: {
+    query: (q: string): Promise<SearchHit[]> => ipcRenderer.invoke("search:query", q),
+    session: (id: string): Promise<ConvMessage[]> => ipcRenderer.invoke("search:session", id),
+    progress: (): Promise<IndexProgress> => ipcRenderer.invoke("index:progress"),
+    onProgress: (cb: (p: IndexProgress) => void): (() => void) => {
+      const listener = (_e: unknown, p: IndexProgress) => cb(p);
+      ipcRenderer.on("index:progress", listener);
+      return () => ipcRenderer.removeListener("index:progress", listener);
+    },
+  },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
     onChanged: (cb: (sessions: AgentSession[]) => void): (() => void) => {

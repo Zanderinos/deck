@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { DeckSettings } from "../../shared/settings.js";
+import { SearchView } from "./search/SearchView.js";
 import { TerminalTabs } from "./terminal/TerminalTabs.js";
+import { onOpenTerminalTab } from "./lib/bus.js";
 
 type View = "terminal" | "search" | "board" | "settings";
 
@@ -17,6 +19,20 @@ export default function App() {
 
   useEffect(() => {
     window.deck.getSettings().then(setSettings);
+  }, []);
+
+  // Opening a tab from search (or anywhere) lands you back in the terminal.
+  useEffect(() => onOpenTerminalTab(() => setView("terminal")), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === "p") {
+        e.preventDefault();
+        setView((v) => (v === "search" ? "terminal" : "search"));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   return (
@@ -41,7 +57,12 @@ export default function App() {
         <div className={`min-h-0 flex-1 ${view === "terminal" ? "" : "hidden"}`}>
           <TerminalTabs />
         </div>
-        {view !== "terminal" && (
+        {view === "search" && (
+          <div className="min-h-0 flex-1">
+            <SearchView />
+          </div>
+        )}
+        {view !== "terminal" && view !== "search" && (
           <>
             <header className="h-10 shrink-0 border-b border-edge drag-region" />
             <section className="flex flex-1 items-center justify-center">
