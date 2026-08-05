@@ -139,6 +139,8 @@ async function indexFile(filePath: string): Promise<void> {
   })();
 }
 
+// Only top-level session transcripts: <session>/subagents/agent-*.jsonl are
+// subagent runs, skipped for the same reason sidechain lines are.
 function listTranscripts(): string[] {
   if (!fs.existsSync(PROJECTS_DIR)) return [];
   const files: string[] = [];
