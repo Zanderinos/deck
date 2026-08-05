@@ -22,7 +22,8 @@ import {
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
-import { listSessions, onSessionsChanged } from "./sessions.js";
+import { getBoardCache, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
+import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
 let win: BrowserWindow | undefined;
@@ -160,6 +161,11 @@ app.whenReady().then(() => {
   ipcMain.handle("repos:list", () => listRepos());
   onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
+  ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
+  startBoardSync();
+  onBoardChanged((b) => win?.webContents.send("board:changed", b));
+  ipcMain.handle("board:get", () => getBoardCache());
+  ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
   ipcMain.handle("hooks:installed", () => hooksInstalled());
   ipcMain.handle("hooks:install", () => installClaudeHooks());
   ipcMain.handle("settings:get", () => getSettings());

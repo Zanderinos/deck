@@ -101,17 +101,17 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
         {recent.map((s) => {
           const glyph = statusGlyph[s.status];
           return (
-            <button
+            <div
               key={s.claude_session_id}
               onClick={() => {
                 void newTab({ cwd: s.cwd, command: `claude --resume ${s.claude_session_id}` });
                 onView("terminal");
               }}
               title="Resume in a new session"
-              className="flex gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left hover:bg-card2"
+              className="group flex cursor-pointer gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left hover:bg-card2"
             >
               <span className={`text-[11px] leading-[18px] ${glyph.color}`}>{glyph.dot}</span>
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs text-body">
                   {s.title ?? project(s.cwd)}
                 </span>
@@ -120,7 +120,17 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
                   {s.status === "needs_input" ? " · needs input" : ""}
                 </span>
               </span>
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void window.deck.sessions.remove(s.claude_session_id);
+                }}
+                title="Remove from list"
+                className="hidden self-start text-dim hover:text-ink group-hover:block"
+              >
+                ×
+              </button>
+            </div>
           );
         })}
       </div>

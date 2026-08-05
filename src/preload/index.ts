@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
+import type { BoardCache } from "../main/jira.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
@@ -21,8 +22,18 @@ const api = {
       return () => ipcRenderer.removeListener("index:progress", listener);
     },
   },
+  board: {
+    get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
+    sync: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:sync"),
+    onChanged: (cb: (b: BoardCache) => void): (() => void) => {
+      const listener = (_e: unknown, b: BoardCache) => cb(b);
+      ipcRenderer.on("board:changed", listener);
+      return () => ipcRenderer.removeListener("board:changed", listener);
+    },
+  },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke("sessions:remove", id),
     onChanged: (cb: (sessions: AgentSession[]) => void): (() => void) => {
       const listener = (_e: unknown, sessions: AgentSession[]) => cb(sessions);
       ipcRenderer.on("sessions:changed", listener);

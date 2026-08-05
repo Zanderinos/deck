@@ -36,6 +36,11 @@ function notify(): void {
   for (const cb of listeners) cb();
 }
 
+export function removeSession(id: string): void {
+  openDb().prepare("DELETE FROM agent_sessions WHERE claude_session_id = ?").run(id);
+  notify();
+}
+
 export function listSessions(limit = 100): AgentSession[] {
   return openDb()
     .prepare("SELECT * FROM agent_sessions ORDER BY updated_at DESC LIMIT ?")
@@ -74,6 +79,15 @@ export function applyHook(payload: HookPayload, termId: string | null): void {
     transcript: payload.transcript_path ?? null,
     now,
   });
+
+  // One live session per terminal: a new session id in the same deck tab
+  // supersedes whatever ran there before (e.g. `claude --resume` forks a new
+  // session id and would otherwise leave the old row dangling forever).
+  if (termId) {
+    db.prepare(
+      "UPDATE agent_sessions SET status = 'ended', updated_at = ? WHERE term_id = ? AND claude_session_id != ?",
+    ).run(now, termId, id);
+  }
 
   // The first prompt of a session becomes its title.
   if (payload.hook_event_name === "UserPromptSubmit" && payload.prompt) {

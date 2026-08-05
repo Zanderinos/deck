@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DeckSettings } from "../../shared/settings.js";
 import { AgentsView } from "./agents/AgentsView.js";
+import { BoardView } from "./board/BoardView.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
 import { onOpenTerminalTab } from "./lib/bus.js";
@@ -77,25 +78,13 @@ function Shell() {
             </div>
           )}
           {view === "agents" && <AgentsView />}
-          {view === "board" && <BoardPlaceholder />}
+          {view === "board" && <BoardView />}
           {view === "settings" && <SettingsView />}
         </main>
       </div>
       {searchOpen && (
         <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} />
       )}
-    </div>
-  );
-}
-
-function BoardPlaceholder() {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
-        <span className="font-bold text-ink">Board</span>
-        <span className="text-[11px] text-dim">jira board lands in the next slice</span>
-      </div>
-      <div className="flex flex-1 items-center justify-center text-xs text-dim">◫</div>
     </div>
   );
 }
@@ -136,6 +125,37 @@ function SettingsView() {
             }
           }}
         />
+
+        <div className="mt-6 border-t border-edge pt-4 text-xs font-bold text-ink">Jira</div>
+        {(
+          [
+            ["baseUrl", "Base URL", "https://yourorg.atlassian.net"],
+            ["email", "Email", "you@example.com"],
+            ["apiToken", "API token", ""],
+            ["boardId", "Board id", "25"],
+            ["rejectedPattern", "Rejected status pattern", "reject"],
+          ] as const
+        ).map(([field, label, placeholder]) => (
+          <div key={field}>
+            <label className="mt-3 block text-xs text-dim">{label}</label>
+            <input
+              type={field === "apiToken" ? "password" : "text"}
+              placeholder={placeholder}
+              className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              defaultValue={settings.jira[field]}
+              onBlur={async (e) => {
+                const v = e.target.value.trim();
+                if (v !== settings.jira[field]) {
+                  setSettings(
+                    await window.deck.updateSettings({
+                      jira: { ...settings.jira, [field]: v },
+                    }),
+                  );
+                }
+              }}
+            />
+          </div>
+        ))}
 
         <label className="mt-4 block text-xs text-dim">
           Repo roots — searched by ⌘K and the repos fallback (one per line)
