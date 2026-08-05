@@ -126,6 +126,21 @@ function SettingsView() {
           }}
         />
 
+        <label className="mt-4 block text-xs text-dim">
+          GitHub owner — scopes PR search (empty = all of GitHub)
+        </label>
+        <input
+          placeholder="your-org"
+          className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          defaultValue={settings.github.owner}
+          onBlur={async (e) => {
+            const v = e.target.value.trim();
+            if (v !== settings.github.owner) {
+              setSettings(await window.deck.updateSettings({ github: { owner: v } }));
+            }
+          }}
+        />
+
         <div className="mt-6 border-t border-edge pt-4 text-xs font-bold text-ink">Jira</div>
         {(
           [
@@ -134,7 +149,11 @@ function SettingsView() {
             ["apiToken", "API token", ""],
             ["boardId", "Board id", "25"],
             ["rejectedPattern", "Rejected status pattern", "reject"],
-          ] as const
+          ] as const satisfies readonly (readonly [
+            "baseUrl" | "email" | "apiToken" | "boardId" | "rejectedPattern",
+            string,
+            string,
+          ])[]
         ).map(([field, label, placeholder]) => (
           <div key={field}>
             <label className="mt-3 block text-xs text-dim">{label}</label>
@@ -156,6 +175,24 @@ function SettingsView() {
             />
           </div>
         ))}
+
+        <label className="mt-3 block text-xs text-dim">Done column window (days)</label>
+        <input
+          type="number"
+          min={1}
+          className="mt-1 w-24 rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          defaultValue={settings.jira.doneWindowDays}
+          onBlur={async (e) => {
+            const v = Math.max(1, Number(e.target.value) || 7);
+            if (v !== settings.jira.doneWindowDays) {
+              setSettings(
+                await window.deck.updateSettings({
+                  jira: { ...settings.jira, doneWindowDays: v },
+                }),
+              );
+            }
+          }}
+        />
 
         <label className="mt-4 block text-xs text-dim">
           Repo roots — searched by ⌘K and the repos fallback (one per line)

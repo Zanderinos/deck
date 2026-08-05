@@ -22,6 +22,7 @@ import {
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
+import { prDetail, prDiff, prsForIssue } from "./github.js";
 import { getBoardCache, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
 import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
@@ -165,6 +166,9 @@ app.whenReady().then(() => {
   startBoardSync();
   onBoardChanged((b) => win?.webContents.send("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
+  ipcMain.handle("gh:prsForIssue", (_e, key: string) => prsForIssue(key));
+  ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
+  ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
   ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
   ipcMain.handle("hooks:installed", () => hooksInstalled());
   ipcMain.handle("hooks:install", () => installClaudeHooks());

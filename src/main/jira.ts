@@ -50,6 +50,8 @@ async function request<T>(path: string): Promise<T> {
 
 interface AgileConfiguration {
   columnConfig: { columns: { name: string; statuses: { id: string }[] }[] };
+  /** Kanban board sub-filter — applied to the display, not the issue endpoint. */
+  subQuery?: { query?: string };
 }
 
 interface AgileIssuePage {
@@ -60,6 +62,7 @@ interface AgileIssuePage {
       status: { id: string; name: string };
       assignee: { displayName: string } | null;
       updated: string;
+      issuetype?: { name?: string; hierarchyLevel?: number };
     };
   }[];
   total: number;
@@ -93,16 +96,29 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
       statusIds: col.statuses.map((s) => s.id),
     }));
 
-    // Without a JQL guard the agile endpoint returns the board's entire
-    // history (thousands of Done issues). Keep the active board + a week of
-    // Done, and cap pagination as a backstop.
-    const jql = encodeURIComponent("statusCategory != Done OR updated >= -7d");
+    // The issue endpoint applies the board filter but NOT the kanban
+    // sub-filter, and returns epics that never show as cards — apply both
+    // ourselves so counts match what Jira displays. The date guard keeps the
+    // Done column from dragging in the board's entire history.
+    const doneGuard = `statusCategory != Done OR statusCategoryChangedDate >= -${
+      c.doneWindowDays || 7
+    }d`;
+    const sub = conf.subQuery?.query?.trim();
+    const jql = encodeURIComponent(sub ? `(${sub}) AND (${doneGuard})` : doneGuard);
     const issues: BoardIssue[] = [];
     for (let startAt = 0; startAt < 1000; ) {
       const page = await request<AgileIssuePage>(
-        `/rest/agile/1.0/board/${c.boardId}/issue?startAt=${startAt}&maxResults=100&jql=${jql}&fields=summary,status,assignee,updated`,
+        `/rest/agile/1.0/board/${c.boardId}/issue?startAt=${startAt}&maxResults=100&jql=${jql}&fields=summary,status,assignee,updated,issuetype`,
       );
       for (const i of page.issues) {
+        // Kanban cards are standard-level issues only: no epics (level 1+),
+        // no sub-tasks (level -1).
+        const t = i.fields.issuetype;
+        const isCard =
+          t?.hierarchyLevel != null
+            ? t.hierarchyLevel === 0
+            : !/^(epic|sub-?task)$/i.test(t?.name ?? "");
+        if (!isCard) continue;
         issues.push({
           key: i.key,
           summary: i.fields.summary,

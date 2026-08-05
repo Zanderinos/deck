@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import type { IssuePr } from "../../../main/github.js";
 import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { DeckSettings } from "../../../shared/settings.js";
 import { useTabs } from "../store.js";
+import { DiffScreen } from "./DiffScreen.js";
+import { IssuePanel } from "./IssuePanel.js";
 
 const columnDots = ["text-body", "text-orange", "text-blue", "text-green", "text-accent"];
 const avatarColors = ["#f87171", "#4ade80", "#38bdf8", "#a78bfa", "#fb923c", "#7dcfff"];
@@ -24,6 +27,8 @@ export function BoardView() {
   const [board, setBoard] = useState<BoardCache>();
   const [settings, setSettings] = useState<DeckSettings>();
   const [syncing, setSyncing] = useState(false);
+  const [selected, setSelected] = useState<BoardIssue>();
+  const [diffPr, setDiffPr] = useState<IssuePr>();
 
   useEffect(() => {
     void window.deck.getSettings().then(setSettings);
@@ -75,6 +80,7 @@ export function BoardView() {
           </button>
         }
       />
+      <div className="flex min-h-0 flex-1">
       <div className="flex flex-1 items-start gap-4 overflow-auto px-6 py-5">
         {board?.columns.map((col, ci) => {
           const cards = board.issues.filter((i) => col.statusIds.includes(i.statusId));
@@ -91,12 +97,10 @@ export function BoardView() {
                   return (
                     <div
                       key={card.key}
-                      onClick={() =>
-                        window.open(
-                          `${settings!.jira.baseUrl.replace(/\/$/, "")}/browse/${card.key}`,
-                        )
-                      }
-                      className="cursor-pointer rounded-lg border border-edge2 bg-card p-3 hover:border-edge3"
+                      onClick={() => setSelected(card)}
+                      className={`cursor-pointer rounded-lg border bg-card p-3 hover:border-edge3 ${
+                        selected?.key === card.key ? "border-accent/50" : "border-edge2"
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-dim">{card.key}</span>
@@ -128,6 +132,17 @@ export function BoardView() {
           );
         })}
       </div>
+      {selected && settings && (
+        <IssuePanel
+          issue={selected}
+          jiraBaseUrl={settings.jira.baseUrl}
+          rejected={rejectedRe.test(selected.statusName)}
+          onClose={() => setSelected(undefined)}
+          onOpenDiff={setDiffPr}
+        />
+      )}
+      </div>
+      {diffPr && <DiffScreen pr={diffPr} onClose={() => setDiffPr(undefined)} />}
     </div>
   );
 }

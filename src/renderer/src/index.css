@@ -51,6 +51,32 @@ body {
   background: transparent;
 }
 
+/* react-diff-view, recolored for the deck palette. */
+.deck-diff .diff {
+  background: var(--color-bg);
+  color: var(--color-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.deck-diff .diff-gutter {
+  background: var(--color-panel);
+  color: var(--color-dim);
+}
+.deck-diff .diff-code-insert,
+.deck-diff .diff-gutter-insert {
+  background: rgba(74, 222, 128, 0.12);
+}
+.deck-diff .diff-code-delete,
+.deck-diff .diff-gutter-delete {
+  background: rgba(248, 113, 113, 0.12);
+}
+.deck-diff .diff-hunk-header,
+.deck-diff .diff-hunk-header-gutter,
+.deck-diff .diff-hunk-header-content {
+  background: var(--color-card);
+  color: var(--color-dim);
+}
+
 /* The frameless top strip stays draggable. */
 .drag-region {
   -webkit-app-region: drag;

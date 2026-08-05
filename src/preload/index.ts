@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
+import type { IssuePr, PrDetail } from "../main/github.js";
 import type { BoardCache } from "../main/jira.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
@@ -21,6 +22,12 @@ const api = {
       ipcRenderer.on("index:progress", listener);
       return () => ipcRenderer.removeListener("index:progress", listener);
     },
+  },
+  gh: {
+    prsForIssue: (key: string): Promise<IssuePr[]> => ipcRenderer.invoke("gh:prsForIssue", key),
+    prDetail: (repo: string, n: number): Promise<PrDetail | null> =>
+      ipcRenderer.invoke("gh:prDetail", repo, n),
+    prDiff: (repo: string, n: number): Promise<string> => ipcRenderer.invoke("gh:prDiff", repo, n),
   },
   board: {
     get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
