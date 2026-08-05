@@ -1,5 +1,6 @@
 import { rgPath } from "@vscode/ripgrep";
 import { execFile } from "node:child_process";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -55,6 +56,30 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
     }
   }
   return hits;
+}
+
+export interface RepoDir {
+  name: string;
+  path: string;
+}
+
+/** The repositories under the configured roots (for the search overlay). */
+export function listRepos(): RepoDir[] {
+  const repos: RepoDir[] = [];
+  for (const root of getSettings().repoRoots.map(expandHome)) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.isDirectory() && !e.name.startsWith(".")) {
+        repos.push({ name: e.name, path: path.join(root, e.name) });
+      }
+    }
+  }
+  return repos.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export interface GithubHit {

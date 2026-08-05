@@ -1,12 +1,26 @@
 @import "tailwindcss";
 
+/* Palette and type from the deck design project (Deck.dc.html, classic). */
 @theme {
-  --color-bg: #0c0c0e;
-  --color-panel: #131316;
-  --color-edge: #26262b;
-  --color-ink: #e6e6e9;
-  --color-dim: #8a8a93;
-  --color-accent: #7aa2f7;
+  --color-bg: #0c0d10;
+  --color-panel: #0e0f13;
+  --color-card: #14161b;
+  --color-card2: #1a1c23;
+  --color-overlay: #121318;
+  --color-edge: #1a1c22;
+  --color-edge2: #23252d;
+  --color-edge3: #2b2e38;
+  --color-ink: #e2e4ea;
+  --color-body: #9aa0ab;
+  --color-soft: #cfd2da;
+  --color-mut: #7c8290;
+  --color-dim: #565b66;
+  --color-accent: #a78bfa;
+  --color-green: #4ade80;
+  --color-blue: #38bdf8;
+  --color-orange: #fb923c;
+  --color-red: #f87171;
+  --font-mono: "Space Mono", ui-monospace, Menlo, monospace;
 }
 
 html,
@@ -17,17 +31,32 @@ body,
 
 body {
   background: var(--color-bg);
-  color: var(--color-ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: var(--color-body);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;
 }
 
-/* The hiddenInset title bar leaves the top strip draggable. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #23252d;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* The frameless top strip stays draggable. */
 .drag-region {
   -webkit-app-region: drag;
 }
 .drag-region button,
-.drag-region input {
+.drag-region input,
+.no-drag {
   -webkit-app-region: no-drag;
 }

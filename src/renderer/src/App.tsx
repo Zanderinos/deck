@@ -1,161 +1,161 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DeckSettings } from "../../shared/settings.js";
-import { SearchView } from "./search/SearchView.js";
-import { TerminalTabs } from "./terminal/TerminalTabs.js";
+import { AgentsView } from "./agents/AgentsView.js";
+import { Sidebar } from "./chrome/Sidebar.js";
+import { Titlebar } from "./chrome/Titlebar.js";
 import { onOpenTerminalTab } from "./lib/bus.js";
+import { SearchOverlay } from "./search/SearchOverlay.js";
+import { SearchView } from "./search/SearchView.js";
+import { TabProvider, useTabs } from "./store.js";
+import { TerminalView } from "./terminal/TerminalView.js";
 
-type View = "terminal" | "search" | "board" | "settings";
-
-const nav: { id: View; label: string; glyph: string }[] = [
-  { id: "terminal", label: "Terminal", glyph: ">" },
-  { id: "search", label: "Search", glyph: "?" },
-  { id: "board", label: "Board", glyph: "#" },
-  { id: "settings", label: "Settings", glyph: "*" },
-];
+export type View = "terminal" | "board" | "agents" | "search" | "settings";
 
 export default function App() {
+  return (
+    <TabProvider>
+      <Shell />
+    </TabProvider>
+  );
+}
+
+function Shell() {
   const [view, setView] = useState<View>("terminal");
-  const [settings, setSettings] = useState<DeckSettings>();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
+  const { newTab, closeTab, activeId } = useTabs();
 
-  useEffect(() => {
-    window.deck.getSettings().then(setSettings);
-  }, []);
-
-  // Opening a tab from search (or anywhere) lands you back in the terminal.
+  // Opening a tab from anywhere lands back in the terminal.
   useEffect(() => onOpenTerminalTab(() => setView("terminal")), []);
+
+  const openPreview = useCallback((sessionId: string, query: string) => {
+    setPreview({ sessionId, query });
+    setView("search");
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "p") {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setView((v) => (v === "search" ? "terminal" : "search"));
+        setSearchOpen((o) => !o);
+        return;
       }
+      if (searchOpen) return; // the overlay handles its own keys
+      if (meta && e.key === "1") setView("terminal");
+      else if (meta && e.key === "2") setView("board");
+      else if (meta && e.key === "3") setView("agents");
+      else if (meta && e.key === "t") {
+        e.preventDefault();
+        setView("terminal");
+        void newTab();
+      } else if (meta && e.key === "w" && view === "terminal" && activeId) {
+        e.preventDefault();
+        closeTab(activeId);
+      } else {
+        return;
+      }
+      e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [searchOpen, view, activeId, newTab, closeTab]);
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-13 flex-col items-center gap-1 border-r border-edge bg-panel pt-10 drag-region">
-        {nav.map((n) => (
-          <button
-            key={n.id}
-            title={n.label}
-            onClick={() => setView(n.id)}
-            className={`flex h-9 w-9 items-center justify-center rounded-md font-mono text-sm transition-colors ${
-              view === n.id ? "bg-edge text-ink" : "text-dim hover:text-ink"
-            }`}
-          >
-            {n.glyph}
-          </button>
-        ))}
-      </aside>
-
-      <main className="flex min-w-0 flex-1 flex-col">
-        {/* Terminals stay mounted across view switches so sessions survive. */}
-        <div className={`min-h-0 flex-1 ${view === "terminal" ? "" : "hidden"}`}>
-          <TerminalTabs />
-        </div>
-        {view === "search" && (
-          <div className="min-h-0 flex-1">
-            <SearchView />
-          </div>
-        )}
-        {view !== "terminal" && view !== "search" && (
-          <>
-            <header className="h-10 shrink-0 border-b border-edge drag-region" />
-            <section className="flex flex-1 items-center justify-center">
-              {view === "settings" ? (
-                <SettingsView settings={settings} onChange={setSettings} />
-              ) : (
-                <div className="text-center">
-                  <div className="font-mono text-2xl text-dim">deck</div>
-                  <div className="mt-2 text-sm text-dim">
-                    {settings
-                      ? `press ${prettyHotkey(settings.summonHotkey)} anywhere to summon`
-                      : ""}
-                  </div>
-                  <div className="mt-1 text-xs text-dim/60">{viewHint(view)}</div>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </main>
+    <div className="flex h-full flex-col">
+      <Titlebar onSearch={() => setSearchOpen(true)} />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar view={view} onView={setView} />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <TerminalView visible={view === "terminal"} />
+          {view === "search" && (
+            <div className="min-h-0 flex-1">
+              <SearchView
+                initialQuery={preview?.query}
+                initialSessionId={preview?.sessionId}
+              />
+            </div>
+          )}
+          {view === "agents" && <AgentsView />}
+          {view === "board" && <BoardPlaceholder />}
+          {view === "settings" && <SettingsView />}
+        </main>
+      </div>
+      {searchOpen && (
+        <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} />
+      )}
     </div>
   );
 }
 
-function viewHint(view: View): string {
-  switch (view) {
-    case "search":
-      return "global conversation search lands soon";
-    case "board":
-      return "the board port lands soon";
-    default:
-      return "";
-  }
+function BoardPlaceholder() {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
+        <span className="font-bold text-ink">Board</span>
+        <span className="text-[11px] text-dim">jira board lands in the next slice</span>
+      </div>
+      <div className="flex flex-1 items-center justify-center text-xs text-dim">◫</div>
+    </div>
+  );
 }
 
-function prettyHotkey(accelerator: string): string {
-  return accelerator.replace("Alt", "⌥").replace("Cmd", "⌘").replace("+", "");
-}
-
-function SettingsView({
-  settings,
-  onChange,
-}: {
-  settings?: DeckSettings;
-  onChange: (s: DeckSettings) => void;
-}) {
+function SettingsView() {
+  const [settings, setSettings] = useState<DeckSettings>();
+  useEffect(() => {
+    void window.deck.getSettings().then(setSettings);
+  }, []);
   if (!settings) return null;
   return (
-    <div className="w-96">
-      <h1 className="mb-4 text-sm font-medium">Settings</h1>
-      <label className="block text-xs text-dim">Summon hotkey (Electron accelerator)</label>
-      <input
-        className="mt-1 w-full rounded-md border border-edge bg-panel px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
-        defaultValue={settings.summonHotkey}
-        onBlur={async (e) => {
-          const v = e.target.value.trim();
-          if (v && v !== settings.summonHotkey) {
-            onChange(await window.deck.updateSettings({ summonHotkey: v }));
-          }
-        }}
-      />
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
+        <span className="font-bold text-ink">Settings</span>
+      </div>
+      <div className="w-[420px] px-6 py-5">
+        <label className="block text-xs text-dim">Summon hotkey (Electron accelerator)</label>
+        <input
+          className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          defaultValue={settings.summonHotkey}
+          onBlur={async (e) => {
+            const v = e.target.value.trim();
+            if (v && v !== settings.summonHotkey) {
+              setSettings(await window.deck.updateSettings({ summonHotkey: v }));
+            }
+          }}
+        />
 
-      <label className="mt-4 block text-xs text-dim">New terminals start in</label>
-      <input
-        placeholder="~"
-        className="mt-1 w-full rounded-md border border-edge bg-panel px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
-        defaultValue={settings.defaultCwd}
-        onBlur={async (e) => {
-          const v = e.target.value.trim() || "~";
-          if (v !== settings.defaultCwd) {
-            onChange(await window.deck.updateSettings({ defaultCwd: v }));
-          }
-        }}
-      />
+        <label className="mt-4 block text-xs text-dim">New terminals start in</label>
+        <input
+          placeholder="~"
+          className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          defaultValue={settings.defaultCwd}
+          onBlur={async (e) => {
+            const v = e.target.value.trim() || "~";
+            if (v !== settings.defaultCwd) {
+              setSettings(await window.deck.updateSettings({ defaultCwd: v }));
+            }
+          }}
+        />
 
-      <label className="mt-4 block text-xs text-dim">
-        Repo roots — directories searched by the repos fallback (one per line)
-      </label>
-      <textarea
-        rows={3}
-        placeholder="~/www"
-        className="mt-1 w-full resize-none rounded-md border border-edge bg-panel px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
-        defaultValue={settings.repoRoots.join("\n")}
-        onBlur={async (e) => {
-          const roots = e.target.value
-            .split("\n")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          if (roots.join("\n") !== settings.repoRoots.join("\n")) {
-            onChange(await window.deck.updateSettings({ repoRoots: roots }));
-          }
-        }}
-      />
+        <label className="mt-4 block text-xs text-dim">
+          Repo roots — searched by ⌘K and the repos fallback (one per line)
+        </label>
+        <textarea
+          rows={3}
+          placeholder="~/www"
+          className="mt-1 w-full resize-none rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          defaultValue={settings.repoRoots.join("\n")}
+          onBlur={async (e) => {
+            const roots = e.target.value
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (roots.join("\n") !== settings.repoRoots.join("\n")) {
+              setSettings(await window.deck.updateSettings({ repoRoots: roots }));
+            }
+          }}
+        />
+      </div>
     </div>
   );
 }

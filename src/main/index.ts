@@ -19,7 +19,7 @@ import {
   sessionMessages,
   startIndexer,
 } from "./indexer.js";
-import { searchGithub, searchRepos } from "./providers.js";
+import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
 import { listSessions, onSessionsChanged } from "./sessions.js";
@@ -44,12 +44,22 @@ process.on("uncaughtException", (err) => logFatal("uncaught", err));
 process.on("unhandledRejection", (err) => logFatal("unhandled-rejection", err));
 
 // Single instance: a second `deck` just summons the existing window. Dev-mode
-// watch restarts race on the lock and would kill the fresh instance, so the
-// lock only applies to packaged builds.
-if (app.isPackaged && !app.requestSingleInstanceLock()) {
-  app.quit();
+// watch restarts need the opposite — the NEW instance must win, because the
+// tray keeps the old one alive through electron-vite's terminate signal.
+if (app.isPackaged) {
+  if (!app.requestSingleInstanceLock()) app.quit();
+  else app.on("second-instance", () => showWindow());
 } else {
-  app.on("second-instance", () => showWindow());
+  process.on("SIGTERM", () => app.quit());
+  process.on("SIGINT", () => app.quit());
+  const pidFile = path.join(app.getPath("userData"), "dev.pid");
+  try {
+    const old = Number(fs.readFileSync(pidFile, "utf8"));
+    if (old && old !== process.pid) process.kill(old, "SIGKILL");
+  } catch {
+    // no previous instance
+  }
+  fs.writeFileSync(pidFile, String(process.pid));
 }
 
 function createWindow(): BrowserWindow {
@@ -147,6 +157,7 @@ app.whenReady().then(() => {
   ipcMain.handle("search:session", (_e, id: string) => sessionMessages(id));
   ipcMain.handle("search:repos", (_e, q: string) => searchRepos(q));
   ipcMain.handle("search:github", (_e, q: string) => searchGithub(q));
+  ipcMain.handle("repos:list", () => listRepos());
   onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("hooks:installed", () => hooksInstalled());

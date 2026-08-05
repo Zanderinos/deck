@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
-import type { GithubHit, RepoHit } from "../main/providers.js";
+import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
@@ -13,6 +13,7 @@ const api = {
     session: (id: string): Promise<ConvMessage[]> => ipcRenderer.invoke("search:session", id),
     repos: (q: string): Promise<RepoHit[]> => ipcRenderer.invoke("search:repos", q),
     github: (q: string): Promise<GithubHit[]> => ipcRenderer.invoke("search:github", q),
+    listRepos: (): Promise<RepoDir[]> => ipcRenderer.invoke("repos:list"),
     progress: (): Promise<IndexProgress> => ipcRenderer.invoke("index:progress"),
     onProgress: (cb: (p: IndexProgress) => void): (() => void) => {
       const listener = (_e: unknown, p: IndexProgress) => cb(p);

@@ -5,7 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 const theme = {
-  background: "#0c0c0e",
+  background: "#0c0d10",
   foreground: "#e6e6e9",
   cursor: "#7aa2f7",
   selectionBackground: "#33467c",
