@@ -75,7 +75,8 @@ export function SearchView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-edge px-4 drag-region">
+      {/* pl clears the macOS traffic lights when no sessions panel sits left of us. */}
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-edge py-0 pl-10 pr-4 drag-region">
         <input
           ref={inputRef}
           value={query}

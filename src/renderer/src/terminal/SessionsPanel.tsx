@@ -38,7 +38,8 @@ export function SessionsPanel({ openTermIds, onFocusTerm, onResume }: SessionsPa
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-edge bg-panel">
-      <div className="flex h-9 shrink-0 items-center px-3 text-xs font-medium text-dim drag-region">
+      {/* pl clears the macOS traffic lights, which overlay this corner. */}
+      <div className="flex h-9 shrink-0 items-center pl-9 pr-3 text-xs font-medium text-dim drag-region">
         Agent sessions
       </div>
       {!hooksReady && (
