@@ -104,7 +104,11 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
             <div
               key={s.claude_session_id}
               onClick={() => {
-                void newTab({ cwd: s.cwd, command: `claude --resume ${s.claude_session_id}` });
+                void newTab({
+                  cwd: s.cwd,
+                  command: `claude --resume ${s.claude_session_id}`,
+                  issueKey: s.issue_key ?? undefined,
+                });
                 onView("terminal");
               }}
               title="Resume in a new session"
@@ -116,6 +120,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
                   {s.title ?? project(s.cwd)}
                 </span>
                 <span className="block truncate text-[10px] text-dim">
+                  {s.issue_key ? `${s.issue_key} · ` : ""}
                   {project(s.cwd)}
                   {s.status === "needs_input" ? " · needs input" : ""}
                 </span>

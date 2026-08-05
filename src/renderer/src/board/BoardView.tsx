@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { IssuePr } from "../../../main/github.js";
 import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { DeckSettings } from "../../../shared/settings.js";
+import { onNavBack } from "../lib/bus.js";
 import { useTabs } from "../store.js";
 import { DiffScreen } from "./DiffScreen.js";
 import { IssuePanel } from "./IssuePanel.js";
@@ -36,6 +37,24 @@ export function BoardView() {
     return window.deck.board.onChanged(setBoard);
   }, []);
 
+  // Mouse-back closes the top overlay before the view history moves. Refs
+  // mirror the state because the dispatch needs a synchronous answer.
+  const overlayRef = useRef({ diff: false, panel: false });
+  overlayRef.current = { diff: Boolean(diffPr), panel: Boolean(selected) };
+  useEffect(
+    () =>
+      onNavBack((e) => {
+        if (overlayRef.current.diff) {
+          e.preventDefault();
+          setDiffPr(undefined);
+        } else if (overlayRef.current.panel) {
+          e.preventDefault();
+          setSelected(undefined);
+        }
+      }),
+    [],
+  );
+
   const rejectedRe = useMemo(() => {
     try {
       return new RegExp(settings?.jira.rejectedPattern || "reject", "i");
@@ -48,7 +67,7 @@ export function BoardView() {
 
   const spinUp = (issue: BoardIssue) => {
     const prompt = `${issue.key}: ${issue.summary} — the code was rejected in review. Look at the PR feedback and address it.`;
-    void newTab({ command: `claude ${JSON.stringify(prompt)}` });
+    void newTab({ command: `claude ${JSON.stringify(prompt)}`, issueKey: issue.key });
   };
 
   if (!configured) {

@@ -20,6 +20,7 @@ export interface TermTab {
 export interface OpenOptions {
   cwd?: string;
   command?: string;
+  issueKey?: string;
 }
 
 interface TabStore {

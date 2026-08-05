@@ -3,6 +3,7 @@ import pty, { type IPty } from "node-pty";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { linkTermToIssue } from "./sessions.js";
 import { getSettings } from "./settings.js";
 
 function expandHome(p: string): string {
@@ -30,11 +31,14 @@ export interface TermCreateOptions {
   cwd?: string;
   /** Command to run instead of the login shell (e.g. `claude --resume <id>`). */
   command?: string;
+  /** Ticket this terminal was spawned for — links its agent session. */
+  issueKey?: string;
 }
 
 export function registerPtyIpc(): void {
   ipcMain.handle("term:create", (event, opts: TermCreateOptions = {}) => {
     const id = String(nextId++);
+    if (opts.issueKey) linkTermToIssue(id, opts.issueKey);
     const shell = process.env.SHELL ?? "/bin/zsh";
     // A command still runs inside a login shell so PATH and profile apply,
     // and the tab drops back to the prompt when it exits.

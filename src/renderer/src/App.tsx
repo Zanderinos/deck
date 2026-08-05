@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckSettings } from "../../shared/settings.js";
 import { AgentsView } from "./agents/AgentsView.js";
 import { BoardView } from "./board/BoardView.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
-import { onOpenTerminalTab } from "./lib/bus.js";
+import { onOpenTerminalTab, requestNavBack } from "./lib/bus.js";
 import { SearchOverlay } from "./search/SearchOverlay.js";
 import { SearchView } from "./search/SearchView.js";
 import { TabProvider, useTabs } from "./store.js";
@@ -21,13 +21,50 @@ export default function App() {
 }
 
 function Shell() {
-  const [view, setView] = useState<View>("terminal");
+  const [view, setViewRaw] = useState<View>("terminal");
   const [searchOpen, setSearchOpen] = useState(false);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
   const { newTab, closeTab, activeId } = useTabs();
 
+  // View history for the mouse back/forward buttons.
+  const history = useRef({ stack: ["terminal"] as View[], index: 0 });
+  const setView = useCallback((v: View) => {
+    setViewRaw((current) => {
+      if (v !== current) {
+        const h = history.current;
+        h.stack = [...h.stack.slice(0, h.index + 1), v];
+        h.index = h.stack.length - 1;
+      }
+      return v;
+    });
+  }, []);
+  const goBack = useCallback(() => {
+    if (requestNavBack()) return; // an overlay consumed it
+    const h = history.current;
+    if (h.index > 0) setViewRaw(h.stack[--h.index]);
+  }, []);
+  const goForward = useCallback(() => {
+    const h = history.current;
+    if (h.index < h.stack.length - 1) setViewRaw(h.stack[++h.index]);
+  }, []);
+
+  useEffect(() => {
+    // macOS reports the thumb buttons as mouse buttons 3 and 4.
+    const onMouse = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        goBack();
+      } else if (e.button === 4) {
+        e.preventDefault();
+        goForward();
+      }
+    };
+    window.addEventListener("mouseup", onMouse);
+    return () => window.removeEventListener("mouseup", onMouse);
+  }, [goBack, goForward]);
+
   // Opening a tab from anywhere lands back in the terminal.
-  useEffect(() => onOpenTerminalTab(() => setView("terminal")), []);
+  useEffect(() => onOpenTerminalTab(() => setView("terminal")), [setView]);
 
   const openPreview = useCallback((sessionId: string, query: string) => {
     setPreview({ sessionId, query });

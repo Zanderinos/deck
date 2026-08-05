@@ -47,6 +47,7 @@ const migrations: string[] = [
   CREATE TRIGGER IF NOT EXISTS conv_messages_ai AFTER INSERT ON conv_messages BEGIN
     INSERT INTO conv_fts(rowid, text) VALUES (new.id, new.text);
   END;`,
+  `ALTER TABLE agent_sessions ADD COLUMN issue_key TEXT`,
 ];
 
 export function openDb(): Database.Database {

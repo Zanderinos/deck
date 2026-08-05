@@ -51,7 +51,7 @@ const api = {
       ipcRenderer.invoke("hooks:install"),
   },
   term: {
-    create: (opts?: { cwd?: string; command?: string }): Promise<string> =>
+    create: (opts?: { cwd?: string; command?: string; issueKey?: string }): Promise<string> =>
       ipcRenderer.invoke("term:create", opts),
     input: (id: string, data: string): void => ipcRenderer.send("term:input", id, data),
     resize: (id: string, cols: number, rows: number): void =>
