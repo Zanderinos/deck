@@ -1,6 +1,16 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, nativeImage, shell, Tray } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  nativeImage,
+  screen,
+  shell,
+  Tray,
+} from "electron";
 import path from "node:path";
 import type { DeckSettings } from "../shared/settings.js";
+import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { getSettings, updateSettings } from "./settings.js";
 
 let win: BrowserWindow | undefined;
@@ -33,6 +43,12 @@ function createWindow(): BrowserWindow {
 
   win.on("ready-to-show", () => win?.show());
   win.on("closed", () => (win = undefined));
+  // Reloads (dev HMR full reload, ⌘R) orphan the renderer's terminals.
+  const contents = win.webContents;
+  contents.on("did-start-navigation", ({ isSameDocument }) => {
+    if (!isSameDocument) killTermsOf(contents);
+  });
+  win.webContents.on("render-process-gone", () => win && killTermsOf(win.webContents));
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -54,11 +70,26 @@ function showWindow(): void {
   app.focus({ steal: true });
 }
 
+/** Warp-style quake panel: full width, docked to the top of the screen the
+ *  cursor is on. The window itself persists, so it reopens where you left. */
+function dockToTop(w: BrowserWindow): void {
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const ratio = getSettings().summonHeightRatio;
+  w.setBounds({
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: Math.round(workArea.height * Math.min(Math.max(ratio, 0.2), 1)),
+  });
+}
+
 function toggleWindow(): void {
   if (win?.isVisible() && win.isFocused()) {
     win.hide();
     app.hide();
   } else {
+    const w = win ?? createWindow();
+    dockToTop(w);
     showWindow();
   }
 }
@@ -79,6 +110,7 @@ function createTray(): void {
 }
 
 app.whenReady().then(() => {
+  registerPtyIpc();
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);

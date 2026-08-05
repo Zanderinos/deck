@@ -4,6 +4,8 @@
 export interface DeckSettings {
   /** Electron accelerator that summons/hides the window from anywhere. */
   summonHotkey: string;
+  /** Quake-style panel height as a fraction of the screen's work area. */
+  summonHeightRatio: number;
   /** Directories deck treats as repo roots (search fallbacks, repo pickers). */
   repoRoots: string[];
   /** Theme is dark-only for now; kept as a setting so light mode can land later. */
@@ -12,6 +14,7 @@ export interface DeckSettings {
 
 export const defaultSettings: DeckSettings = {
   summonHotkey: "Alt+Space",
+  summonHeightRatio: 0.6,
   repoRoots: [],
   theme: "dark",
 };

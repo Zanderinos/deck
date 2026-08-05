@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DeckSettings } from "../../shared/settings.js";
+import { TerminalTabs } from "./terminal/TerminalTabs.js";
 
 type View = "terminal" | "search" | "board" | "settings";
 
@@ -35,21 +36,31 @@ export default function App() {
         ))}
       </aside>
 
-      <main className="flex flex-1 flex-col">
-        <header className="h-10 shrink-0 border-b border-edge drag-region" />
-        <section className="flex flex-1 items-center justify-center">
-          {view === "settings" ? (
-            <SettingsView settings={settings} onChange={setSettings} />
-          ) : (
-            <div className="text-center">
-              <div className="font-mono text-2xl text-dim">deck</div>
-              <div className="mt-2 text-sm text-dim">
-                {settings ? `press ${prettyHotkey(settings.summonHotkey)} anywhere to summon` : ""}
-              </div>
-              <div className="mt-1 text-xs text-dim/60">{viewHint(view)}</div>
-            </div>
-          )}
-        </section>
+      <main className="flex min-w-0 flex-1 flex-col">
+        {/* Terminals stay mounted across view switches so sessions survive. */}
+        <div className={`min-h-0 flex-1 ${view === "terminal" ? "" : "hidden"}`}>
+          <TerminalTabs />
+        </div>
+        {view !== "terminal" && (
+          <>
+            <header className="h-10 shrink-0 border-b border-edge drag-region" />
+            <section className="flex flex-1 items-center justify-center">
+              {view === "settings" ? (
+                <SettingsView settings={settings} onChange={setSettings} />
+              ) : (
+                <div className="text-center">
+                  <div className="font-mono text-2xl text-dim">deck</div>
+                  <div className="mt-2 text-sm text-dim">
+                    {settings
+                      ? `press ${prettyHotkey(settings.summonHotkey)} anywhere to summon`
+                      : ""}
+                  </div>
+                  <div className="mt-1 text-xs text-dim/60">{viewHint(view)}</div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
@@ -57,8 +68,6 @@ export default function App() {
 
 function viewHint(view: View): string {
   switch (view) {
-    case "terminal":
-      return "terminal tabs land in the next slice";
     case "search":
       return "global conversation search lands soon";
     case "board":
