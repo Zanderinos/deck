@@ -10,7 +10,10 @@ import {
 } from "electron";
 import path from "node:path";
 import type { DeckSettings } from "../shared/settings.js";
+import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
+import { startServer } from "./server.js";
+import { listSessions, onSessionsChanged } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
 let win: BrowserWindow | undefined;
@@ -111,6 +114,11 @@ function createTray(): void {
 
 app.whenReady().then(() => {
   registerPtyIpc();
+  startServer();
+  onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
+  ipcMain.handle("sessions:list", () => listSessions());
+  ipcMain.handle("hooks:installed", () => hooksInstalled());
+  ipcMain.handle("hooks:install", () => installClaudeHooks());
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);

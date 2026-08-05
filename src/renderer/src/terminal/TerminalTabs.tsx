@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SessionsPanel } from "./SessionsPanel.js";
 import { TerminalPane } from "./TerminalPane.js";
 
 interface Tab {
@@ -65,8 +66,16 @@ export function TerminalTabs() {
   }, [activeId, tabs, newTab, closeTab]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge px-2 drag-region">
+    <div className="flex h-full">
+      <SessionsPanel
+        openTermIds={tabs.map((t) => t.termId)}
+        onFocusTerm={setActiveId}
+        onResume={(s) =>
+          void newTab({ cwd: s.cwd, command: `claude --resume ${s.claude_session_id}` })
+        }
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-9 shrink-0 items-center gap-1 border-b border-edge px-2 drag-region">
         {tabs.map((tab) => (
           <div
             key={tab.termId}
@@ -111,6 +120,7 @@ export function TerminalTabs() {
             ⌘T to open a terminal
           </div>
         )}
+        </div>
       </div>
     </div>
   );

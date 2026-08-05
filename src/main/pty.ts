@@ -28,7 +28,13 @@ export function registerPtyIpc(): void {
       cols: 80,
       rows: 24,
       cwd: opts.cwd ?? os.homedir(),
-      env: { ...process.env, TERM_PROGRAM: "deck", COLORTERM: "truecolor" },
+      env: {
+        ...process.env,
+        TERM_PROGRAM: "deck",
+        COLORTERM: "truecolor",
+        // Lets Claude Code hook callbacks identify which deck tab they run in.
+        DECK_TERM_ID: id,
+      },
     });
 
     const owner = event.sender;

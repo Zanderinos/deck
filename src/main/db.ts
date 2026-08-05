@@ -9,6 +9,17 @@ const migrations: string[] = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS agent_sessions (
+    claude_session_id TEXT PRIMARY KEY,
+    agent TEXT NOT NULL DEFAULT 'claude',
+    cwd TEXT NOT NULL,
+    title TEXT,
+    status TEXT NOT NULL,
+    term_id TEXT,
+    transcript_path TEXT,
+    started_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
 ];
 
 export function openDb(): Database.Database {

@@ -1,10 +1,22 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
 const api = {
   getSettings: (): Promise<DeckSettings> => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: Partial<DeckSettings>): Promise<DeckSettings> =>
     ipcRenderer.invoke("settings:update", patch),
+  sessions: {
+    list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
+    onChanged: (cb: (sessions: AgentSession[]) => void): (() => void) => {
+      const listener = (_e: unknown, sessions: AgentSession[]) => cb(sessions);
+      ipcRenderer.on("sessions:changed", listener);
+      return () => ipcRenderer.removeListener("sessions:changed", listener);
+    },
+    hooksInstalled: (): Promise<boolean> => ipcRenderer.invoke("hooks:installed"),
+    installHooks: (): Promise<{ installed: boolean; path: string }> =>
+      ipcRenderer.invoke("hooks:install"),
+  },
   term: {
     create: (opts?: { cwd?: string; command?: string }): Promise<string> =>
       ipcRenderer.invoke("term:create", opts),
