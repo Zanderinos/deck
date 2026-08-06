@@ -40,6 +40,12 @@ export function registerPtyIpc(): void {
     const id = String(nextId++);
     if (opts.issueKey) linkTermToIssue(id, opts.issueKey);
     const shell = process.env.SHELL ?? "/bin/zsh";
+    // Deck itself may have been launched from inside a Claude Code session
+    // (dev mode); its CLAUDE* markers would make claude in this terminal
+    // think it's a child session and disable transcript saving.
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("CLAUDE")),
+    );
     // A command still runs inside a login shell so PATH and profile apply,
     // and the tab drops back to the prompt when it exits.
     const args = opts.command ? ["-l", "-i", "-c", `${opts.command}; exec ${shell} -l`] : ["-l"];
@@ -49,7 +55,12 @@ export function registerPtyIpc(): void {
       rows: 24,
       cwd: startCwd(opts.cwd),
       env: {
-        ...process.env,
+        ...cleanEnv,
+        // Start from the system baseline like Terminal.app, so the login
+        // shell's own profile builds PATH. Inheriting an already-built PATH
+        // makes "add if missing" guards in rc files skip their prepends,
+        // resolving different binaries than the user's real terminal.
+        PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
         TERM_PROGRAM: "deck",
         COLORTERM: "truecolor",
         // Lets Claude Code hook callbacks identify which deck tab they run in.
@@ -58,7 +69,11 @@ export function registerPtyIpc(): void {
     });
 
     const owner = event.sender;
-    proc.onData((data) => owner.send("term:data", id, data));
+    // A send after the window closed throws inside node-pty's native
+    // callback, which terminates the whole process (Napi::Error).
+    proc.onData((data) => {
+      if (!owner.isDestroyed()) owner.send("term:data", id, data);
+    });
     proc.onExit(({ exitCode }) => {
       terms.delete(id);
       if (!owner.isDestroyed()) owner.send("term:exit", id, exitCode);

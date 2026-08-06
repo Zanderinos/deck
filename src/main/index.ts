@@ -10,6 +10,7 @@ import {
 } from "electron";
 import fs from "node:fs";
 import path from "node:path";
+import appIcon from "../../resources/icon.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
 import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
 import {
@@ -22,14 +23,44 @@ import {
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { killTermsOf, registerPtyIpc } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
-import { prDetail, prDiff, prsForIssue } from "./github.js";
+import {
+  mergePr,
+  prComments,
+  prDetail,
+  prDiff,
+  prsForIssue,
+  submitPrReview,
+  type DraftComment,
+  type MergeMethod,
+  type ReviewEvent,
+} from "./github.js";
+import { workingChanges } from "./git.js";
 import { getBoardCache, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
-import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
+import { clearTermLinks, listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
-let win: BrowserWindow | undefined;
+/** Which action brought a window up. Mapped to a window role by windowMode. */
+type EntryPoint = "hotkey" | "tray" | "manual";
+type WindowRole = "main" | "panel" | "tray";
+
+const wins = new Map<WindowRole, BrowserWindow>();
 let tray: Tray | undefined;
 let registeredHotkey: string | undefined;
+
+// Dev mode runs the stock Electron binary, which otherwise names the menu
+// bar and dock "Electron".
+app.setName("deck");
+
+function roleFor(entry: EntryPoint): WindowRole {
+  const mode = getSettings().windowMode;
+  if (mode === "shared") return "main";
+  if (mode === "panel") return entry === "hotkey" ? "panel" : "main";
+  return entry === "hotkey" ? "panel" : entry === "tray" ? "tray" : "main";
+}
+
+function broadcast(channel: string, ...args: unknown[]): void {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, ...args);
+}
 
 // Surface main-process crashes instead of dying silently.
 function logFatal(kind: string, err: unknown): void {
@@ -50,7 +81,7 @@ process.on("unhandledRejection", (err) => logFatal("unhandled-rejection", err));
 // tray keeps the old one alive through electron-vite's terminate signal.
 if (app.isPackaged) {
   if (!app.requestSingleInstanceLock()) app.quit();
-  else app.on("second-instance", () => showWindow());
+  else app.on("second-instance", () => showWindow(roleFor("manual")));
 } else {
   process.on("SIGTERM", () => app.quit());
   process.on("SIGINT", () => app.quit());
@@ -64,8 +95,8 @@ if (app.isPackaged) {
   fs.writeFileSync(pidFile, String(process.pid));
 }
 
-function createWindow(): BrowserWindow {
-  win = new BrowserWindow({
+function createWindow(role: WindowRole): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 720,
@@ -81,14 +112,18 @@ function createWindow(): BrowserWindow {
     },
   });
 
-  win.on("ready-to-show", () => win?.show());
-  win.on("closed", () => (win = undefined));
+  wins.set(role, win);
+  win.on("ready-to-show", () => win.show());
+  win.on("closed", () => {
+    if (wins.get(role) === win) wins.delete(role);
+    killTermsOf(contents);
+  });
   // Reloads (dev HMR full reload, ⌘R) orphan the renderer's terminals.
   const contents = win.webContents;
   contents.on("did-start-navigation", ({ isSameDocument }) => {
     if (!isSameDocument) killTermsOf(contents);
   });
-  win.webContents.on("render-process-gone", () => win && killTermsOf(win.webContents));
+  win.webContents.on("render-process-gone", () => killTermsOf(win.webContents));
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -102,8 +137,8 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function showWindow(): void {
-  const w = win ?? createWindow();
+function showWindow(role: WindowRole): void {
+  const w = wins.get(role) ?? createWindow(role);
   if (w.isMinimized()) w.restore();
   w.show();
   w.focus();
@@ -123,22 +158,31 @@ function dockToTop(w: BrowserWindow): void {
   });
 }
 
-function toggleWindow(): void {
+function toggleWindow(entry: EntryPoint): void {
+  const role = roleFor(entry);
+  const win = wins.get(role);
   if (win?.isVisible() && win.isFocused()) {
     win.hide();
-    app.hide();
+    // Only leave the app when no other deck window stays visible.
+    if (BrowserWindow.getAllWindows().every((w) => !w.isVisible())) app.hide();
   } else {
-    const w = win ?? createWindow();
-    dockToTop(w);
-    showWindow();
+    const w = win ?? createWindow(role);
+    if (entry === "hotkey" && getSettings().summonDockToTop) dockToTop(w);
+    showWindow(role);
   }
 }
 
-function registerHotkey(accelerator: string): boolean {
-  if (registeredHotkey) globalShortcut.unregister(registeredHotkey);
-  const ok = globalShortcut.register(accelerator, toggleWindow);
-  registeredHotkey = ok ? accelerator : undefined;
-  return ok;
+/** (Re)registers the summon hotkey from settings; unregisters when disabled. */
+function applyHotkey(): void {
+  if (registeredHotkey) {
+    globalShortcut.unregister(registeredHotkey);
+    registeredHotkey = undefined;
+  }
+  const { summonHotkey, summonHotkeyEnabled } = getSettings();
+  if (!summonHotkeyEnabled) return;
+  if (globalShortcut.register(summonHotkey, () => toggleWindow("hotkey"))) {
+    registeredHotkey = summonHotkey;
+  }
 }
 
 function createTray(): void {
@@ -146,44 +190,59 @@ function createTray(): void {
   tray = new Tray(nativeImage.createEmpty());
   tray.setTitle("▤");
   tray.setToolTip("deck");
-  tray.on("click", toggleWindow);
+  tray.on("click", () => toggleWindow("tray"));
 }
 
 app.whenReady().then(() => {
+  app.dock?.setIcon(nativeImage.createFromPath(appIcon));
+  clearTermLinks();
   registerPtyIpc();
   startServer();
   startIndexer();
-  onIndexProgress((p) => win?.webContents.send("index:progress", p));
+  onIndexProgress((p) => broadcast("index:progress", p));
   ipcMain.handle("index:progress", () => getIndexProgress());
   ipcMain.handle("search:query", (_e, q: string) => searchConversations(q));
   ipcMain.handle("search:session", (_e, id: string) => sessionMessages(id));
   ipcMain.handle("search:repos", (_e, q: string) => searchRepos(q));
   ipcMain.handle("search:github", (_e, q: string) => searchGithub(q));
   ipcMain.handle("repos:list", () => listRepos());
-  onSessionsChanged(() => win?.webContents.send("sessions:changed", listSessions()));
+  onSessionsChanged(() => broadcast("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
+  ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
   startBoardSync();
-  onBoardChanged((b) => win?.webContents.send("board:changed", b));
+  onBoardChanged((b) => broadcast("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
   ipcMain.handle("gh:prsForIssue", (_e, key: string) => prsForIssue(key));
   ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
+  ipcMain.handle("gh:prComments", (_e, repo: string, n: number) => prComments(repo, n));
+  ipcMain.handle(
+    "gh:review",
+    (_e, repo: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[]) =>
+      submitPrReview(repo, n, event, body, comments),
+  );
+  ipcMain.handle("gh:merge", (_e, repo: string, n: number, method: MergeMethod) =>
+    mergePr(repo, n, method),
+  );
   ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
+  // An existing install predates events added since; appending is a no-op
+  // when nothing is missing, and consent was given by the original install.
+  if (hooksInstalled()) installClaudeHooks();
   ipcMain.handle("hooks:installed", () => hooksInstalled());
   ipcMain.handle("hooks:install", () => installClaudeHooks());
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);
-    if (patch.summonHotkey) registerHotkey(next.summonHotkey);
+    if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch) applyHotkey();
     return next;
   });
 
-  createWindow();
+  createWindow("main");
   createTray();
-  registerHotkey(getSettings().summonHotkey);
+  applyHotkey();
 
-  app.on("activate", () => showWindow());
+  app.on("activate", () => showWindow(roleFor("manual")));
 });
 
 // deck lives in the tray; closing the window must not quit the app.

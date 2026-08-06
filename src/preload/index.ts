@@ -1,7 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
-import type { IssuePr, PrDetail } from "../main/github.js";
+import type {
+  DraftComment,
+  IssuePr,
+  MergeMethod,
+  PrActionResult,
+  PrComment,
+  PrDetail,
+  ReviewEvent,
+} from "../main/github.js";
+import type { WorkingChanges } from "../main/git.js";
 import type { BoardCache } from "../main/jira.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
@@ -28,6 +37,17 @@ const api = {
     prDetail: (repo: string, n: number): Promise<PrDetail | null> =>
       ipcRenderer.invoke("gh:prDetail", repo, n),
     prDiff: (repo: string, n: number): Promise<string> => ipcRenderer.invoke("gh:prDiff", repo, n),
+    prComments: (repo: string, n: number): Promise<PrComment[]> =>
+      ipcRenderer.invoke("gh:prComments", repo, n),
+    review: (
+      repo: string,
+      n: number,
+      event: ReviewEvent,
+      body: string,
+      comments: DraftComment[],
+    ): Promise<PrActionResult> => ipcRenderer.invoke("gh:review", repo, n, event, body, comments),
+    merge: (repo: string, n: number, method: MergeMethod): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:merge", repo, n, method),
   },
   board: {
     get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
@@ -37,6 +57,9 @@ const api = {
       ipcRenderer.on("board:changed", listener);
       return () => ipcRenderer.removeListener("board:changed", listener);
     },
+  },
+  git: {
+    changes: (cwd: string): Promise<WorkingChanges> => ipcRenderer.invoke("git:changes", cwd),
   },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),

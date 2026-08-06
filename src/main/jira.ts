@@ -16,6 +16,8 @@ export interface BoardIssue {
   statusId: string;
   statusName: string;
   assignee: string | null;
+  /** Jira account id of the assignee — how "mine" is decided. */
+  assigneeId: string | null;
   updated: string;
 }
 
@@ -23,6 +25,8 @@ export interface BoardCache {
   boardName: string;
   columns: BoardColumn[];
   issues: BoardIssue[];
+  /** Account id of the authenticated user, absent on caches from older syncs. */
+  myAccountId?: string;
   at: number;
 }
 
@@ -60,7 +64,7 @@ interface AgileIssuePage {
     fields: {
       summary: string;
       status: { id: string; name: string };
-      assignee: { displayName: string } | null;
+      assignee: { displayName: string; accountId: string } | null;
       updated: string;
       issuetype?: { name?: string; hierarchyLevel?: number };
     };
@@ -87,9 +91,10 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
   syncing = true;
   try {
     const c = config();
-    const [board, conf] = await Promise.all([
+    const [board, conf, me] = await Promise.all([
       request<{ name: string }>(`/rest/agile/1.0/board/${c.boardId}`),
       request<AgileConfiguration>(`/rest/agile/1.0/board/${c.boardId}/configuration`),
+      request<{ accountId: string }>("/rest/api/3/myself"),
     ]);
     const columns: BoardColumn[] = conf.columnConfig.columns.map((col) => ({
       name: col.name,
@@ -125,6 +130,7 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
           statusId: i.fields.status.id,
           statusName: i.fields.status.name,
           assignee: i.fields.assignee?.displayName ?? null,
+          assigneeId: i.fields.assignee?.accountId ?? null,
           updated: i.fields.updated,
         });
       }
@@ -149,6 +155,7 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
       boardName: board.name,
       columns,
       issues: boardIssues,
+      myAccountId: me.accountId,
       at: Date.now(),
     };
     kvSet(CACHE_KEY, cache);

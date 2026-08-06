@@ -129,7 +129,7 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
           ))}
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {selectedId ? (
             <>
               <div className="flex h-10 shrink-0 items-center gap-2 border-b border-edge px-4">

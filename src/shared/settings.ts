@@ -17,11 +17,22 @@ export interface GithubSettings {
   owner: string;
 }
 
+/** How the entry points (hotkey, tray, manual open) map to windows.
+ *  - "shared": one window for everything.
+ *  - "panel": the hotkey gets its own quake panel; tray and manual share a main window.
+ *  - "per-entry": hotkey, tray and manual open each get their own window. */
+export type WindowMode = "shared" | "panel" | "per-entry";
+
 export interface DeckSettings {
   jira: JiraSettings;
   github: GithubSettings;
+  windowMode: WindowMode;
   /** Electron accelerator that summons/hides the window from anywhere. */
   summonHotkey: string;
+  /** Master switch for the summon hotkey. */
+  summonHotkeyEnabled: boolean;
+  /** Whether the hotkey docks the window to the top of the screen (quake style). */
+  summonDockToTop: boolean;
   /** Quake-style panel height as a fraction of the screen's work area. */
   summonHeightRatio: number;
   /** Directories deck treats as repo roots (search fallbacks, repo pickers). */
@@ -42,7 +53,10 @@ export const defaultSettings: DeckSettings = {
     doneWindowDays: 7,
   },
   github: { owner: "" },
+  windowMode: "shared",
   summonHotkey: "Alt+Space",
+  summonHotkeyEnabled: true,
+  summonDockToTop: true,
   summonHeightRatio: 0.6,
   repoRoots: [],
   defaultCwd: "~",

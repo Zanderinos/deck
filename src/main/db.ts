@@ -48,6 +48,7 @@ const migrations: string[] = [
     INSERT INTO conv_fts(rowid, text) VALUES (new.id, new.text);
   END;`,
   `ALTER TABLE agent_sessions ADD COLUMN issue_key TEXT`,
+  `ALTER TABLE agent_sessions ADD COLUMN review_note TEXT`,
 ];
 
 export function openDb(): Database.Database {

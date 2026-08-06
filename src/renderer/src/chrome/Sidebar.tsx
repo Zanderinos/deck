@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AgentSession } from "../../../main/sessions.js";
+import { useAgentSessions } from "../lib/useSessions.js";
 import { useTabs } from "../store.js";
 import type { View } from "../App.js";
 
@@ -12,8 +13,14 @@ const navDefs: { icon: string; label: string; key: string; v: View; iconColor: s
 const statusGlyph: Record<AgentSession["status"], { dot: string; color: string }> = {
   working: { dot: "✳", color: "text-accent" },
   needs_input: { dot: "✳", color: "text-orange" },
+  needs_review: { dot: "◆", color: "text-orange" },
   idle: { dot: "·", color: "text-blue" },
   ended: { dot: "❯", color: "text-dim" },
+};
+
+const statusLabel: Partial<Record<AgentSession["status"], string>> = {
+  needs_input: " · needs input",
+  needs_review: " · needs review",
 };
 
 function project(cwd?: string | null): string {
@@ -22,13 +29,11 @@ function project(cwd?: string | null): string {
 
 export function Sidebar({ view, onView }: { view: View; onView: (v: View) => void }) {
   const { tabs, activeId, newTab, focusTab } = useTabs();
-  const [agentSessions, setAgentSessions] = useState<AgentSession[]>([]);
+  const agentSessions = useAgentSessions();
   const [hooksReady, setHooksReady] = useState(true);
 
   useEffect(() => {
-    void window.deck.sessions.list().then(setAgentSessions);
     void window.deck.sessions.hooksInstalled().then(setHooksReady);
-    return window.deck.sessions.onChanged(setAgentSessions);
   }, []);
 
   const byTerm = new Map(agentSessions.filter((s) => s.term_id).map((s) => [s.term_id!, s]));
@@ -92,7 +97,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
                 </span>
                 <span className="block truncate text-[10px] text-dim">
                   {project(s?.cwd ?? tab.cwd)}
-                  {s?.status === "needs_input" ? " · needs input" : ""}
+                  {(s && statusLabel[s.status]) ?? ""}
                 </span>
               </span>
             </button>
@@ -122,7 +127,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
                 <span className="block truncate text-[10px] text-dim">
                   {s.issue_key ? `${s.issue_key} · ` : ""}
                   {project(s.cwd)}
-                  {s.status === "needs_input" ? " · needs input" : ""}
+                  {statusLabel[s.status] ?? ""}
                 </span>
               </span>
               <button

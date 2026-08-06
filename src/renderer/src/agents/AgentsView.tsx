@@ -5,6 +5,7 @@ import { useTabs } from "../store.js";
 const rows: Record<AgentSession["status"], { dot: string; color: string; label: string }> = {
   working: { dot: "◐", color: "text-blue", label: "running" },
   needs_input: { dot: "●", color: "text-orange", label: "needs input" },
+  needs_review: { dot: "◆", color: "text-orange", label: "needs review" },
   idle: { dot: "✓", color: "text-green", label: "idle" },
   ended: { dot: "✓", color: "text-dim", label: "done" },
 };
@@ -35,7 +36,7 @@ export function AgentsView() {
   const open = new Set(tabs.map((t) => t.termId));
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
         <span className="font-bold text-ink">Agents</span>
         <span className="text-[11px] text-dim">
@@ -43,7 +44,7 @@ export function AgentsView() {
           {(counts.idle ?? 0) + (counts.ended ?? 0)} done
         </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
         {sessions.length === 0 && (
           <div className="pt-4 text-xs text-dim">
             No agent sessions yet — run <span className="font-mono text-soft">claude</span> in a

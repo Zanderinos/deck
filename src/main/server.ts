@@ -1,6 +1,6 @@
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
-import { applyHook, type HookPayload } from "./sessions.js";
+import { applyHook, requestReview, type HookPayload } from "./sessions.js";
 
 // deck's local HTTP surface. Claude Code hooks curl into it; later slices add
 // search and board APIs. Loopback only.
@@ -18,6 +18,15 @@ function buildApp(): Hono {
     const payload = (await c.req.json().catch(() => ({}))) as HookPayload;
     applyHook(payload, c.req.header("x-deck-term") || null);
     return c.json({ ok: true });
+  });
+
+  // The deck-review skill posts the agent's decisions summary as plain text
+  // when it pauses for user verification before pushing.
+  app.post("/api/review", async (c) => {
+    const term = c.req.header("x-deck-term");
+    const note = (await c.req.text().catch(() => "")).trim();
+    if (term && note) requestReview(term, note);
+    return c.json({ ok: Boolean(term && note) });
   });
 
   return app;

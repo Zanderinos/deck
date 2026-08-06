@@ -104,7 +104,7 @@ function Shell() {
       <Titlebar onSearch={() => setSearchOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <Sidebar view={view} onView={setView} />
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <TerminalView visible={view === "terminal"} />
           {view === "search" && (
             <div className="min-h-0 flex-1">
@@ -133,12 +133,54 @@ function SettingsView() {
   }, []);
   if (!settings) return null;
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
         <span className="font-bold text-ink">Settings</span>
       </div>
-      <div className="w-[420px] px-6 py-5">
-        <label className="block text-xs text-dim">Summon hotkey (Electron accelerator)</label>
+      <div className="min-h-0 w-[420px] flex-1 overflow-y-auto px-6 py-5">
+        <label className="block text-xs text-dim">Windows</label>
+        <select
+          className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+          value={settings.windowMode}
+          onChange={async (e) => {
+            const v = e.target.value as DeckSettings["windowMode"];
+            if (v !== settings.windowMode) {
+              setSettings(await window.deck.updateSettings({ windowMode: v }));
+            }
+          }}
+        >
+          <option value="shared">One shared window for hotkey, tray and manual open</option>
+          <option value="panel">Separate hotkey panel + main window for tray/manual</option>
+          <option value="per-entry">Separate windows for hotkey, tray and manual open</option>
+        </select>
+
+        <label className="mt-4 flex items-center gap-2 text-xs text-dim">
+          <input
+            type="checkbox"
+            checked={settings.summonHotkeyEnabled}
+            onChange={async (e) =>
+              setSettings(
+                await window.deck.updateSettings({ summonHotkeyEnabled: e.target.checked }),
+              )
+            }
+          />
+          Enable summon hotkey
+        </label>
+
+        <label className="mt-2 flex items-center gap-2 text-xs text-dim">
+          <input
+            type="checkbox"
+            checked={settings.summonDockToTop}
+            onChange={async (e) =>
+              setSettings(
+                await window.deck.updateSettings({ summonDockToTop: e.target.checked }),
+              )
+            }
+          />
+          Hotkey docks the window to the top of the screen (quake style)
+        </label>
+
+        <label className="mt-4 block text-xs text-dim">Summon hotkey (Electron accelerator)</label>
         <input
           className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
           defaultValue={settings.summonHotkey}

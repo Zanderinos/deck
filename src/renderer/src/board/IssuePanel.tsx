@@ -14,6 +14,7 @@ const stateColor: Record<string, string> = {
 const agentGlyph: Record<AgentSession["status"], { dot: string; color: string; label: string }> = {
   working: { dot: "◐", color: "text-blue", label: "working" },
   needs_input: { dot: "●", color: "text-orange", label: "needs input" },
+  needs_review: { dot: "◆", color: "text-orange", label: "needs review" },
   idle: { dot: "·", color: "text-green", label: "idle" },
   ended: { dot: "✓", color: "text-dim", label: "ended" },
 };

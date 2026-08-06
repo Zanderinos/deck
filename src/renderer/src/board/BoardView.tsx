@@ -30,6 +30,7 @@ export function BoardView() {
   const [syncing, setSyncing] = useState(false);
   const [selected, setSelected] = useState<BoardIssue>();
   const [diffPr, setDiffPr] = useState<IssuePr>();
+  const [mineOnly, setMineOnly] = useState(false);
 
   useEffect(() => {
     void window.deck.getSettings().then(setSettings);
@@ -65,6 +66,15 @@ export function BoardView() {
 
   const configured = Boolean(settings && settings.jira.baseUrl && settings.jira.boardId);
 
+  // Older caches have no account id, so "mine" can only be honoured once a
+  // sync has recorded who we are.
+  const canFilterMine = Boolean(board?.myAccountId);
+  const issues = useMemo(() => {
+    if (!board) return [];
+    if (!mineOnly || !board.myAccountId) return board.issues;
+    return board.issues.filter((i) => i.assigneeId === board.myAccountId);
+  }, [board, mineOnly]);
+
   const spinUp = (issue: BoardIssue) => {
     const prompt = `${issue.key}: ${issue.summary} — the code was rejected in review. Look at the PR feedback and address it.`;
     void newTab({ command: `claude ${JSON.stringify(prompt)}`, issueKey: issue.key });
@@ -72,7 +82,7 @@ export function BoardView() {
 
   if (!configured) {
     return (
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header title="Board" sub="not configured" />
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-xs text-dim">
           <div>Fill in Jira base URL, email, API token and board id in Settings.</div>
@@ -82,27 +92,38 @@ export function BoardView() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Header
         title="Board"
-        sub={board ? `${board.boardName} · ${board.issues.length} issues` : "syncing…"}
+        sub={board ? `${board.boardName} · ${issues.length} issues` : "syncing…"}
         right={
-          <button
-            onClick={async () => {
-              setSyncing(true);
-              setBoard((await window.deck.board.sync()) ?? board);
-              setSyncing(false);
-            }}
-            className="text-[11px] text-dim hover:text-ink"
-          >
-            {syncing ? "syncing…" : "↻ sync"}
-          </button>
+          <div className="flex items-center gap-4">
+            {canFilterMine && (
+              <button
+                onClick={() => setMineOnly((v) => !v)}
+                className={`text-[11px] ${mineOnly ? "text-accent" : "text-dim hover:text-ink"}`}
+                title="Show only issues assigned to me"
+              >
+                {mineOnly ? "● my tasks" : "○ my tasks"}
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                setSyncing(true);
+                setBoard((await window.deck.board.sync()) ?? board);
+                setSyncing(false);
+              }}
+              className="text-[11px] text-dim hover:text-ink"
+            >
+              {syncing ? "syncing…" : "↻ sync"}
+            </button>
+          </div>
         }
       />
       <div className="flex min-h-0 flex-1">
       <div className="flex flex-1 items-start gap-4 overflow-auto px-6 py-5">
         {board?.columns.map((col, ci) => {
-          const cards = board.issues.filter((i) => col.statusIds.includes(i.statusId));
+          const cards = issues.filter((i) => col.statusIds.includes(i.statusId));
           return (
             <div key={col.name} className="w-[280px] shrink-0">
               <div className="flex items-center gap-2 px-1 pb-2.5">
