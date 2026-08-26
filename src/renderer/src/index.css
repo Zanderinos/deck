@@ -57,24 +57,178 @@ body {
   color: var(--color-soft);
   font-family: var(--font-mono);
   font-size: 11px;
+  line-height: 1.7;
+  border-collapse: collapse;
+}
+.deck-diff .diff-line:hover .diff-code {
+  background: rgba(255, 255, 255, 0.025);
 }
 .deck-diff .diff-gutter {
-  background: var(--color-panel);
+  background: var(--color-bg);
   color: var(--color-dim);
+  min-width: 52px;
+  padding: 0 10px 0 6px;
+  text-align: right;
+  border-right: 1px solid var(--color-edge);
 }
-.deck-diff .diff-code-insert,
+.deck-diff .diff-gutter > a {
+  color: inherit;
+}
+.deck-diff .diff-code {
+  padding-left: 14px;
+  padding-right: 24px;
+}
+.deck-diff .diff-code-insert {
+  background: rgba(74, 222, 128, 0.1);
+}
 .deck-diff .diff-gutter-insert {
-  background: rgba(74, 222, 128, 0.12);
+  background: rgba(74, 222, 128, 0.14);
+  color: var(--color-green);
 }
-.deck-diff .diff-code-delete,
+.deck-diff .diff-code-delete {
+  background: rgba(248, 113, 113, 0.1);
+}
 .deck-diff .diff-gutter-delete {
-  background: rgba(248, 113, 113, 0.12);
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--color-red);
+}
+.deck-diff .diff-code-insert .diff-code-edit {
+  background: rgba(74, 222, 128, 0.28);
+  border-radius: 2px;
+}
+.deck-diff .diff-code-delete .diff-code-edit {
+  background: rgba(248, 113, 113, 0.28);
+  border-radius: 2px;
 }
 .deck-diff .diff-hunk-header,
 .deck-diff .diff-hunk-header-gutter,
 .deck-diff .diff-hunk-header-content {
   background: var(--color-card);
   color: var(--color-dim);
+}
+.deck-diff .diff-decoration {
+  background: var(--color-panel);
+}
+.deck-diff .diff-decoration-gutter,
+.deck-diff .diff-decoration-content {
+  background: var(--color-panel);
+  padding: 2px 0;
+}
+.deck-diff .deck-gap {
+  border-top: 1px solid var(--color-edge);
+  border-bottom: 1px solid var(--color-edge);
+}
+.deck-diff .diff-widget-content {
+  background: var(--color-bg);
+}
+.deck-file-active {
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.deck-diff .diff-gutter {
+  cursor: pointer;
+  user-select: none;
+}
+.deck-diff .diff-gutter-selected,
+.deck-diff .diff-code-selected {
+  background: rgba(167, 139, 250, 0.18);
+}
+.deck-diff .diff-gutter-selected {
+  color: var(--color-accent);
+}
+
+/* Prism tokens (via refractor), on the deck palette. */
+.deck-diff .token.comment,
+.deck-diff .token.prolog,
+.deck-diff .token.doctype,
+.deck-diff .token.cdata {
+  color: var(--color-dim);
+  font-style: italic;
+}
+.deck-diff .token.punctuation {
+  color: var(--color-mut);
+}
+.deck-diff .token.keyword,
+.deck-diff .token.atrule,
+.deck-diff .token.important {
+  color: #c084fc;
+}
+.deck-diff .token.string,
+.deck-diff .token.char,
+.deck-diff .token.attr-value,
+.deck-diff .token.template-string {
+  color: #fcd34d;
+}
+.deck-diff .token.number,
+.deck-diff .token.boolean,
+.deck-diff .token.constant,
+.deck-diff .token.symbol {
+  color: var(--color-orange);
+}
+.deck-diff .token.function,
+.deck-diff .token.function-variable,
+.deck-diff .token.method {
+  color: var(--color-blue);
+}
+.deck-diff .token.class-name,
+.deck-diff .token.maybe-class-name,
+.deck-diff .token.builtin,
+.deck-diff .token.tag .token.class-name {
+  color: #7dd3fc;
+}
+.deck-diff .token.tag,
+.deck-diff .token.selector {
+  color: var(--color-red);
+}
+.deck-diff .token.attr-name,
+.deck-diff .token.property,
+.deck-diff .token.variable {
+  color: #fdba74;
+}
+.deck-diff .token.operator,
+.deck-diff .token.entity,
+.deck-diff .token.url {
+  color: var(--color-soft);
+}
+.deck-diff .token.regex {
+  color: var(--color-green);
+}
+.deck-diff .token.deleted {
+  color: var(--color-red);
+}
+.deck-diff .token.inserted {
+  color: var(--color-green);
+}
+
+/* PR description reads like a document, not a chat card. */
+.pr-overview-body .md {
+  font-size: 13px;
+  line-height: 1.65;
+  margin-top: 0;
+}
+.pr-overview-body .md h1 {
+  font-size: 18px;
+  margin-top: 1.4em;
+}
+.pr-overview-body .md h2 {
+  font-size: 16px;
+  margin-top: 1.4em;
+}
+.pr-overview-body .md h3,
+.pr-overview-body .md h4 {
+  font-size: 13px;
+  margin-top: 1.2em;
+}
+.pr-overview-body .md code {
+  font-size: 11.5px;
+  padding: 1px 5px;
+}
+.pr-overview-body .md pre {
+  padding: 12px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.pr-overview-body .md li + li {
+  margin-top: 0.4em;
 }
 
 /* The frameless top strip stays draggable. */
@@ -85,4 +239,93 @@ body {
 .drag-region input,
 .no-drag {
   -webkit-app-region: no-drag;
+}
+
+.md > * + * {
+  margin-top: 0.5em;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  color: var(--color-soft);
+  font-weight: 700;
+}
+.md h1 {
+  font-size: 13px;
+}
+.md h2 {
+  font-size: 12px;
+}
+.md h3,
+.md h4 {
+  font-size: 11px;
+}
+.md strong {
+  color: var(--color-soft);
+}
+.md a {
+  color: var(--color-blue);
+  text-decoration: underline;
+}
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li + li {
+  margin-top: 0.2em;
+}
+.md code {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  background: var(--color-card2);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.md pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-edge2);
+  border-radius: 4px;
+  padding: 6px 8px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md blockquote {
+  border-left: 2px solid var(--color-edge3);
+  padding-left: 8px;
+  color: var(--color-mut);
+}
+.md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-edge2);
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.md th {
+  color: var(--color-soft);
+}
+.md hr {
+  border-color: var(--color-edge2);
+}
+.md summary {
+  cursor: pointer;
+  color: var(--color-soft);
+}
+.md details > *:not(summary) {
+  margin-top: 0.5em;
 }

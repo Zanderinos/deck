@@ -25,16 +25,22 @@ import { startPtyHost, stopPtyHost } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
 import {
   mergePr,
+  addPrComment,
+  enableAutoMerge,
+  fileContent,
   prComments,
   prDetail,
   prDiff,
-  prsForIssue,
+  replyToThread,
+  setPrFileViewed,
+  setThreadResolved,
   submitPrReview,
   type DraftComment,
   type MergeMethod,
   type ReviewEvent,
 } from "./github.js";
 import { workingChanges } from "./git.js";
+import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import { getBoardCache, moveIssue, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
 import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
@@ -202,11 +208,15 @@ app.whenReady().then(async () => {
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
+  startPrWarmer();
+  onPrsChanged((key, prs) => broadcast("prs:changed", key, prs));
   startBoardSync();
   onBoardChanged((b) => broadcast("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
   ipcMain.handle("board:move", (_e, key: string, column: string) => moveIssue(key, column));
-  ipcMain.handle("gh:prsForIssue", (_e, key: string) => prsForIssue(key));
+  ipcMain.handle("gh:prsForIssue", (_e, key: string) =>
+    prsForIssue(key, getBoardCache()?.issues.find((i) => i.key === key)),
+  );
   ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
   ipcMain.handle("gh:prComments", (_e, repo: string, n: number) => prComments(repo, n));
@@ -217,6 +227,24 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle("gh:merge", (_e, repo: string, n: number, method: MergeMethod) =>
     mergePr(repo, n, method),
+  );
+  ipcMain.handle("gh:setFileViewed", (_e, prId: string, path: string, viewed: boolean) =>
+    setPrFileViewed(prId, path, viewed),
+  );
+  ipcMain.handle("gh:autoMerge", (_e, repo: string, n: number, method: MergeMethod) =>
+    enableAutoMerge(repo, n, method),
+  );
+  ipcMain.handle("gh:replyToThread", (_e, threadId: string, body: string) =>
+    replyToThread(threadId, body),
+  );
+  ipcMain.handle("gh:setThreadResolved", (_e, threadId: string, resolved: boolean) =>
+    setThreadResolved(threadId, resolved),
+  );
+  ipcMain.handle("gh:addComment", (_e, repo: string, n: number, body: string) =>
+    addPrComment(repo, n, body),
+  );
+  ipcMain.handle("gh:fileContent", (_e, repo: string, ref: string, path: string) =>
+    fileContent(repo, ref, path),
   );
   ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
   // An existing install predates events added since; appending is a no-op

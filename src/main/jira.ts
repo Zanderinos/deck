@@ -11,6 +11,8 @@ export interface BoardColumn {
 }
 
 export interface BoardIssue {
+  /** Numeric Jira id, needed by the dev-status (linked PR) endpoints. */
+  id: string;
   key: string;
   summary: string;
   statusId: string;
@@ -91,6 +93,62 @@ export async function moveIssue(key: string, columnName: string): Promise<BoardC
   return next;
 }
 
+export interface LinkedPullRequest {
+  /** Full "owner/repo" as GitHub names it. */
+  repo: string;
+  number: number;
+  title: string;
+  /** OPEN, MERGED, DECLINED or DRAFT. */
+  status: string;
+  url: string;
+  lastUpdate: string;
+}
+
+interface DevStatusSummary {
+  summary: { pullrequest?: { byInstanceType?: Record<string, unknown> } };
+}
+
+interface DevStatusDetail {
+  detail: {
+    pullRequests: {
+      id: string;
+      name: string;
+      status: string;
+      url: string;
+      lastUpdate: string;
+      repositoryName: string;
+    }[];
+  }[];
+}
+
+/** Pull requests the GitHub-for-Jira integration attached to an issue. The
+ *  detail endpoint wants the integration's instance type, which the summary
+ *  reports, so this is two requests instead of a hardcoded vendor string. */
+export async function linkedPullRequests(issueId: string): Promise<LinkedPullRequest[]> {
+  const { summary } = await request<DevStatusSummary>(
+    `/rest/dev-status/latest/issue/summary?issueId=${issueId}`,
+  );
+  const types = Object.keys(summary.pullrequest?.byInstanceType ?? {});
+  const details = await Promise.all(
+    types.map((type) =>
+      request<DevStatusDetail>(
+        `/rest/dev-status/latest/issue/detail?issueId=${issueId}&applicationType=${encodeURIComponent(type)}&dataType=pullrequest`,
+      ),
+    ),
+  );
+  return details
+    .flatMap((d) => d.detail)
+    .flatMap((d) => d.pullRequests)
+    .map((pr) => ({
+      repo: pr.repositoryName,
+      number: Number(pr.id.replace(/^#/, "")),
+      title: pr.name,
+      status: pr.status,
+      url: pr.url,
+      lastUpdate: pr.lastUpdate,
+    }));
+}
+
 interface AgileConfiguration {
   columnConfig: { columns: { name: string; statuses: { id: string }[] }[] };
   /** Kanban board sub-filter — applied to the display, not the issue endpoint. */
@@ -99,6 +157,7 @@ interface AgileConfiguration {
 
 interface AgileIssuePage {
   issues: {
+    id: string;
     key: string;
     fields: {
       summary: string;
@@ -164,6 +223,7 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
             : !/^(epic|sub-?task)$/i.test(t?.name ?? "");
         if (!isCard) continue;
         issues.push({
+          id: i.id,
           key: i.key,
           summary: i.fields.summary,
           statusId: i.fields.status.id,

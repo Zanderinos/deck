@@ -6,6 +6,8 @@ const exec = promisify(execFile);
 
 // PRs via the gh CLI (the user's own auth), adapted from slate's prSearch.
 // Scoped to the configured owner when set, otherwise searches all of GitHub.
+// This is the fallback for issues Jira has no PR linked to; the cache that
+// serves the board lives in issuePrs.ts.
 
 export interface IssuePr {
   repo: string;
@@ -29,7 +31,7 @@ interface GhPrRow {
   repository?: { nameWithOwner?: string };
 }
 
-export async function prsForIssue(issueKey: string): Promise<IssuePr[]> {
+export async function searchPrsForIssue(issueKey: string): Promise<IssuePr[]> {
   const owner = getSettings().github.owner;
   const args = [
     "search",
@@ -60,16 +62,66 @@ export async function prsForIssue(issueKey: string): Promise<IssuePr[]> {
   }
 }
 
-export interface PrDetail {
-  title: string;
+export type MergeMethod = "merge" | "squash" | "rebase";
+
+export interface PrCheck {
+  name: string;
   state: string;
-  reviewDecision: string | null;
-  checks: { name: string; state: string }[];
-  /** Merge methods the repo allows, in GitHub's merge/squash/rebase order. */
-  mergeMethods: ("merge" | "squash" | "rebase")[];
+  url: string | null;
 }
 
-async function allowedMergeMethods(repo: string): Promise<PrDetail["mergeMethods"]> {
+export interface PrReviewer {
+  login: string;
+  /** APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED or PENDING for an open request. */
+  state: string;
+}
+
+export interface PrCommit {
+  oid: string;
+  headline: string;
+  author: string;
+  date: string;
+}
+
+export interface PrFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  /** GitHub's own "Viewed" checkbox, so review progress follows the user across tools. */
+  viewed: boolean;
+}
+
+export interface PrDetail {
+  /** GraphQL node id, needed by the viewed-file mutations. */
+  id: string;
+  title: string;
+  body: string;
+  state: string;
+  isDraft: boolean;
+  url: string;
+  author: string;
+  baseRefName: string;
+  headRefName: string;
+  headRefOid: string;
+  additions: number;
+  deletions: number;
+  reviewDecision: string | null;
+  /** MERGEABLE, CONFLICTING or UNKNOWN. */
+  mergeable: string;
+  /** CLEAN, BEHIND, BLOCKED, DIRTY, UNSTABLE, HAS_HOOKS, DRAFT or UNKNOWN. */
+  mergeStateStatus: string;
+  checks: PrCheck[];
+  /** Merge methods the repo allows, in GitHub's merge/squash/rebase order. */
+  mergeMethods: MergeMethod[];
+  reviewers: PrReviewer[];
+  /** Set when someone enabled GitHub auto-merge; it fires once requirements pass. */
+  autoMerge: { method: MergeMethod; by: string } | null;
+  commits: PrCommit[];
+  linkedIssues: { number: number; title: string; url: string }[];
+  files: PrFile[];
+}
+
+async function allowedMergeMethods(repo: string): Promise<MergeMethod[]> {
   try {
     const { stdout } = await exec(
       "gh",
@@ -81,7 +133,7 @@ async function allowedMergeMethods(repo: string): Promise<PrDetail["mergeMethods
       squashMergeAllowed: boolean;
       rebaseMergeAllowed: boolean;
     };
-    const methods: PrDetail["mergeMethods"] = [];
+    const methods: MergeMethod[] = [];
     if (repoView.mergeCommitAllowed) methods.push("merge");
     if (repoView.squashMergeAllowed) methods.push("squash");
     if (repoView.rebaseMergeAllowed) methods.push("rebase");
@@ -91,40 +143,270 @@ async function allowedMergeMethods(repo: string): Promise<PrDetail["mergeMethods
   }
 }
 
+const FILES_QUERY = `
+query($owner: String!, $name: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      files(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { path additions deletions viewerViewedState }
+      }
+    }
+  }
+}`;
+
+interface GhFileNode {
+  path: string;
+  additions: number;
+  deletions: number;
+  viewerViewedState: "VIEWED" | "UNVIEWED" | "DISMISSED";
+}
+
+async function graphql(query: string, variables: Record<string, string | number | null>) {
+  const args = ["api", "graphql", "-f", `query=${query}`];
+  for (const [key, value] of Object.entries(variables)) {
+    if (value !== null) args.push("-F", `${key}=${value}`);
+  }
+  const { stdout } = await exec("gh", args, { timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
+  return JSON.parse(stdout) as { data?: Record<string, unknown> };
+}
+
+// The REST `files` field lacks the viewed state, so files come from GraphQL.
+async function prFiles(repo: string, number: number): Promise<PrFile[]> {
+  const [owner, name] = repo.split("/");
+  const files: PrFile[] = [];
+  let after: string | null = null;
+  try {
+    do {
+      const page = (await graphql(FILES_QUERY, { owner, name, number, after })).data as
+        | {
+            repository?: {
+              pullRequest?: {
+                files: { pageInfo: { hasNextPage: boolean; endCursor: string }; nodes: GhFileNode[] };
+              };
+            };
+          }
+        | undefined;
+      const connection = page?.repository?.pullRequest?.files;
+      if (!connection) break;
+      for (const node of connection.nodes) {
+        files.push({
+          path: node.path,
+          additions: node.additions,
+          deletions: node.deletions,
+          viewed: node.viewerViewedState === "VIEWED",
+        });
+      }
+      after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
+    } while (after);
+  } catch {
+    // A partial list beats no detail at all.
+  }
+  return files;
+}
+
 interface GhCheckRollup {
   name?: string;
   context?: string;
   state?: string;
   conclusion?: string;
   status?: string;
+  detailsUrl?: string;
+  targetUrl?: string;
 }
+
+interface GhPrView {
+  id: string;
+  title: string;
+  body: string;
+  state: string;
+  isDraft: boolean;
+  url: string;
+  author: { login?: string } | null;
+  baseRefName: string;
+  headRefName: string;
+  headRefOid: string;
+  additions: number;
+  deletions: number;
+  reviewDecision: string | null;
+  mergeable: string;
+  mergeStateStatus: string;
+  statusCheckRollup: GhCheckRollup[] | null;
+  reviewRequests: ({ login?: string } | { name?: string; slug?: string })[];
+  latestReviews: { author: { login: string }; state: string }[];
+  autoMergeRequest: { mergeMethod: string; enabledBy?: { login?: string } } | null;
+  commits: {
+    oid: string;
+    messageHeadline: string;
+    authors: { login?: string; name?: string }[];
+    committedDate: string;
+  }[];
+  closingIssuesReferences: { number: number; title: string; url: string }[];
+}
+
+const PR_VIEW_FIELDS = [
+  "id",
+  "title",
+  "body",
+  "state",
+  "isDraft",
+  "url",
+  "author",
+  "baseRefName",
+  "headRefName",
+  "headRefOid",
+  "additions",
+  "deletions",
+  "reviewDecision",
+  "mergeable",
+  "mergeStateStatus",
+  "statusCheckRollup",
+  "reviewRequests",
+  "latestReviews",
+  "autoMergeRequest",
+  "commits",
+  "closingIssuesReferences",
+].join(",");
 
 export async function prDetail(repo: string, number: number): Promise<PrDetail | null> {
   try {
-    const [{ stdout }, mergeMethods] = await Promise.all([
-      exec(
-        "gh",
-        ["pr", "view", String(number), "-R", repo, "--json", "title,state,reviewDecision,statusCheckRollup"],
-        { timeout: 20_000 },
-      ),
+    const [{ stdout }, mergeMethods, files] = await Promise.all([
+      exec("gh", ["pr", "view", String(number), "-R", repo, "--json", PR_VIEW_FIELDS], {
+        timeout: 20_000,
+        maxBuffer: 8 * 1024 * 1024,
+      }),
       allowedMergeMethods(repo),
+      prFiles(repo, number),
     ]);
-    const raw = JSON.parse(stdout) as {
-      title: string;
-      state: string;
-      reviewDecision: string | null;
-      statusCheckRollup: GhCheckRollup[] | null;
-    };
+    const raw = JSON.parse(stdout) as GhPrView;
+
+    // Open requests first, then whoever already reviewed; a login appears once.
+    const reviewers: PrReviewer[] = [];
+    for (const request of raw.reviewRequests ?? []) {
+      const login = "login" in request && request.login ? request.login : "name" in request ? request.name : undefined;
+      if (login) reviewers.push({ login, state: "PENDING" });
+    }
+    for (const review of raw.latestReviews ?? []) {
+      const login = review.author?.login;
+      if (!login || reviewers.some((r) => r.login === login)) continue;
+      reviewers.push({ login, state: review.state });
+    }
+
     return {
+      id: raw.id,
       title: raw.title,
+      body: raw.body ?? "",
       state: raw.state,
+      isDraft: raw.isDraft,
+      url: raw.url,
+      author: raw.author?.login ?? "",
+      baseRefName: raw.baseRefName,
+      headRefName: raw.headRefName,
+      headRefOid: raw.headRefOid,
+      additions: raw.additions,
+      deletions: raw.deletions,
       reviewDecision: raw.reviewDecision,
+      mergeable: raw.mergeable ?? "UNKNOWN",
+      mergeStateStatus: raw.mergeStateStatus ?? "UNKNOWN",
       checks: (raw.statusCheckRollup ?? []).map((c) => ({
         name: c.name ?? c.context ?? "check",
         state: c.conclusion ?? c.state ?? c.status ?? "",
+        url: c.detailsUrl ?? c.targetUrl ?? null,
       })),
       mergeMethods,
+      reviewers,
+      autoMerge: raw.autoMergeRequest
+        ? {
+            method: raw.autoMergeRequest.mergeMethod.toLowerCase() as MergeMethod,
+            by: raw.autoMergeRequest.enabledBy?.login ?? "",
+          }
+        : null,
+      commits: (raw.commits ?? []).map((c) => ({
+        oid: c.oid,
+        headline: c.messageHeadline,
+        author: c.authors?.[0]?.login || c.authors?.[0]?.name || "",
+        date: c.committedDate,
+      })),
+      linkedIssues: raw.closingIssuesReferences ?? [],
+      files,
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function setPrFileViewed(
+  pullRequestId: string,
+  path: string,
+  viewed: boolean,
+): Promise<PrActionResult> {
+  const mutation = viewed ? "markFileAsViewed" : "unmarkFileAsViewed";
+  try {
+    await graphql(
+      `mutation($id: ID!, $path: String!) {
+        ${mutation}(input: { pullRequestId: $id, path: $path }) { clientMutationId }
+      }`,
+      { id: pullRequestId, path },
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: firstLine(err) };
+  }
+}
+
+export async function replyToThread(threadId: string, body: string): Promise<PrActionResult> {
+  try {
+    await graphql(
+      `mutation($id: ID!, $body: String!) {
+        addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $id, body: $body }) {
+          comment { id }
+        }
+      }`,
+      { id: threadId, body },
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: firstLine(err) };
+  }
+}
+
+export async function setThreadResolved(threadId: string, resolved: boolean): Promise<PrActionResult> {
+  const mutation = resolved ? "resolveReviewThread" : "unresolveReviewThread";
+  try {
+    await graphql(
+      `mutation($id: ID!) { ${mutation}(input: { threadId: $id }) { thread { id } } }`,
+      { id: threadId },
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: firstLine(err) };
+  }
+}
+
+/** A plain conversation comment on the PR, outside any review. */
+export async function addPrComment(repo: string, number: number, body: string): Promise<PrActionResult> {
+  try {
+    const pending = exec("gh", ["pr", "comment", String(number), "-R", repo, "--body-file", "-"], {
+      timeout: 30_000,
+    });
+    pending.child.stdin?.end(body);
+    await pending;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: firstLine(err) };
+  }
+}
+
+/** Raw file content at a ref, for expanding the unchanged lines around a hunk. */
+export async function fileContent(repo: string, ref: string, path: string): Promise<string | null> {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  try {
+    const { stdout } = await exec(
+      "gh",
+      ["api", `repos/${repo}/contents/${encoded}?ref=${ref}`, "-H", "Accept: application/vnd.github.raw+json"],
+      { timeout: 20_000, maxBuffer: 16 * 1024 * 1024 },
+    );
+    return stdout;
   } catch {
     return null;
   }
@@ -135,6 +417,8 @@ export async function prDetail(repo: string, number: number): Promise<PrDetail |
 // review-level bodies (Copilot's summary, a human's overall note) have none.
 export interface PrComment {
   id: number;
+  /** Review thread node id; null for review bodies and plain PR comments. */
+  threadId: string | null;
   author: string;
   isBot: boolean;
   body: string;
@@ -152,6 +436,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
         nodes {
+          id
           isResolved
           isOutdated
           path
@@ -163,6 +448,9 @@ query($owner: String!, $name: String!, $number: Int!) {
       }
       reviews(first: 50) {
         nodes { databaseId body url createdAt state author { login } }
+      }
+      comments(first: 100) {
+        nodes { databaseId body url createdAt author { login } }
       }
     }
   }
@@ -207,6 +495,7 @@ export async function prComments(repo: string, number: number): Promise<PrCommen
             pullRequest?: {
               reviewThreads: {
                 nodes: {
+                  id: string;
                   isResolved: boolean;
                   isOutdated: boolean;
                   path: string | null;
@@ -215,6 +504,7 @@ export async function prComments(repo: string, number: number): Promise<PrCommen
                 }[];
               };
               reviews: { nodes: (CommentNode & { state: string })[] };
+              comments: { nodes: CommentNode[] };
             };
           };
         };
@@ -223,12 +513,13 @@ export async function prComments(repo: string, number: number): Promise<PrCommen
     if (!pr) return [];
 
     const comments: PrComment[] = [];
-    for (const review of pr.reviews.nodes) {
+    for (const review of [...pr.reviews.nodes, ...pr.comments.nodes]) {
       const body = review.body?.trim();
       if (!body || NOISE.test(body)) continue;
       const author = review.author?.login ?? "unknown";
       comments.push({
         id: review.databaseId,
+        threadId: null,
         author,
         isBot: isBotLogin(author),
         body,
@@ -245,6 +536,7 @@ export async function prComments(repo: string, number: number): Promise<PrCommen
         const author = node.author?.login ?? "unknown";
         comments.push({
           id: node.databaseId,
+          threadId: thread.id,
           author,
           isBot: isBotLogin(author),
           body: node.body,
@@ -320,8 +612,6 @@ export async function submitPrReview(
   }
 }
 
-export type MergeMethod = "merge" | "squash" | "rebase";
-
 // Guards mirror slate's merge route: refuse drafts, conflicts and red checks
 // with a readable message instead of letting gh fail with a worse one.
 export async function mergePr(
@@ -355,6 +645,22 @@ export async function mergePr(
       return { ok: false, error: `${failing.length} check(s) failing; nothing to merge yet.` };
     }
     await exec("gh", ["pr", "merge", String(number), "-R", repo, `--${method}`], {
+      timeout: 30_000,
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: firstLine(err) };
+  }
+}
+
+/** Asks GitHub to merge on its own once checks and reviews allow it. */
+export async function enableAutoMerge(
+  repo: string,
+  number: number,
+  method: MergeMethod,
+): Promise<PrActionResult> {
+  try {
+    await exec("gh", ["pr", "merge", String(number), "-R", repo, "--auto", `--${method}`], {
       timeout: 30_000,
     });
     return { ok: true };

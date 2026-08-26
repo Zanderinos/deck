@@ -37,6 +37,9 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
   useEffect(() => {
     setPrs(undefined);
     void window.deck.gh.prsForIssue(issue.key).then(setPrs);
+    return window.deck.gh.onPrsChanged((key, next) => {
+      if (key === issue.key) setPrs(next);
+    });
   }, [issue.key]);
 
   useEffect(() => {

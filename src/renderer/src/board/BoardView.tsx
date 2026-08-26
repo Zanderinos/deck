@@ -4,7 +4,7 @@ import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { DeckSettings } from "../../../shared/settings.js";
 import { onNavBack } from "../lib/bus.js";
 import { useTabs } from "../store.js";
-import { DiffScreen } from "./DiffScreen.js";
+import { PrScreen } from "./PrScreen.js";
 import { IssuePanel } from "./IssuePanel.js";
 
 const columnDots = ["text-body", "text-orange", "text-blue", "text-green", "text-accent"];
@@ -295,7 +295,14 @@ export function BoardView() {
         />
       )}
       </div>
-      {diffPr && <DiffScreen pr={diffPr} onClose={() => setDiffPr(undefined)} />}
+      {diffPr && (
+        <PrScreen
+          pr={diffPr}
+          issue={selected}
+          jiraBaseUrl={settings?.jira.baseUrl}
+          onClose={() => setDiffPr(undefined)}
+        />
+      )}
     </div>
   );
 }

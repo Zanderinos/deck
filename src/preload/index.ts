@@ -35,6 +35,11 @@ const api = {
   },
   gh: {
     prsForIssue: (key: string): Promise<IssuePr[]> => ipcRenderer.invoke("gh:prsForIssue", key),
+    onPrsChanged: (cb: (key: string, prs: IssuePr[]) => void): (() => void) => {
+      const listener = (_e: unknown, key: string, prs: IssuePr[]) => cb(key, prs);
+      ipcRenderer.on("prs:changed", listener);
+      return () => ipcRenderer.removeListener("prs:changed", listener);
+    },
     prDetail: (repo: string, n: number): Promise<PrDetail | null> =>
       ipcRenderer.invoke("gh:prDetail", repo, n),
     prDiff: (repo: string, n: number): Promise<string> => ipcRenderer.invoke("gh:prDiff", repo, n),
@@ -49,6 +54,18 @@ const api = {
     ): Promise<PrActionResult> => ipcRenderer.invoke("gh:review", repo, n, event, body, comments),
     merge: (repo: string, n: number, method: MergeMethod): Promise<PrActionResult> =>
       ipcRenderer.invoke("gh:merge", repo, n, method),
+    setFileViewed: (prId: string, path: string, viewed: boolean): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:setFileViewed", prId, path, viewed),
+    autoMerge: (repo: string, n: number, method: MergeMethod): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:autoMerge", repo, n, method),
+    replyToThread: (threadId: string, body: string): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:replyToThread", threadId, body),
+    setThreadResolved: (threadId: string, resolved: boolean): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:setThreadResolved", threadId, resolved),
+    addComment: (repo: string, n: number, body: string): Promise<PrActionResult> =>
+      ipcRenderer.invoke("gh:addComment", repo, n, body),
+    fileContent: (repo: string, ref: string, path: string): Promise<string | null> =>
+      ipcRenderer.invoke("gh:fileContent", repo, ref, path),
   },
   board: {
     get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
