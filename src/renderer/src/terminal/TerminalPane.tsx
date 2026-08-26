@@ -69,6 +69,8 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
     const onTitleChange = term.onTitleChange(onTitle);
     const onResize = term.onResize(({ cols, rows }) => window.deck.term.resize(termId, cols, rows));
     window.deck.term.resize(termId, term.cols, term.rows);
+    // Subscribed above, so the replayed buffer lands before any live data.
+    void window.deck.term.attach(termId);
 
     const observer = new ResizeObserver(() => {
       if (host.clientWidth > 0) fit.fit();

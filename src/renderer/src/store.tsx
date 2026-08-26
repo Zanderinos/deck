@@ -26,6 +26,8 @@ export interface OpenOptions {
 interface TabStore {
   tabs: TermTab[];
   activeId?: string;
+  /** False until terminals surviving from before the reload are restored. */
+  ready: boolean;
   newTab: (opts?: OpenOptions) => Promise<void>;
   closeTab: (termId: string, kill?: boolean) => void;
   focusTab: (termId: string) => void;
@@ -37,11 +39,28 @@ const Ctx = createContext<TabStore | null>(null);
 export function TabProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<TermTab[]>([]);
   const [activeId, setActiveId] = useState<string>();
+  const [ready, setReady] = useState(false);
+
+  const toTab = (meta: { id: string; cwd: string; command?: string }): TermTab => ({
+    termId: meta.id,
+    title: meta.command?.split(" ")[0] ?? "shell",
+    cwd: meta.cwd,
+  });
+
+  // Terminals live in the pty host, so a reload (or a restarted main
+  // process) finds the previous tabs still running.
+  useEffect(() => {
+    void window.deck.term.list().then((terms) => {
+      setTabs(terms.map(toTab));
+      setActiveId(terms.at(-1)?.id);
+      setReady(true);
+    });
+  }, []);
 
   const newTab = useCallback(async (opts?: OpenOptions) => {
-    const termId = await window.deck.term.create(opts);
-    setTabs((t) => [...t, { termId, title: opts?.command?.split(" ")[0] ?? "shell", cwd: opts?.cwd }]);
-    setActiveId(termId);
+    const meta = await window.deck.term.create(opts);
+    setTabs((t) => [...t, toTab(meta)]);
+    setActiveId(meta.id);
   }, []);
 
   const closeTab = useCallback((termId: string, kill = true) => {
@@ -63,8 +82,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
   useEffect(() => window.deck.term.onExit((id) => closeTab(id, false)), [closeTab]);
 
   const store = useMemo<TabStore>(
-    () => ({ tabs, activeId, newTab, closeTab, focusTab: setActiveId, setTitle }),
-    [tabs, activeId, newTab, closeTab, setTitle],
+    () => ({ tabs, activeId, ready, newTab, closeTab, focusTab: setActiveId, setTitle }),
+    [tabs, activeId, ready, newTab, closeTab, setTitle],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

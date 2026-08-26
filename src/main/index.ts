@@ -21,7 +21,7 @@ import {
   startIndexer,
 } from "./indexer.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
-import { killTermsOf, registerPtyIpc } from "./pty.js";
+import { startPtyHost, stopPtyHost } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
 import {
   mergePr,
@@ -36,7 +36,7 @@ import {
 } from "./github.js";
 import { workingChanges } from "./git.js";
 import { getBoardCache, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
-import { clearTermLinks, listSessions, onSessionsChanged, removeSession } from "./sessions.js";
+import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
 /** Which action brought a window up. Mapped to a window role by windowMode. */
@@ -116,14 +116,7 @@ function createWindow(role: WindowRole): BrowserWindow {
   win.on("ready-to-show", () => win.show());
   win.on("closed", () => {
     if (wins.get(role) === win) wins.delete(role);
-    killTermsOf(contents);
   });
-  // Reloads (dev HMR full reload, ⌘R) orphan the renderer's terminals.
-  const contents = win.webContents;
-  contents.on("did-start-navigation", ({ isSameDocument }) => {
-    if (!isSameDocument) killTermsOf(contents);
-  });
-  win.webContents.on("render-process-gone", () => killTermsOf(win.webContents));
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -193,10 +186,9 @@ function createTray(): void {
   tray.on("click", () => toggleWindow("tray"));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.dock?.setIcon(nativeImage.createFromPath(appIcon));
-  clearTermLinks();
-  registerPtyIpc();
+  await startPtyHost();
   startServer();
   startIndexer();
   onIndexProgress((p) => broadcast("index:progress", p));
@@ -253,4 +245,5 @@ app.on("will-quit", () => {
   // touch globalShortcut — Electron throws pre-ready.
   if (app.isReady()) globalShortcut.unregisterAll();
   stopServer();
+  stopPtyHost();
 });

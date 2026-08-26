@@ -40,10 +40,13 @@ export function requestReview(termId: string, note: string): void {
   if (changed > 0) notify();
 }
 
-/** Terminals don't survive an app restart, but session rows do — stale
- *  term_ids would collide with the fresh counter and mislabel new tabs. */
-export function clearTermLinks(): void {
-  openDb().prepare("UPDATE agent_sessions SET term_id = NULL WHERE term_id IS NOT NULL").run();
+/** Session rows outlive their terminals; a term_id whose terminal is gone
+ *  would mislabel whatever tab later reuses it. */
+export function clearTermLinks(liveTermIds: string[]): void {
+  const keep = liveTermIds.map(() => "?").join(",") || "''";
+  openDb()
+    .prepare(`UPDATE agent_sessions SET term_id = NULL WHERE term_id IS NOT NULL AND term_id NOT IN (${keep})`)
+    .run(...liveTermIds);
 }
 
 const ISSUE_KEY_RE = /\b[A-Z][A-Z0-9]+-\d+\b/;

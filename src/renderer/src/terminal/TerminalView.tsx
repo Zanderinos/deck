@@ -7,17 +7,17 @@ import { TerminalPane } from "./TerminalPane.js";
 
 // Panes only — the sidebar is the session switcher (per the deck design).
 export function TerminalView({ visible }: { visible: boolean }) {
-  const { tabs, activeId, newTab, setTitle } = useTabs();
+  const { tabs, activeId, ready, newTab, setTitle } = useTabs();
   const sessions = useAgentSessions();
   const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => onOpenTerminalTab((detail) => void newTab(detail)), [newTab]);
 
-  // First shell on mount.
+  // First shell, once we know no earlier ones survived the reload.
   useEffect(() => {
-    if (tabs.length === 0) void newTab();
+    if (ready && tabs.length === 0) void newTab();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
   const activeTab = tabs.find((t) => t.termId === activeId);
   // listSessions is ordered by recency, so find() picks the live session.

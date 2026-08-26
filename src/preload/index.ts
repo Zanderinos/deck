@@ -11,6 +11,7 @@ import type {
   ReviewEvent,
 } from "../main/github.js";
 import type { WorkingChanges } from "../main/git.js";
+import type { TermMeta } from "../main/pty.js";
 import type { BoardCache } from "../main/jira.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
@@ -74,8 +75,11 @@ const api = {
       ipcRenderer.invoke("hooks:install"),
   },
   term: {
-    create: (opts?: { cwd?: string; command?: string; issueKey?: string }): Promise<string> =>
+    create: (opts?: { cwd?: string; command?: string; issueKey?: string }): Promise<TermMeta> =>
       ipcRenderer.invoke("term:create", opts),
+    list: (): Promise<TermMeta[]> => ipcRenderer.invoke("term:list"),
+    /** Replays the terminal's recent output to this window, then streams live. */
+    attach: (id: string): Promise<void> => ipcRenderer.invoke("term:attach", id),
     input: (id: string, data: string): void => ipcRenderer.send("term:input", id, data),
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send("term:resize", id, cols, rows),
