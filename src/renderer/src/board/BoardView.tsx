@@ -8,6 +8,15 @@ import { DiffScreen } from "./DiffScreen.js";
 import { IssuePanel } from "./IssuePanel.js";
 
 const columnDots = ["text-body", "text-orange", "text-blue", "text-green", "text-accent"];
+const COLLAPSED_KEY = "deck.board.collapsedColumns";
+
+function loadCollapsed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
 const avatarColors = ["#f87171", "#4ade80", "#38bdf8", "#a78bfa", "#fb923c", "#7dcfff"];
 
 function initials(name: string | null): string {
@@ -31,6 +40,16 @@ export function BoardView() {
   const [selected, setSelected] = useState<BoardIssue>();
   const [diffPr, setDiffPr] = useState<IssuePr>();
   const [mineOnly, setMineOnly] = useState(false);
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+
+  const toggleCollapsed = (name: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(name)) next.add(name);
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   useEffect(() => {
     void window.deck.getSettings().then(setSettings);
@@ -124,12 +143,41 @@ export function BoardView() {
       <div className="flex flex-1 items-start gap-4 overflow-auto px-6 py-5">
         {board?.columns.map((col, ci) => {
           const cards = issues.filter((i) => col.statusIds.includes(i.statusId));
+          const dot = columnDots[ci % columnDots.length];
+          if (collapsed.has(col.name)) {
+            // Jira-style collapsed column: a narrow strip with the title
+            // running down it; click anywhere to expand.
+            return (
+              <button
+                key={col.name}
+                onClick={() => toggleCollapsed(col.name)}
+                title={`Expand ${col.name}`}
+                className="flex w-9 shrink-0 flex-col items-center gap-2 rounded-lg border border-edge2 bg-card py-2.5 hover:border-edge3"
+              >
+                <span className={`text-[10px] ${dot}`}>●</span>
+                <span
+                  className="whitespace-nowrap text-xs font-bold text-ink"
+                  style={{ writingMode: "vertical-rl" }}
+                >
+                  {col.name}
+                </span>
+                <span className="text-[11px] text-dim">{cards.length}</span>
+              </button>
+            );
+          }
           return (
-            <div key={col.name} className="w-[280px] shrink-0">
+            <div key={col.name} className="group w-[280px] shrink-0">
               <div className="flex items-center gap-2 px-1 pb-2.5">
-                <span className={`text-[10px] ${columnDots[ci % columnDots.length]}`}>●</span>
+                <span className={`text-[10px] ${dot}`}>●</span>
                 <span className="text-xs font-bold text-ink">{col.name}</span>
                 <span className="text-[11px] text-dim">{cards.length}</span>
+                <button
+                  onClick={() => toggleCollapsed(col.name)}
+                  title="Collapse"
+                  className="ml-auto text-[11px] text-dim opacity-0 hover:text-ink group-hover:opacity-100"
+                >
+                  →←
+                </button>
               </div>
               <div className="flex flex-col gap-2">
                 {cards.map((card) => {
