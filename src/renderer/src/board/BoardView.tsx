@@ -41,6 +41,9 @@ export function BoardView() {
   const [diffPr, setDiffPr] = useState<IssuePr>();
   const [mineOnly, setMineOnly] = useState(false);
   const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const [dragKey, setDragKey] = useState<string>();
+  const [dropTarget, setDropTarget] = useState<string>();
+  const [moveError, setMoveError] = useState<string>();
 
   const toggleCollapsed = (name: string) => {
     setCollapsed((prev) => {
@@ -94,6 +97,41 @@ export function BoardView() {
     return board.issues.filter((i) => i.assigneeId === board.myAccountId);
   }, [board, mineOnly]);
 
+  // Optimistic: the card lands in the column at once; a failed transition
+  // puts the real board back and says why.
+  const moveTo = async (columnName: string) => {
+    const key = dragKey;
+    setDragKey(undefined);
+    setDropTarget(undefined);
+    const column = board?.columns.find((c) => c.name === columnName);
+    const issue = board?.issues.find((i) => i.key === key);
+    if (!board || !column || !issue || column.statusIds.includes(issue.statusId)) return;
+    const before = board;
+    setBoard({
+      ...board,
+      issues: board.issues.map((i) =>
+        i.key === key ? { ...i, statusId: column.statusIds[0], statusName: columnName } : i,
+      ),
+    });
+    setMoveError(undefined);
+    try {
+      setBoard(await window.deck.board.move(issue.key, columnName));
+    } catch (err) {
+      setBoard(before);
+      setMoveError(err instanceof Error ? err.message.replace(/^Error invoking.*?: /, "") : String(err));
+    }
+  };
+
+  const dropProps = (columnName: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragKey) return;
+      e.preventDefault();
+      if (dropTarget !== columnName) setDropTarget(columnName);
+    },
+    onDragLeave: () => setDropTarget((t) => (t === columnName ? undefined : t)),
+    onDrop: () => void moveTo(columnName),
+  });
+
   const spinUp = (issue: BoardIssue) => {
     const prompt = `${issue.key}: ${issue.summary} — the code was rejected in review. Look at the PR feedback and address it.`;
     void newTab({ command: `claude ${JSON.stringify(prompt)}`, issueKey: issue.key });
@@ -139,11 +177,20 @@ export function BoardView() {
           </div>
         }
       />
+      {moveError && (
+        <div className="flex items-center gap-3 border-b border-red/30 bg-red/10 px-6 py-1.5 text-[11px] text-red">
+          <span className="min-w-0 flex-1 truncate">{moveError}</span>
+          <button onClick={() => setMoveError(undefined)} className="hover:text-ink">
+            ✕
+          </button>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
       <div className="flex flex-1 items-start gap-4 overflow-auto px-6 py-5">
         {board?.columns.map((col, ci) => {
           const cards = issues.filter((i) => col.statusIds.includes(i.statusId));
           const dot = columnDots[ci % columnDots.length];
+          const isTarget = dropTarget === col.name;
           if (collapsed.has(col.name)) {
             // Jira-style collapsed column: a narrow strip with the title
             // running down it; click anywhere to expand.
@@ -152,7 +199,10 @@ export function BoardView() {
                 key={col.name}
                 onClick={() => toggleCollapsed(col.name)}
                 title={`Expand ${col.name}`}
-                className="flex w-9 shrink-0 flex-col items-center gap-2 rounded-lg border border-edge2 bg-card py-2.5 hover:border-edge3"
+                {...dropProps(col.name)}
+                className={`flex w-9 shrink-0 flex-col items-center gap-2 rounded-lg border bg-card py-2.5 hover:border-edge3 ${
+                  isTarget ? "border-accent" : "border-edge2"
+                }`}
               >
                 <span className={`text-[10px] ${dot}`}>●</span>
                 <span
@@ -166,7 +216,13 @@ export function BoardView() {
             );
           }
           return (
-            <div key={col.name} className="group w-[280px] shrink-0">
+            <div
+              key={col.name}
+              {...dropProps(col.name)}
+              className={`group w-[280px] shrink-0 self-stretch rounded-lg ${
+                isTarget ? "bg-accent/5 ring-1 ring-accent/40" : ""
+              }`}
+            >
               <div className="flex items-center gap-2 px-1 pb-2.5">
                 <span className={`text-[10px] ${dot}`}>●</span>
                 <span className="text-xs font-bold text-ink">{col.name}</span>
@@ -185,10 +241,19 @@ export function BoardView() {
                   return (
                     <div
                       key={card.key}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragKey(card.key);
+                      }}
+                      onDragEnd={() => {
+                        setDragKey(undefined);
+                        setDropTarget(undefined);
+                      }}
                       onClick={() => setSelected(card)}
                       className={`cursor-pointer rounded-lg border bg-card p-3 hover:border-edge3 ${
                         selected?.key === card.key ? "border-accent/50" : "border-edge2"
-                      }`}
+                      } ${dragKey === card.key ? "opacity-40" : ""}`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-dim">{card.key}</span>

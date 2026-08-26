@@ -35,7 +35,7 @@ import {
   type ReviewEvent,
 } from "./github.js";
 import { workingChanges } from "./git.js";
-import { getBoardCache, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
+import { getBoardCache, moveIssue, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
 import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
@@ -205,6 +205,7 @@ app.whenReady().then(async () => {
   startBoardSync();
   onBoardChanged((b) => broadcast("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
+  ipcMain.handle("board:move", (_e, key: string, column: string) => moveIssue(key, column));
   ipcMain.handle("gh:prsForIssue", (_e, key: string) => prsForIssue(key));
   ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));

@@ -53,6 +53,8 @@ const api = {
   board: {
     get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
     sync: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:sync"),
+    move: (key: string, column: string): Promise<BoardCache> =>
+      ipcRenderer.invoke("board:move", key, column),
     onChanged: (cb: (b: BoardCache) => void): (() => void) => {
       const listener = (_e: unknown, b: BoardCache) => cb(b);
       ipcRenderer.on("board:changed", listener);

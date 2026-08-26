@@ -1,9 +1,9 @@
 import { kvGet, kvSet } from "./db.js";
 import { getSettings } from "./settings.js";
 
-// Read-only Jira board mirror, adapted from slate's jira client. Configured
-// entirely through settings (base url, email, api token, board id) — nothing
-// vendor-specific in code. Writes (transitions) are a later slice.
+// Jira board mirror, adapted from slate's jira client. Configured entirely
+// through settings (base url, email, api token, board id) — nothing
+// vendor-specific in code. The one write is moving a card between columns.
 
 export interface BoardColumn {
   name: string;
@@ -40,16 +40,55 @@ export function jiraConfigured(): boolean {
   return Boolean(c.baseUrl && c.email && c.apiToken && c.boardId);
 }
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, body?: unknown): Promise<T> {
   const c = config();
   const auth = Buffer.from(`${c.email}:${c.apiToken}`).toString("base64");
   const res = await fetch(`${c.baseUrl.replace(/\/$/, "")}${path}`, {
-    headers: { Authorization: `Basic ${auth}`, Accept: "application/json" },
+    method: body ? "POST" : "GET",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     throw new Error(`Jira ${res.status} on ${path}: ${(await res.text()).slice(0, 300)}`);
   }
-  return (await res.json()) as T;
+  // Transitions answer 204 with an empty body.
+  return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+interface Transitions {
+  transitions: { id: string; name: string; to: { id: string; name: string } }[];
+}
+
+/** Moves a card to a column by firing the workflow transition that lands in
+ *  one of that column's statuses. Updates the cache so the board reflects the
+ *  move before the next sync. */
+export async function moveIssue(key: string, columnName: string): Promise<BoardCache> {
+  const cache = getBoardCache();
+  const column = cache?.columns.find((c) => c.name === columnName);
+  if (!cache || !column) throw new Error(`Unknown column ${columnName}`);
+  const { transitions } = await request<Transitions>(`/rest/api/3/issue/${key}/transitions`);
+  // Several statuses can share a column (Done also holds Cancelled), so
+  // prefer the status named like the column, then the column's own order.
+  const transition =
+    transitions.find((t) => t.to.name.toLowerCase() === columnName.toLowerCase()) ??
+    column.statusIds.map((id) => transitions.find((t) => t.to.id === id)).find(Boolean);
+  if (!transition) {
+    throw new Error(`${key} has no transition into "${columnName}" from its current status`);
+  }
+  await request(`/rest/api/3/issue/${key}/transitions`, { transition: { id: transition.id } });
+  const next: BoardCache = {
+    ...cache,
+    issues: cache.issues.map((i) =>
+      i.key === key ? { ...i, statusId: transition.to.id, statusName: transition.to.name } : i,
+    ),
+  };
+  kvSet(CACHE_KEY, next);
+  for (const cb of listeners) cb(next);
+  return next;
 }
 
 interface AgileConfiguration {
