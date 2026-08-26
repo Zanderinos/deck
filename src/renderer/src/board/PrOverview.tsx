@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { IssuePr, PrComment, PrDetail } from "../../../main/github.js";
 import type { BoardIssue } from "../../../main/jira.js";
 import { useMemo } from "react";
+import { Icon, type IconName } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 import { TextBox, ThreadCard, threadsOf, type ThreadActions } from "./PrComments.js";
 import { Avatar, checksSummary, checkTone, ExtBadge, FileName, relativeTime, Stat, toneColor } from "./prUi.js";
@@ -18,13 +19,16 @@ function groupFiles<T extends { path: string }>(files: T[]): { name: string; fil
   return [...groups].map(([name, files]) => ({ name, files }));
 }
 
-const reviewerGlyph: Record<string, { glyph: string; color: string; label: string }> = {
-  APPROVED: { glyph: "✓", color: "text-green", label: "approved" },
-  CHANGES_REQUESTED: { glyph: "✗", color: "text-red", label: "requested changes" },
-  COMMENTED: { glyph: "◌", color: "text-mut", label: "commented" },
-  DISMISSED: { glyph: "–", color: "text-dim", label: "dismissed" },
-  PENDING: { glyph: "○", color: "text-dim", label: "requested" },
+const reviewerGlyph: Record<string, { icon: IconName; color: string; label: string }> = {
+  APPROVED: { icon: "check", color: "text-green", label: "approved" },
+  CHANGES_REQUESTED: { icon: "x", color: "text-red", label: "requested changes" },
+  COMMENTED: { icon: "comment", color: "text-mut", label: "commented" },
+  DISMISSED: { icon: "minus", color: "text-dim", label: "dismissed" },
+  PENDING: { icon: "circle", color: "text-dim", label: "requested" },
 };
+
+const checksIcon = (tone: "pass" | "fail" | "pending" | "skip"): IconName =>
+  tone === "pass" ? "checkSquare" : tone === "fail" ? "xSquare" : "clock";
 
 // mergeStateStatus is what GitHub's merge box keys on; these are its words.
 const branchLabel = (detail: PrDetail): { label: string; color: string } => {
@@ -131,7 +135,7 @@ export function PrOverview({
                   onClick={() => jiraBaseUrl && window.open(`${jiraBaseUrl}/browse/${issue.key}`)}
                   className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-edge2 bg-card px-2 py-0.5 font-sans text-[12px] hover:border-edge3"
                 >
-                  <span className="text-accent">◑</span>
+                  <Icon name="jira" className="text-accent" />
                   <span className="text-mut">{issue.key}</span>
                   <span className="text-soft">{issue.summary}</span>
                 </button>
@@ -164,7 +168,7 @@ export function PrOverview({
                     <span>
                       <span className="text-soft">{r.login}</span> approved
                     </span>
-                    <span className="text-green">✓</span>
+                    <Icon name="check" size={11} className="text-green" />
                   </div>
                 ))}
                 {detail.autoMerge && (
@@ -193,7 +197,7 @@ export function PrOverview({
           <Section title="Status">
             {status ? (
               <span className={`flex items-center gap-2 text-[13px] ${status.color}`}>
-                <span>⎇</span>
+                <Icon name="branch" />
                 <span className="text-soft">{status.label}</span>
               </span>
             ) : (
@@ -239,8 +243,8 @@ export function PrOverview({
                 <div key={r.login} className="flex items-center gap-2 py-0.5" title={g.label}>
                   <Avatar name={r.login} size={16} />
                   <span className="truncate text-soft">{r.login}</span>
-                  <span className={`ml-auto text-[11px] ${g.color}`}>
-                    {g.glyph} {g.label}
+                  <span className={`ml-auto flex items-center gap-1 text-[11px] ${g.color}`}>
+                    <Icon name={g.icon} size={11} /> {g.label}
                   </span>
                 </div>
               );
@@ -253,7 +257,7 @@ export function PrOverview({
                 <summary
                   className={`flex cursor-pointer list-none items-center gap-2 text-[13px] ${toneColor[checks.tone]}`}
                 >
-                  <span>{checks.tone === "pass" ? "☑" : checks.tone === "fail" ? "☒" : "◌"}</span>
+                  <Icon name={checksIcon(checks.tone)} />
                   <span className="text-soft">{checks.label}</span>
                 </summary>
                 <div className="mt-2 flex flex-col gap-0.5 pl-1">
@@ -264,7 +268,7 @@ export function PrOverview({
                       disabled={!c.url}
                       className="flex items-center gap-2 rounded px-1 py-0.5 text-left text-[11px] hover:bg-card disabled:cursor-default"
                     >
-                      <span className={toneColor[checkTone(c.state)]}>●</span>
+                      <Icon name="dot" size={11} className={toneColor[checkTone(c.state)]} />
                       <span className="truncate text-mut">{c.name}</span>
                     </button>
                   ))}
@@ -276,7 +280,7 @@ export function PrOverview({
           <Section title="Branch">
             {branch && (
               <span className={`flex items-center gap-2 text-[13px] ${branch.color}`}>
-                <span>⎇</span>
+                <Icon name="branch" />
                 <span className="text-soft">{branch.label}</span>
               </span>
             )}
@@ -285,7 +289,7 @@ export function PrOverview({
             )}
             {detail?.autoMerge && (
               <div className="flex items-center gap-2 pt-2 text-[13px] text-accent">
-                <span>⏵</span>
+                <Icon name="play" size={11} />
                 <span className="text-soft">
                   Auto-merge on <span className="text-dim">({detail.autoMerge.method})</span>
                 </span>
@@ -342,8 +346,11 @@ export function PrOverview({
                             <FileName path={f.path} className="flex-1" />
                           </button>
                           {threads.length > 0 && (
-                            <span className={`text-[10px] ${open > 0 ? "text-orange" : "text-dim"}`}>
-                              ⬩{open > 0 ? open : threads.length}
+                            <span
+                              className={`flex items-center gap-0.5 text-[10px] ${open > 0 ? "text-orange" : "text-dim"}`}
+                            >
+                              <Icon name="comment" size={10} />
+                              {open > 0 ? open : threads.length}
                             </span>
                           )}
                           <Stat additions={f.additions} deletions={f.deletions} />

@@ -13,6 +13,7 @@ import { openTerminalTab } from "../lib/bus.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
 import { PrDiffTab, type AskClaudeRequest } from "./PrDiffTab.js";
 import { PrOverview } from "./PrOverview.js";
+import { Icon } from "./icons.js";
 import { checksSummary, shellQuote, Stat, toneColor } from "./prUi.js";
 
 // GitHub enables its merge button for exactly these merge-box states.
@@ -73,6 +74,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const [composer, setComposer] = useState<ComposerTarget | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<MergeMethod>();
   const [repos, setRepos] = useState<RepoDir[]>([]);
   const draftSeq = useRef(0);
@@ -234,6 +236,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
         if (composer) setComposer(null);
         else if (rejectOpen) setRejectOpen(false);
         else if (mergeOpen) setMergeOpen(false);
+        else if (menuOpen) setMenuOpen(false);
         else onClose();
         return;
       }
@@ -274,15 +277,17 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
             <span className="text-dim">›</span>
           </>
         )}
-        <span className={merged ? "text-accent" : closed ? "text-red" : "text-green"}>⎇</span>
+        <Icon name="branch" className={merged ? "text-accent" : closed ? "text-red" : "text-green"} />
         <span className="truncate text-ink">
           <span className="text-mut">#{pr.number}</span> {pr.title}
         </span>
         {detail && <Stat additions={detail.additions} deletions={detail.deletions} />}
         {checks && (
-          <span className={`text-[10px] ${toneColor[checks.tone]}`} title={`Checks: ${checks.label}`}>
-            {checks.tone === "pass" ? "☑" : checks.tone === "fail" ? "☒" : "◌"}
-          </span>
+          <Icon
+            name={checks.tone === "pass" ? "checkSquare" : checks.tone === "fail" ? "xSquare" : "clock"}
+            className={toneColor[checks.tone]}
+            title={`Checks: ${checks.label}`}
+          />
         )}
         {detail?.reviewDecision && (
           <span
@@ -293,20 +298,44 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
             {detail.reviewDecision.toLowerCase().replace("_", " ")}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-3 text-[11px] text-dim">
+        <span className="relative ml-auto flex items-center gap-3 text-[11px] text-dim">
           <button
-            onClick={() => void navigator.clipboard.writeText(pr.url)}
-            title="Copy link"
-            className="hover:text-ink"
+            onClick={() => setMenuOpen((o) => !o)}
+            title="More"
+            className={`rounded px-1 hover:text-ink ${menuOpen ? "bg-card2 text-ink" : ""}`}
           >
-            🔗
+            <Icon name="dots" />
           </button>
-          <button onClick={() => window.open(pr.url)} title="Open on GitHub" className="hover:text-ink">
-            ↗
+          <button onClick={onClose} className="flex items-center gap-1 hover:text-ink">
+            esc <Icon name="x" size={11} />
           </button>
-          <button onClick={onClose} className="hover:text-ink">
-            esc ×
-          </button>
+          {menuOpen && (
+            <div
+              className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-md border border-edge2 bg-panel p-1 font-sans text-[12px] text-body shadow-lg"
+              onClick={() => setMenuOpen(false)}
+            >
+              <button
+                onClick={() => void navigator.clipboard.writeText(pr.url)}
+                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left hover:bg-card2"
+              >
+                <Icon name="link" className="text-dim" /> Copy link
+              </button>
+              <button
+                onClick={() => window.open(pr.url)}
+                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left hover:bg-card2"
+              >
+                <Icon name="external" className="text-dim" /> Open on GitHub
+              </button>
+              {issue && jiraBaseUrl && (
+                <button
+                  onClick={() => window.open(`${jiraBaseUrl}/browse/${issue.key}`)}
+                  className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left hover:bg-card2"
+                >
+                  <Icon name="jira" className="text-dim" /> Open {issue.key} in Jira
+                </button>
+              )}
+            </div>
+          )}
         </span>
       </div>
 
@@ -348,25 +377,28 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
                 disabled={busy !== undefined}
                 className="rounded-md border border-edge2 px-2.5 py-1 text-red hover:border-red disabled:opacity-40"
               >
-                ✗ Request changes
+                <Icon name="x" size={11} /> Request changes
               </button>
               <button
                 onClick={() => void submitReview("APPROVE")}
                 disabled={busy !== undefined || approved}
                 className="rounded-md border border-edge2 px-2.5 py-1 text-green hover:border-green disabled:opacity-40"
               >
-                {busy === "review"
-                  ? "Sending…"
-                  : approved
-                    ? "✓ Approved"
-                    : `✓ Approve${drafts.length > 0 ? ` +${drafts.length}` : ""}`}
+                {busy === "review" ? (
+                  "Sending…"
+                ) : (
+                  <>
+                    <Icon name="check" size={11} /> {approved ? "Approved" : "Approve"}
+                    {!approved && drafts.length > 0 && ` +${drafts.length}`}
+                  </>
+                )}
               </button>
               {autoMerge && (
                 <span
                   className="rounded-md bg-accent/15 px-2.5 py-1 text-accent"
                   title={`Auto-merge enabled by ${autoMerge.by}`}
                 >
-                  ⏵ Auto-merge on
+                  <Icon name="play" size={10} /> Auto-merge on
                 </span>
               )}
               <span
@@ -380,7 +412,13 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
                   disabled={busy !== undefined || blocker !== undefined}
                   className="px-3 py-1 font-semibold hover:bg-accent/90 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
-                  {busy === "merge" ? "Merging…" : `⎇ ${mergeLabel[chosenMethod]}`}
+                  {busy === "merge" ? (
+                    "Merging…"
+                  ) : (
+                    <>
+                      <Icon name="branch" size={12} /> {mergeLabel[chosenMethod]}
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={() => setMergeOpen((o) => !o)}
@@ -388,7 +426,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
                   className="border-l border-bg/20 px-2 py-1 hover:bg-accent/90"
                   title="Merge options"
                 >
-                  ▾
+                  <Icon name="chevronDown" size={11} />
                 </button>
               </span>
             </>
@@ -409,7 +447,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
                   m === chosenMethod ? "text-ink" : "text-mut"
                 }`}
               >
-                {m === chosenMethod ? "● " : "○ "}
+                <Icon name={m === chosenMethod ? "dot" : "circle"} size={11} className="mr-1.5" />
                 {mergeLabel[m]}
               </button>
             ))}
@@ -419,7 +457,8 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
                 className="mt-1 block w-full rounded border-t border-edge px-2.5 py-1.5 text-left text-accent hover:bg-card2"
                 title="GitHub merges on its own once reviews and checks pass"
               >
-                ⏵ Enable auto-merge ({mergeLabel[chosenMethod].toLowerCase()})
+                <Icon name="play" size={10} className="mr-1" />
+                Enable auto-merge ({mergeLabel[chosenMethod].toLowerCase()})
               </button>
             )}
           </div>

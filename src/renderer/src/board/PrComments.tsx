@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DraftComment, PrComment } from "../../../main/github.js";
+import { Icon } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 import { Avatar, relativeTime } from "./prUi.js";
 
@@ -120,7 +121,7 @@ export function ThreadCard({
                 className="text-dim hover:text-ink"
                 title="Open on GitHub"
               >
-                ↗
+                <Icon name="external" size={11} />
               </button>
             </span>
           </div>
@@ -181,7 +182,7 @@ export function DraftCard({ draft, onDelete }: { draft: Draft; onDelete: () => v
         )}
         <span className="text-dim">sent with your review</span>
         <button onClick={onDelete} className="ml-auto text-dim hover:text-red">
-          ×
+          <Icon name="x" size={11} />
         </button>
       </div>
       <Markdown>{draft.body}</Markdown>

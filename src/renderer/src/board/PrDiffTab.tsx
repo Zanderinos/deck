@@ -30,6 +30,7 @@ import {
   type Draft,
   type ThreadActions,
 } from "./PrComments.js";
+import { Icon } from "./icons.js";
 import { ExtBadge, FileName, relativeTime, Stat } from "./prUi.js";
 
 const EXPAND_STEP = 20;
@@ -110,15 +111,16 @@ function Gap({
       <div className="flex items-center justify-center gap-1 text-[10px] text-dim">
         {stepped && onUp && (
           <button onClick={onUp} title={`Expand ${EXPAND_STEP} lines down`} className="rounded px-1.5 hover:bg-card2 hover:text-ink">
-            ↧
+            <Icon name="expandDown" size={11} />
           </button>
         )}
         <button onClick={onAll} className="rounded px-2 hover:bg-card2 hover:text-ink">
-          {lines === null ? "↕ expand to end of file" : `↕ ${lines} unchanged line${lines === 1 ? "" : "s"}`}
+          <Icon name="expand" size={11} className="mr-1" />
+          {lines === null ? "expand to end of file" : `${lines} unchanged line${lines === 1 ? "" : "s"}`}
         </button>
         {stepped && onDown && (
           <button onClick={onDown} title={`Expand ${EXPAND_STEP} lines up`} className="rounded px-1.5 hover:bg-card2 hover:text-ink">
-            ↥
+            <Icon name="expandUp" size={11} />
           </button>
         )}
       </div>
@@ -182,7 +184,7 @@ function SelectionBar({
               onClick={onComment}
               className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink"
             >
-              💬 Comment
+              <Icon name="comment" size={11} /> Comment
             </button>
           )}
           <button
@@ -191,7 +193,7 @@ function SelectionBar({
               asking ? "border-accent text-accent" : "border-edge2 text-body hover:border-edge3 hover:text-ink"
             }`}
           >
-            ✳ Ask Claude
+            <Icon name="sparkle" size={11} /> Ask Claude
           </button>
           <button
             onClick={onCopy}
@@ -200,7 +202,7 @@ function SelectionBar({
             Copy
           </button>
           <button onClick={onClear} className="px-1 text-dim hover:text-ink" title="Clear selection (esc)">
-            ×
+            <Icon name="x" size={11} />
           </button>
         </span>
       </div>
@@ -508,7 +510,7 @@ function FileDiff({
           className="w-4 text-[10px] text-dim hover:text-ink"
           title={collapsed ? "Expand file" : "Collapse file"}
         >
-          {collapsed ? "▸" : "▾"}
+          <Icon name={collapsed ? "chevronRight" : "chevronDown"} size={11} />
         </button>
         <ExtBadge path={path} />
         <FileName path={path} className="min-w-0 flex-1" />
@@ -524,11 +526,13 @@ function FileDiff({
             }`}
             title="Review comments on this file"
           >
-            ⬩ {threadsOf(comments).length}
+            <Icon name="comment" size={10} /> {threadsOf(comments).length}
           </span>
         )}
         {drafts.length > 0 && (
-          <span className="rounded bg-accent/15 px-1.5 text-[10px] text-accent">✎ {drafts.length}</span>
+          <span className="rounded bg-accent/15 px-1.5 text-[10px] text-accent">
+            <Icon name="pencil" size={10} /> {drafts.length}
+          </span>
         )}
         <Stat additions={additions} deletions={deletions} />
         <label
@@ -551,7 +555,7 @@ function FileDiff({
           className="text-[11px] text-dim hover:text-ink"
           title="Open on GitHub"
         >
-          ↗
+          <Icon name="external" size={12} />
         </button>
       </div>
       {!collapsed && (
@@ -690,7 +694,8 @@ export function PrDiffTab(props: PrDiffTabProps) {
               subTab === tab ? "bg-card2 text-ink" : "text-mut hover:text-ink"
             }`}
           >
-            {tab === "files" ? "☰ Files" : "⊸ Commits"}{" "}
+            <Icon name={tab === "files" ? "list" : "commits"} size={11} className="mr-1" />
+            {tab === "files" ? "Files" : "Commits"}{" "}
             <span className="text-dim">{tab === "files" ? files.length : commits.length}</span>
           </button>
         ))}
