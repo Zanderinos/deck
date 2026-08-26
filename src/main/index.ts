@@ -22,7 +22,7 @@ import {
 } from "./indexer.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { startPtyHost, stopPtyHost } from "./pty.js";
-import { startServer, stopServer } from "./server.js";
+import { onPrDrafts, startServer, stopServer } from "./server.js";
 import {
   mergePr,
   addPrComment,
@@ -206,6 +206,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("search:github", (_e, q: string) => searchGithub(q));
   ipcMain.handle("repos:list", () => listRepos());
   onSessionsChanged(() => broadcast("sessions:changed", listSessions()));
+  onPrDrafts((termId, drafts) => broadcast("pr:drafts", termId, drafts));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));

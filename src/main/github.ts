@@ -100,6 +100,8 @@ export interface PrDetail {
   isDraft: boolean;
   url: string;
   author: string;
+  /** The gh user, so the UI knows whether it is looking at its own PR. */
+  viewer: string;
   baseRefName: string;
   headRefName: string;
   headRefOid: string;
@@ -120,6 +122,13 @@ export interface PrDetail {
   linkedIssues: { number: number; title: string; url: string }[];
   files: PrFile[];
 }
+
+let viewer: Promise<string> | undefined;
+
+const viewerLogin = (): Promise<string> =>
+  (viewer ??= exec("gh", ["api", "user", "--jq", ".login"], { timeout: 20_000 })
+    .then(({ stdout }) => stdout.trim())
+    .catch(() => ""));
 
 async function allowedMergeMethods(repo: string): Promise<MergeMethod[]> {
   try {
@@ -270,13 +279,14 @@ const PR_VIEW_FIELDS = [
 
 export async function prDetail(repo: string, number: number): Promise<PrDetail | null> {
   try {
-    const [{ stdout }, mergeMethods, files] = await Promise.all([
+    const [{ stdout }, mergeMethods, files, viewer] = await Promise.all([
       exec("gh", ["pr", "view", String(number), "-R", repo, "--json", PR_VIEW_FIELDS], {
         timeout: 20_000,
         maxBuffer: 8 * 1024 * 1024,
       }),
       allowedMergeMethods(repo),
       prFiles(repo, number),
+      viewerLogin(),
     ]);
     const raw = JSON.parse(stdout) as GhPrView;
 
@@ -300,6 +310,7 @@ export async function prDetail(repo: string, number: number): Promise<PrDetail |
       isDraft: raw.isDraft,
       url: raw.url,
       author: raw.author?.login ?? "",
+      viewer,
       baseRefName: raw.baseRefName,
       headRefName: raw.headRefName,
       headRefOid: raw.headRefOid,

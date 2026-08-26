@@ -15,6 +15,7 @@ import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
 import { PrDiffTab, type AskClaudeRequest } from "./PrDiffTab.js";
 import { PrOverview } from "./PrOverview.js";
 import { Icon } from "./icons.js";
+import { PrAgentPanel } from "./PrAgentPanel.js";
 import { checksSummary, shellQuote, Stat, toneColor } from "./prUi.js";
 
 // GitHub enables its merge button for exactly these merge-box states.
@@ -79,6 +80,9 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<MergeMethod>();
   const [repos, setRepos] = useState<RepoDir[]>([]);
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentTermId, setAgentTermId] = useState<string>();
+  const [agentPending, setAgentPending] = useState<string>();
   const draftSeq = useRef(0);
   const rejectRef = useRef<HTMLTextAreaElement>(null);
 
@@ -112,6 +116,17 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
     }
   }, [diffText]);
   const paths = useMemo(() => files.map((f) => f.newPath || f.oldPath), [files]);
+  const checkoutCwd = repos.find((r) => r.name === pr.repo.split("/")[1])?.path;
+
+  // Review comments the agent panel's Claude hands back become drafts here.
+  useEffect(
+    () =>
+      window.deck.gh.onPrDrafts((termId, incoming) => {
+        if (termId !== agentTermId) return;
+        setDrafts((ds) => [...ds, ...incoming.map((d) => ({ ...d, id: draftSeq.current++ }))]);
+      }),
+    [agentTermId],
+  );
 
   const methods = detail?.mergeMethods ?? ["merge"];
   const chosenMethod = mergeMethod && methods.includes(mergeMethod) ? mergeMethod : methods[0];
@@ -198,11 +213,9 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
 
   const addComment = (body: string) => window.deck.gh.addComment(pr.repo, pr.number, body).then(report);
 
-  // Hands the selected lines to a Claude session in the PR's checkout, the way
-  // the issue panel spins one up for a task.
+  // Hands the selected lines to the agent panel when it is open, otherwise to
+  // a Claude session in the PR's checkout, the way the issue panel spins one up.
   const askClaude = ({ path, side, start, end, snippet, question }: AskClaudeRequest) => {
-    const repoName = pr.repo.split("/")[1];
-    const cwd = repos.find((r) => r.name === repoName)?.path;
     const where = start === end ? `line ${start}` : `lines ${start}–${end}`;
     const which = side === "LEFT" ? "the old version" : "the new version";
     const prompt = [
@@ -214,7 +227,8 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
       "```",
       question,
     ].join("\n");
-    openTerminalTab({ cwd, command: `claude ${shellQuote(prompt)}`, issueKey: issue?.key });
+    if (agentOpen) setAgentPending(prompt);
+    else openTerminalTab({ cwd: checkoutCwd, command: `claude ${shellQuote(prompt)}`, issueKey: issue?.key });
   };
 
   const openComposer = (target: ComposerTarget, extend: boolean) => {
@@ -357,6 +371,15 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
             )}
           </button>
         ))}
+        <button
+          onClick={() => setAgentOpen((o) => !o)}
+          className={`ml-1 flex items-center gap-1.5 rounded-full px-3 py-1 ${
+            agentOpen ? "bg-accent/15 text-accent" : "text-mut hover:text-ink"
+          }`}
+          title="Claude session pinned to this PR"
+        >
+          <Icon name="sparkle" size={11} /> Agent
+        </button>
         {actionError && <span className="ml-3 truncate text-[11px] text-red">{actionError}</span>}
 
         <span className="ml-auto flex items-center gap-2">
@@ -493,49 +516,63 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
         )}
       </div>
 
-      {tab === "overview" ? (
-        <PrOverview
-          pr={pr}
-          detail={detail}
-          issue={issue}
-          jiraBaseUrl={jiraBaseUrl}
-          generalComments={generalComments}
-          timeline={timeline}
-          commentsByPath={commentsByPath}
-          viewed={viewed}
-          onToggleViewed={toggleViewed}
-          onOpenFile={openFile}
-          threadActions={threadActions}
-          onComment={addComment}
-        />
-      ) : (
-        <PrDiffTab
-          repo={pr.repo}
-          detail={detail}
-          files={files}
-          diffText={diffText}
-          viewType={viewType}
-          onViewType={setViewType}
-          viewed={viewed}
-          onToggleViewed={toggleViewed}
-          activePath={activePath}
-          onActivate={setActivePath}
-          canComment={canComment}
-          commentsByPath={commentsByPath}
-          drafts={drafts}
-          composer={composer}
-          onOpenComposer={openComposer}
-          onCancelComposer={() => setComposer(null)}
-          onSaveDraft={(body) => {
-            if (!composer) return;
-            setDrafts((ds) => [...ds, { ...composer, id: draftSeq.current++, body }]);
-            setComposer(null);
-          }}
-          onDeleteDraft={(id) => setDrafts((ds) => ds.filter((d) => d.id !== id))}
-          threadActions={threadActions}
-          onAskClaude={askClaude}
-        />
-      )}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {tab === "overview" ? (
+          <PrOverview
+            pr={pr}
+            detail={detail}
+            issue={issue}
+            jiraBaseUrl={jiraBaseUrl}
+            generalComments={generalComments}
+            timeline={timeline}
+            commentsByPath={commentsByPath}
+            viewed={viewed}
+            onToggleViewed={toggleViewed}
+            onOpenFile={openFile}
+            threadActions={threadActions}
+            onComment={addComment}
+          />
+        ) : (
+          <PrDiffTab
+            repo={pr.repo}
+            detail={detail}
+            files={files}
+            diffText={diffText}
+            viewType={viewType}
+            onViewType={setViewType}
+            viewed={viewed}
+            onToggleViewed={toggleViewed}
+            activePath={activePath}
+            onActivate={setActivePath}
+            canComment={canComment}
+            commentsByPath={commentsByPath}
+            drafts={drafts}
+            composer={composer}
+            onOpenComposer={openComposer}
+            onCancelComposer={() => setComposer(null)}
+            onSaveDraft={(body) => {
+              if (!composer) return;
+              setDrafts((ds) => [...ds, { ...composer, id: draftSeq.current++, body }]);
+              setComposer(null);
+            }}
+            onDeleteDraft={(id) => setDrafts((ds) => ds.filter((d) => d.id !== id))}
+            threadActions={threadActions}
+            onAskClaude={askClaude}
+          />
+        )}
+        {agentOpen && (
+          <PrAgentPanel
+            pr={pr}
+            detail={detail}
+            cwd={checkoutCwd}
+            issueKey={issue?.key}
+            pending={agentPending}
+            onPendingSent={() => setAgentPending(undefined)}
+            onTermId={setAgentTermId}
+            onClose={() => setAgentOpen(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }

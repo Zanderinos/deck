@@ -1,5 +1,6 @@
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
+import type { DraftComment } from "./github.js";
 import { applyHook, requestReview, type HookPayload } from "./sessions.js";
 
 // deck's local HTTP surface. Claude Code hooks curl into it; later slices add
@@ -8,6 +9,21 @@ import { applyHook, requestReview, type HookPayload } from "./sessions.js";
 export const SERVER_PORT = 47800;
 
 let server: ServerType | undefined;
+
+const draftListeners = new Set<(termId: string, drafts: DraftComment[]) => void>();
+
+/** Fires when an agent in a deck terminal hands back review comments for a PR. */
+export function onPrDrafts(cb: (termId: string, drafts: DraftComment[]) => void): () => void {
+  draftListeners.add(cb);
+  return () => draftListeners.delete(cb);
+}
+
+const isDraft = (d: unknown): d is DraftComment =>
+  typeof d === "object" &&
+  d !== null &&
+  typeof (d as DraftComment).path === "string" &&
+  Number.isInteger((d as DraftComment).line) &&
+  typeof (d as DraftComment).body === "string";
 
 function buildApp(): Hono {
   const app = new Hono();
@@ -27,6 +43,18 @@ function buildApp(): Hono {
     const note = (await c.req.text().catch(() => "")).trim();
     if (term && note) requestReview(term, note);
     return c.json({ ok: Boolean(term && note) });
+  });
+
+  // The PR agent panel asks its Claude session to post review comments here;
+  // they land as drafts in the review screen instead of going to GitHub.
+  app.post("/api/pr-drafts", async (c) => {
+    const term = c.req.header("x-deck-term");
+    const body = (await c.req.json().catch(() => null)) as unknown;
+    const drafts: DraftComment[] = Array.isArray(body)
+      ? body.filter(isDraft).map((d) => ({ ...d, side: d.side === "LEFT" ? "LEFT" : "RIGHT" }))
+      : [];
+    if (term && drafts.length > 0) for (const cb of draftListeners) cb(term, drafts);
+    return c.json({ ok: Boolean(term), accepted: drafts.length });
   });
 
   return app;

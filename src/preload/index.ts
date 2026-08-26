@@ -67,6 +67,11 @@ const api = {
       ipcRenderer.invoke("gh:setThreadResolved", threadId, resolved),
     addComment: (repo: string, n: number, body: string): Promise<PrActionResult> =>
       ipcRenderer.invoke("gh:addComment", repo, n, body),
+    onPrDrafts: (cb: (termId: string, drafts: DraftComment[]) => void): (() => void) => {
+      const listener = (_e: unknown, termId: string, drafts: DraftComment[]) => cb(termId, drafts);
+      ipcRenderer.on("pr:drafts", listener);
+      return () => ipcRenderer.removeListener("pr:drafts", listener);
+    },
     fileContent: (repo: string, ref: string, path: string): Promise<string | null> =>
       ipcRenderer.invoke("gh:fileContent", repo, ref, path),
   },
