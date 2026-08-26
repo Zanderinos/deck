@@ -8,6 +8,7 @@ import type {
   PrActionResult,
   PrComment,
   PrDetail,
+  PrTimelineEvent,
   ReviewEvent,
 } from "../main/github.js";
 import type { WorkingChanges } from "../main/git.js";
@@ -45,6 +46,8 @@ const api = {
     prDiff: (repo: string, n: number): Promise<string> => ipcRenderer.invoke("gh:prDiff", repo, n),
     prComments: (repo: string, n: number): Promise<PrComment[]> =>
       ipcRenderer.invoke("gh:prComments", repo, n),
+    prTimeline: (repo: string, n: number): Promise<PrTimelineEvent[]> =>
+      ipcRenderer.invoke("gh:prTimeline", repo, n),
     review: (
       repo: string,
       n: number,

@@ -31,6 +31,7 @@ import {
   prComments,
   prDetail,
   prDiff,
+  prTimeline,
   replyToThread,
   setPrFileViewed,
   setThreadResolved,
@@ -220,6 +221,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
   ipcMain.handle("gh:prComments", (_e, repo: string, n: number) => prComments(repo, n));
+  ipcMain.handle("gh:prTimeline", (_e, repo: string, n: number) => prTimeline(repo, n));
   ipcMain.handle(
     "gh:review",
     (_e, repo: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[]) =>

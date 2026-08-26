@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { IssuePr, PrComment, PrDetail } from "../../../main/github.js";
+import type { IssuePr, PrComment, PrDetail, PrTimelineEvent } from "../../../main/github.js";
 import type { BoardIssue } from "../../../main/jira.js";
 import { useMemo } from "react";
 import { Icon, type IconName } from "./icons.js";
@@ -25,6 +25,40 @@ const reviewerGlyph: Record<string, { icon: IconName; color: string; label: stri
   COMMENTED: { icon: "comment", color: "text-mut", label: "commented" },
   DISMISSED: { icon: "minus", color: "text-dim", label: "dismissed" },
   PENDING: { icon: "circle", color: "text-dim", label: "requested" },
+};
+
+const timelineRow = (
+  e: PrTimelineEvent,
+): { text: string; icon?: IconName; color?: string } => {
+  const n = Number(e.detail);
+  switch (e.kind) {
+    case "opened":
+      return { text: "opened this pull request", icon: "branch", color: "text-green" };
+    case "commits":
+      return { text: `pushed ${n} commit${n === 1 ? "" : "s"}`, icon: "commits" };
+    case "force_pushed":
+      return { text: "force-pushed the branch", icon: "commits", color: "text-orange" };
+    case "review_requested":
+      return { text: `requested a review from ${e.detail}`, icon: "circle" };
+    case "reviewed":
+      return e.detail === "APPROVED"
+        ? { text: "approved", icon: "check", color: "text-green" }
+        : e.detail === "CHANGES_REQUESTED"
+          ? { text: "requested changes", icon: "x", color: "text-red" }
+          : { text: "dismissed a review", icon: "minus" };
+    case "ready_for_review":
+      return { text: "marked as ready for review", icon: "circle" };
+    case "auto_merge_enabled":
+      return { text: "enabled auto-merge", icon: "play", color: "text-accent" };
+    case "auto_merge_disabled":
+      return { text: "disabled auto-merge", icon: "play" };
+    case "merged":
+      return { text: "merged this pull request", icon: "branch", color: "text-accent" };
+    case "closed":
+      return { text: "closed this pull request", icon: "x", color: "text-red" };
+    case "reopened":
+      return { text: "reopened this pull request", icon: "branch", color: "text-green" };
+  }
 };
 
 const checksIcon = (tone: "pass" | "fail" | "pending" | "skip"): IconName =>
@@ -73,6 +107,7 @@ export interface PrOverviewProps {
   issue?: BoardIssue;
   jiraBaseUrl?: string;
   generalComments: PrComment[];
+  timeline: PrTimelineEvent[];
   commentsByPath: Map<string, PrComment[]>;
   viewed: Set<string>;
   onToggleViewed: (path: string) => void;
@@ -87,6 +122,7 @@ export function PrOverview({
   issue,
   jiraBaseUrl,
   generalComments,
+  timeline,
   commentsByPath,
   viewed,
   onToggleViewed,
@@ -152,34 +188,20 @@ export function PrOverview({
             <>
               <div className="mt-10 pb-2 font-sans text-[12px] text-dim">Activity</div>
               <div className="font-sans text-[12px] text-mut">
-                <div className="flex items-center gap-2 py-1">
-                  <Avatar name={detail.author} size={16} />
-                  <span>
-                    <span className="text-soft">{detail.author}</span> opened with {detail.commits.length} commit
-                    {detail.commits.length === 1 ? "" : "s"}
-                  </span>
-                  {detail.commits[0] && (
-                    <span className="text-dim">· {relativeTime(detail.commits[0].date)}</span>
-                  )}
-                </div>
-                {approvals.map((r) => (
-                  <div key={r.login} className="flex items-center gap-2 py-1">
-                    <Avatar name={r.login} size={16} />
-                    <span>
-                      <span className="text-soft">{r.login}</span> approved
-                    </span>
-                    <Icon name="check" size={11} className="text-green" />
-                  </div>
-                ))}
-                {detail.autoMerge && (
-                  <div className="flex items-center gap-2 py-1">
-                    <Avatar name={detail.autoMerge.by || "?"} size={16} />
-                    <span>
-                      <span className="text-soft">{detail.autoMerge.by}</span> enabled auto-merge (
-                      {detail.autoMerge.method})
-                    </span>
-                  </div>
-                )}
+                {timeline.length === 0 && <div className="py-1 text-dim">loading…</div>}
+                {timeline.map((e, i) => {
+                  const row = timelineRow(e);
+                  return (
+                    <div key={i} className="flex items-center gap-2 py-1">
+                      <Avatar name={e.actor || "?"} size={16} />
+                      <span>
+                        <span className="text-soft">{e.actor}</span> {row.text}
+                      </span>
+                      {row.icon && <Icon name={row.icon} size={11} className={row.color ?? "text-dim"} />}
+                      {e.date && <span className="text-dim">· {relativeTime(e.date)}</span>}
+                    </div>
+                  );
+                })}
               </div>
               <div className="-mx-2 mt-2">
                 {threadsOf(generalComments).map((thread) => (

@@ -415,6 +415,131 @@ export async function fileContent(repo: string, ref: string, path: string): Prom
 // Review feedback (Copilot and humans), adapted from slate's prComments.
 // Thread comments carry the thread's anchor so they render inline in the diff;
 // review-level bodies (Copilot's summary, a human's overall note) have none.
+export type PrTimelineKind =
+  | "opened"
+  | "commits"
+  | "force_pushed"
+  | "review_requested"
+  | "reviewed"
+  | "ready_for_review"
+  | "auto_merge_enabled"
+  | "auto_merge_disabled"
+  | "merged"
+  | "closed"
+  | "reopened";
+
+export interface PrTimelineEvent {
+  kind: PrTimelineKind;
+  actor: string;
+  date: string;
+  /** Reviewer for review requests, review state for reviews, commit count for pushes. */
+  detail: string;
+}
+
+const TIMELINE_QUERY = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      createdAt
+      author { login }
+      timelineItems(first: 250, itemTypes: [
+        PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT, REVIEW_REQUESTED_EVENT,
+        PULL_REQUEST_REVIEW, READY_FOR_REVIEW_EVENT, AUTO_MERGE_ENABLED_EVENT,
+        AUTO_MERGE_DISABLED_EVENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT
+      ]) {
+        nodes {
+          __typename
+          ... on PullRequestCommit { commit { committedDate author { user { login } name } } }
+          ... on HeadRefForcePushedEvent { createdAt actor { login } }
+          ... on ReviewRequestedEvent {
+            createdAt actor { login }
+            requestedReviewer { ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } }
+          }
+          ... on PullRequestReview { submittedAt state author { login } }
+          ... on ReadyForReviewEvent { createdAt actor { login } }
+          ... on AutoMergeEnabledEvent { createdAt actor { login } }
+          ... on AutoMergeDisabledEvent { createdAt actor { login } }
+          ... on MergedEvent { createdAt actor { login } }
+          ... on ClosedEvent { createdAt actor { login } }
+          ... on ReopenedEvent { createdAt actor { login } }
+        }
+      }
+    }
+  }
+}`;
+
+interface GhTimelineNode {
+  __typename: string;
+  createdAt?: string;
+  submittedAt?: string;
+  state?: string;
+  actor?: { login?: string } | null;
+  author?: { login?: string } | null;
+  requestedReviewer?: { login?: string; name?: string } | null;
+  commit?: { committedDate: string; author: { user: { login?: string } | null; name?: string } | null };
+}
+
+const timelineKinds: Record<string, PrTimelineKind> = {
+  HeadRefForcePushedEvent: "force_pushed",
+  ReviewRequestedEvent: "review_requested",
+  PullRequestReview: "reviewed",
+  ReadyForReviewEvent: "ready_for_review",
+  AutoMergeEnabledEvent: "auto_merge_enabled",
+  AutoMergeDisabledEvent: "auto_merge_disabled",
+  MergedEvent: "merged",
+  ClosedEvent: "closed",
+  ReopenedEvent: "reopened",
+};
+
+/** What GitHub shows in its conversation tab, minus the comments (those come from prComments). */
+export async function prTimeline(repo: string, number: number): Promise<PrTimelineEvent[]> {
+  const [owner, name] = repo.split("/");
+  try {
+    const data = (await graphql(TIMELINE_QUERY, { owner, name, number })).data as
+      | {
+          repository?: {
+            pullRequest?: {
+              createdAt: string;
+              author: { login?: string } | null;
+              timelineItems: { nodes: GhTimelineNode[] };
+            };
+          };
+        }
+      | undefined;
+    const pr = data?.repository?.pullRequest;
+    if (!pr) return [];
+
+    const events: PrTimelineEvent[] = [
+      { kind: "opened", actor: pr.author?.login ?? "", date: pr.createdAt, detail: "" },
+    ];
+    for (const node of pr.timelineItems.nodes) {
+      if (node.__typename === "PullRequestCommit") {
+        // Consecutive commits by one author collapse into a single "pushed N commits" row.
+        const actor = node.commit?.author?.user?.login || node.commit?.author?.name || "";
+        const last = events[events.length - 1];
+        if (last.kind === "commits" && last.actor === actor) {
+          last.detail = String(Number(last.detail) + 1);
+          last.date = node.commit?.committedDate ?? last.date;
+        } else events.push({ kind: "commits", actor, date: node.commit?.committedDate ?? "", detail: "1" });
+        continue;
+      }
+      const kind = timelineKinds[node.__typename];
+      if (!kind) continue;
+      // Pending reviews and empty COMMENTED reviews are noise GitHub hides too.
+      if (kind === "reviewed" && (node.state === "PENDING" || node.state === "COMMENTED")) continue;
+      events.push({
+        kind,
+        actor: node.actor?.login ?? node.author?.login ?? "",
+        date: node.createdAt ?? node.submittedAt ?? "",
+        detail: node.requestedReviewer?.login ?? node.requestedReviewer?.name ?? node.state ?? "",
+      });
+    }
+    return events;
+  } catch {
+    return [];
+  }
+}
+
 export interface PrComment {
   id: number;
   /** Review thread node id; null for review bodies and plain PR comments. */

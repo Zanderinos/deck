@@ -5,6 +5,7 @@ import type {
   MergeMethod,
   PrComment,
   PrDetail,
+  PrTimelineEvent,
   ReviewEvent,
 } from "../../../main/github.js";
 import type { BoardIssue } from "../../../main/jira.js";
@@ -63,6 +64,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const [diffText, setDiffText] = useState<string>();
   const [detail, setDetail] = useState<PrDetail | null>();
   const [comments, setComments] = useState<PrComment[]>([]);
+  const [timeline, setTimeline] = useState<PrTimelineEvent[]>([]);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [activePath, setActivePath] = useState<string>();
   const [viewType, setViewType] = useState<ViewType>(
@@ -90,6 +92,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
       if (d) setViewed(new Set(d.files.filter((f) => f.viewed).map((f) => f.path)));
     });
     void window.deck.gh.prComments(pr.repo, pr.number).then(setComments);
+    void window.deck.gh.prTimeline(pr.repo, pr.number).then(setTimeline);
   };
 
   useEffect(() => {
@@ -497,6 +500,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
           issue={issue}
           jiraBaseUrl={jiraBaseUrl}
           generalComments={generalComments}
+          timeline={timeline}
           commentsByPath={commentsByPath}
           viewed={viewed}
           onToggleViewed={toggleViewed}
