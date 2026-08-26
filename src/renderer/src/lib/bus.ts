@@ -5,6 +5,7 @@ export interface OpenTabDetail {
   cwd?: string;
   command?: string;
   issueKey?: string;
+  sessionId?: string;
 }
 
 // Mouse/keyboard "back": overlays get first refusal (they call

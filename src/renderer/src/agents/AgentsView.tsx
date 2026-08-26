@@ -59,10 +59,7 @@ export function AgentsView() {
               onClick={() =>
                 s.term_id && open.has(s.term_id)
                   ? focusTab(s.term_id)
-                  : void newTab({
-                      cwd: s.cwd,
-                      command: `claude --resume ${s.claude_session_id}`,
-                    })
+                  : void newTab({ cwd: s.cwd, sessionId: s.claude_session_id })
               }
               className="flex items-center gap-3.5 rounded-lg border border-edge2 bg-card px-4 py-3 text-left hover:border-edge3"
             >

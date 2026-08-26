@@ -37,9 +37,18 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
   }, []);
 
   const byTerm = new Map(agentSessions.filter((s) => s.term_id).map((s) => [s.term_id!, s]));
+  const bySession = new Map(agentSessions.map((s) => [s.claude_session_id, s]));
   const openTermIds = new Set(tabs.map((t) => t.termId));
+  // A tab resuming a session counts as that session from the click on, not
+  // only once claude's first hook links the terminal.
+  const openSessionIds = new Set(tabs.map((t) => t.sessionId));
   const recent = agentSessions
-    .filter((s) => (s.term_id == null || !openTermIds.has(s.term_id)) && s.status !== "ended")
+    .filter(
+      (s) =>
+        (s.term_id == null || !openTermIds.has(s.term_id)) &&
+        !openSessionIds.has(s.claude_session_id) &&
+        s.status !== "ended",
+    )
     .slice(0, 12);
 
   return (
@@ -74,7 +83,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2.5">
         {tabs.map((tab) => {
-          const s = byTerm.get(tab.termId);
+          const s = byTerm.get(tab.termId) ?? (tab.sessionId ? bySession.get(tab.sessionId) : undefined);
           const glyph = s ? statusGlyph[s.status] : { dot: "❯", color: "text-dim" };
           const active = tab.termId === activeId;
           return (
@@ -111,7 +120,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
               onClick={() => {
                 void newTab({
                   cwd: s.cwd,
-                  command: `claude --resume ${s.claude_session_id}`,
+                  sessionId: s.claude_session_id,
                   issueKey: s.issue_key ?? undefined,
                 });
                 onView("terminal");

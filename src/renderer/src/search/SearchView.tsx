@@ -79,10 +79,7 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
 
   const resumeSelected = () => {
     const hit = selected;
-    openTerminalTab({
-      cwd: hit?.cwd ?? undefined,
-      command: `claude --resume ${selectedId}`,
-    });
+    openTerminalTab({ cwd: hit?.cwd ?? undefined, sessionId: selectedId });
   };
 
   return (

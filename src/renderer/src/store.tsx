@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -15,12 +16,16 @@ export interface TermTab {
   termId: string;
   title: string;
   cwd?: string;
+  /** Claude session this tab was opened to resume. */
+  sessionId?: string;
 }
 
 export interface OpenOptions {
   cwd?: string;
   command?: string;
   issueKey?: string;
+  /** Resume this Claude session; a tab already resuming it is focused instead. */
+  sessionId?: string;
 }
 
 interface TabStore {
@@ -45,7 +50,14 @@ export function TabProvider({ children }: { children: ReactNode }) {
     termId: meta.id,
     title: meta.command?.split(" ")[0] ?? "shell",
     cwd: meta.cwd,
+    sessionId: /--resume (\S+)/.exec(meta.command ?? "")?.[1],
   });
+
+  // Callbacks read the live tab list, and a session being resumed is held
+  // here until its tab exists so a double click can't open it twice.
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const resuming = useRef(new Set<string>());
 
   // Terminals live in the pty host, so a reload (or a restarted main
   // process) finds the previous tabs still running.
@@ -57,10 +69,25 @@ export function TabProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const newTab = useCallback(async (opts?: OpenOptions) => {
-    const meta = await window.deck.term.create(opts);
-    setTabs((t) => [...t, toTab(meta)]);
-    setActiveId(meta.id);
+  const newTab = useCallback(async (opts: OpenOptions = {}) => {
+    const { sessionId, ...create } = opts;
+    if (sessionId) {
+      const open = tabsRef.current.find((t) => t.sessionId === sessionId);
+      if (open) {
+        setActiveId(open.termId);
+        return;
+      }
+      if (resuming.current.has(sessionId)) return;
+      resuming.current.add(sessionId);
+      create.command = `claude --resume ${sessionId}`;
+    }
+    try {
+      const meta = await window.deck.term.create(create);
+      setTabs((t) => [...t, toTab(meta)]);
+      setActiveId(meta.id);
+    } finally {
+      if (sessionId) resuming.current.delete(sessionId);
+    }
   }, []);
 
   const closeTab = useCallback((termId: string, kill = true) => {

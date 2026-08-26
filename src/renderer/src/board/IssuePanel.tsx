@@ -72,11 +72,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
   const continueSession = (s: AgentSession) => {
     if (s.term_id && openTermIds.has(s.term_id)) focusTab(s.term_id);
     else
-      void newTab({
-        cwd: s.cwd,
-        command: `claude --resume ${s.claude_session_id}`,
-        issueKey: issue.key,
-      });
+      void newTab({ cwd: s.cwd, sessionId: s.claude_session_id, issueKey: issue.key });
   };
 
   return (

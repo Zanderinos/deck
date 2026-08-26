@@ -73,10 +73,7 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
           meta: h.project.replace(/^-Users-[^-]+-/, ""),
           open: (newPane) =>
             newPane
-              ? void newTab({
-                  cwd: h.cwd ?? undefined,
-                  command: `claude --resume ${h.session_id}`,
-                })
+              ? void newTab({ cwd: h.cwd ?? undefined, sessionId: h.session_id })
               : onPreview(h.session_id, query),
         })),
       });
