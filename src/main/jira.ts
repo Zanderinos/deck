@@ -21,6 +21,8 @@ export interface BoardIssue {
   /** Jira account id of the assignee — how "mine" is decided. */
   assigneeId: string | null;
   updated: string;
+  /** Set when the card sits in a column deck moved it to locally, not Jira. */
+  localMove?: true;
 }
 
 export interface BoardCache {
@@ -82,15 +84,74 @@ export async function moveIssue(key: string, columnName: string): Promise<BoardC
     throw new Error(`${key} has no transition into "${columnName}" from its current status`);
   }
   await request(`/rest/api/3/issue/${key}/transitions`, { transition: { id: transition.id } });
-  const next: BoardCache = {
-    ...cache,
-    issues: cache.issues.map((i) =>
+  const raw = kvGet<BoardCache>(CACHE_KEY) ?? cache;
+  return publish({
+    ...raw,
+    issues: raw.issues.map((i) =>
       i.key === key ? { ...i, statusId: transition.to.id, statusName: transition.to.name } : i,
     ),
-  };
-  kvSet(CACHE_KEY, next);
-  for (const cb of listeners) cb(next);
-  return next;
+  });
+}
+
+/** Cards moved on deck's board only, keyed by issue. Each remembers the Jira
+ *  status it was moved away from: once Jira reports anything else the move
+ *  has been overtaken (Jira's own automation caught up, or someone moved the
+ *  card) and is dropped. */
+interface LocalMove {
+  fromStatusId: string;
+  column: string;
+}
+
+const LOCAL_MOVES_KEY = "board_local_moves";
+
+function applyLocalMoves(raw: BoardCache): BoardCache {
+  const moves = kvGet<Record<string, LocalMove>>(LOCAL_MOVES_KEY) ?? {};
+  const kept: Record<string, LocalMove> = {};
+  const issues = raw.issues.map((issue) => {
+    const move = moves[issue.key];
+    const column = move && raw.columns.find((c) => c.name === move.column);
+    if (!move || !column || issue.statusId !== move.fromStatusId) return issue;
+    kept[issue.key] = move;
+    return {
+      ...issue,
+      statusId: column.statusIds[0],
+      statusName: column.name,
+      localMove: true as const,
+    };
+  });
+  if (Object.keys(kept).length !== Object.keys(moves).length) kvSet(LOCAL_MOVES_KEY, kept);
+  return { ...raw, issues };
+}
+
+/** Stores the Jira truth and hands listeners the board as deck shows it. */
+function publish(raw: BoardCache): BoardCache {
+  kvSet(CACHE_KEY, raw);
+  const shown = applyLocalMoves(raw);
+  for (const cb of listeners) cb(shown);
+  return shown;
+}
+
+/** Runs the configured on-merge action for an issue: a Jira transition, or a
+ *  board-only move that keeps the card out of the way while Jira's own
+ *  automation is still on its way. */
+export async function afterPrMerged(key: string): Promise<void> {
+  const { onMerge } = config();
+  if (!onMerge.enabled || !onMerge.column) return;
+  if (onMerge.mode === "jira") {
+    await moveIssue(key, onMerge.column);
+    return;
+  }
+  const raw = kvGet<BoardCache>(CACHE_KEY);
+  const issue = raw?.issues.find((i) => i.key === key);
+  const column = raw?.columns.find((c) => c.name === onMerge.column);
+  if (!raw || !issue || !column) {
+    throw new Error(`Unknown issue ${key} or column ${onMerge.column}`);
+  }
+  if (column.statusIds.includes(issue.statusId)) return;
+  const moves = kvGet<Record<string, LocalMove>>(LOCAL_MOVES_KEY) ?? {};
+  moves[key] = { fromStatusId: issue.statusId, column: column.name };
+  kvSet(LOCAL_MOVES_KEY, moves);
+  publish(raw);
 }
 
 export interface LinkedPullRequest {
@@ -181,7 +242,8 @@ export function onBoardChanged(cb: (b: BoardCache) => void): () => void {
 }
 
 export function getBoardCache(): BoardCache | undefined {
-  return kvGet<BoardCache>(CACHE_KEY);
+  const raw = kvGet<BoardCache>(CACHE_KEY);
+  return raw && applyLocalMoves(raw);
 }
 
 export async function syncBoard(): Promise<BoardCache | undefined> {
@@ -250,16 +312,13 @@ export async function syncBoard(): Promise<BoardCache | undefined> {
     }
     const boardIssues = issues.filter((i) => !backlog.has(i.key));
 
-    const cache: BoardCache = {
+    return publish({
       boardName: board.name,
       columns,
       issues: boardIssues,
       myAccountId: me.accountId,
       at: Date.now(),
-    };
-    kvSet(CACHE_KEY, cache);
-    for (const cb of listeners) cb(cache);
-    return cache;
+    });
   } finally {
     syncing = false;
   }

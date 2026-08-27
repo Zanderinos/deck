@@ -55,8 +55,12 @@ const api = {
       body: string,
       comments: DraftComment[],
     ): Promise<PrActionResult> => ipcRenderer.invoke("gh:review", repo, n, event, body, comments),
-    merge: (repo: string, n: number, method: MergeMethod): Promise<PrActionResult> =>
-      ipcRenderer.invoke("gh:merge", repo, n, method),
+    merge: (
+      repo: string,
+      n: number,
+      method: MergeMethod,
+      issueKey?: string,
+    ): Promise<PrActionResult> => ipcRenderer.invoke("gh:merge", repo, n, method, issueKey),
     setFileViewed: (prId: string, path: string, viewed: boolean): Promise<PrActionResult> =>
       ipcRenderer.invoke("gh:setFileViewed", prId, path, viewed),
     autoMerge: (repo: string, n: number, method: MergeMethod): Promise<PrActionResult> =>

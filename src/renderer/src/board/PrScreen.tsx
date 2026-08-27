@@ -180,10 +180,11 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
     setBusy("merge");
     setMergeOpen(false);
     setActionError(undefined);
-    const result = await window.deck.gh.merge(pr.repo, pr.number, chosenMethod);
+    const result = await window.deck.gh.merge(pr.repo, pr.number, chosenMethod, issue?.key);
     setBusy(undefined);
-    if (!result.ok) return setActionError(result.error);
+    // The merge may have gone through even when the follow-up move failed.
     refresh();
+    if (!result.ok) setActionError(result.error);
   };
 
   const enableAutoMerge = async () => {

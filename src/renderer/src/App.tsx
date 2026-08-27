@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DeckSettings } from "../../shared/settings.js";
+import type { DeckSettings, OnMergeMode, OnMergeSettings } from "../../shared/settings.js";
 import { AgentsView } from "./agents/AgentsView.js";
 import { BoardView } from "./board/BoardView.js";
 import { Sidebar } from "./chrome/Sidebar.js";
@@ -128,10 +128,19 @@ function Shell() {
 
 function SettingsView() {
   const [settings, setSettings] = useState<DeckSettings>();
+  const [columns, setColumns] = useState<string[]>([]);
   useEffect(() => {
     void window.deck.getSettings().then(setSettings);
+    void window.deck.board.get().then((b) => setColumns(b?.columns.map((c) => c.name) ?? []));
   }, []);
   if (!settings) return null;
+  const { onMerge } = settings.jira;
+  const updateOnMerge = async (patch: Partial<OnMergeSettings>) =>
+    setSettings(
+      await window.deck.updateSettings({
+        jira: { ...settings.jira, onMerge: { ...onMerge, ...patch } },
+      }),
+    );
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
@@ -272,6 +281,39 @@ function SettingsView() {
             }
           }}
         />
+
+        <label className="mt-4 flex items-center gap-2 text-xs text-dim">
+          <input
+            type="checkbox"
+            checked={onMerge.enabled}
+            onChange={(e) => void updateOnMerge({ enabled: e.target.checked })}
+          />
+          Move the issue when its PR is merged from deck
+        </label>
+        {onMerge.enabled && (
+          <div className="mt-2 flex gap-2">
+            <select
+              className="min-w-0 flex-1 rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              value={onMerge.column}
+              onChange={(e) => void updateOnMerge({ column: e.target.value })}
+            >
+              <option value="">{columns.length ? "Pick a column…" : "Sync the board first"}</option>
+              {columns.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="min-w-0 flex-1 rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              value={onMerge.mode}
+              onChange={(e) => void updateOnMerge({ mode: e.target.value as OnMergeMode })}
+            >
+              <option value="local">On deck's board only (until Jira catches up)</option>
+              <option value="jira">Transition in Jira too</option>
+            </select>
+          </div>
+        )}
 
         <label className="mt-4 block text-xs text-dim">
           Repo roots — searched by ⌘K and the repos fallback (one per line)

@@ -256,7 +256,17 @@ export function BoardView() {
                       } ${dragKey === card.key ? "opacity-40" : ""}`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-dim">{card.key}</span>
+                        <span className="text-[11px] text-dim">
+                          {card.key}
+                          {card.localMove && (
+                            <span
+                              className="ml-1.5 text-mut"
+                              title="Moved on this board only; Jira still shows the previous column"
+                            >
+                              · local
+                            </span>
+                          )}
+                        </span>
                         <span
                           className="flex h-[18px] w-[18px] items-center justify-center rounded-full text-[9px] font-bold text-bg"
                           style={{ background: avatarColor(card.assignee) }}

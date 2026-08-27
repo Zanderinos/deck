@@ -4,7 +4,15 @@ import { kvGet, kvSet } from "./db.js";
 const KEY = "settings";
 
 export function getSettings(): DeckSettings {
-  return { ...defaultSettings, ...(kvGet<Partial<DeckSettings>>(KEY) ?? {}) };
+  const stored = kvGet<Partial<DeckSettings>>(KEY) ?? {};
+  // Nested groups gain fields over time; settings saved before a field
+  // existed must still pick up its default.
+  return {
+    ...defaultSettings,
+    ...stored,
+    jira: { ...defaultSettings.jira, ...stored.jira },
+    github: { ...defaultSettings.github, ...stored.github },
+  };
 }
 
 export function updateSettings(patch: Partial<DeckSettings>): DeckSettings {

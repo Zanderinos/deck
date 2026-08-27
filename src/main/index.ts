@@ -42,7 +42,14 @@ import {
 } from "./github.js";
 import { workingChanges } from "./git.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
-import { getBoardCache, moveIssue, onBoardChanged, startBoardSync, syncBoard } from "./jira.js";
+import {
+  afterPrMerged,
+  getBoardCache,
+  moveIssue,
+  onBoardChanged,
+  startBoardSync,
+  syncBoard,
+} from "./jira.js";
 import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
@@ -228,8 +235,19 @@ app.whenReady().then(async () => {
     (_e, repo: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[]) =>
       submitPrReview(repo, n, event, body, comments),
   );
-  ipcMain.handle("gh:merge", (_e, repo: string, n: number, method: MergeMethod) =>
-    mergePr(repo, n, method),
+  ipcMain.handle(
+    "gh:merge",
+    async (_e, repo: string, n: number, method: MergeMethod, issueKey?: string) => {
+      const result = await mergePr(repo, n, method);
+      if (!result.ok || !issueKey) return result;
+      try {
+        await afterPrMerged(issueKey);
+        return result;
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: `Merged, but moving ${issueKey} failed: ${reason}` };
+      }
+    },
   );
   ipcMain.handle("gh:setFileViewed", (_e, prId: string, path: string, viewed: boolean) =>
     setPrFileViewed(prId, path, viewed),

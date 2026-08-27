@@ -10,6 +10,20 @@ export interface JiraSettings {
   rejectedPattern: string;
   /** How many days of Done issues stay on the board. */
   doneWindowDays: number;
+  /** What happens to an issue when one of its PRs is merged from deck. */
+  onMerge: OnMergeSettings;
+}
+
+/** - "local": the card shows in the target column on deck's board only, until
+ *    Jira catches up (its own automation) or the issue moves elsewhere.
+ *  - "jira": deck fires the Jira transition itself. */
+export type OnMergeMode = "local" | "jira";
+
+export interface OnMergeSettings {
+  enabled: boolean;
+  /** Board column the issue lands in. */
+  column: string;
+  mode: OnMergeMode;
 }
 
 export interface GithubSettings {
@@ -51,6 +65,7 @@ export const defaultSettings: DeckSettings = {
     boardId: "",
     rejectedPattern: "reject",
     doneWindowDays: 7,
+    onMerge: { enabled: false, column: "", mode: "local" },
   },
   github: { owner: "" },
   windowMode: "shared",
