@@ -14,6 +14,7 @@ import type {
 import type { WorkingChanges } from "../main/git.js";
 import type { TermMeta } from "../main/pty.js";
 import type { BoardCache } from "../main/jira.js";
+import type { AskResult } from "../main/ask.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
@@ -104,6 +105,16 @@ const api = {
     hooksInstalled: (): Promise<boolean> => ipcRenderer.invoke("hooks:installed"),
     installHooks: (): Promise<{ installed: boolean; path: string }> =>
       ipcRenderer.invoke("hooks:install"),
+  },
+  ask: {
+    /** One turn of the deck conversation; text also streams via onDelta. */
+    send: (question: string): Promise<AskResult> => ipcRenderer.invoke("ask:send", question),
+    reset: (): Promise<void> => ipcRenderer.invoke("ask:reset"),
+    onDelta: (cb: (text: string) => void): (() => void) => {
+      const listener = (_e: unknown, text: string) => cb(text);
+      ipcRenderer.on("ask:delta", listener);
+      return () => ipcRenderer.removeListener("ask:delta", listener);
+    },
   },
   term: {
     create: (opts?: { cwd?: string; command?: string; issueKey?: string }): Promise<TermMeta> =>

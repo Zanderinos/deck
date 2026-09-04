@@ -233,3 +233,12 @@ export function sessionMessages(sessionId: string): ConvMessage[] {
     .prepare("SELECT role, ts, text FROM conv_messages WHERE session_id = ? ORDER BY id")
     .all(sessionId) as ConvMessage[];
 }
+
+/** The tail of a conversation, oldest first — what a session last said. */
+export function lastMessages(sessionId: string, limit: number): ConvMessage[] {
+  return (
+    openDb()
+      .prepare("SELECT role, ts, text FROM conv_messages WHERE session_id = ? ORDER BY id DESC LIMIT ?")
+      .all(sessionId, limit) as ConvMessage[]
+  ).reverse();
+}

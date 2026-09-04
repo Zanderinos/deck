@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import appIcon from "../../resources/icon.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
+import { askDeck, resetAsk } from "./ask.js";
 import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
 import {
   getIndexProgress,
@@ -217,6 +218,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
+  ipcMain.handle("ask:send", (e, question: string) =>
+    askDeck(question, (delta) => {
+      if (!e.sender.isDestroyed()) e.sender.send("ask:delta", delta);
+    }),
+  );
+  ipcMain.handle("ask:reset", () => resetAsk());
   startPrWarmer();
   onPrsChanged((key, prs) => broadcast("prs:changed", key, prs));
   startBoardSync();

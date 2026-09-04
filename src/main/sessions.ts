@@ -59,6 +59,15 @@ export interface HookPayload {
   prompt?: string;
 }
 
+// Sessions deck itself runs (the "Ask deck" assistant) fire the same hooks
+// as any other session; they are excluded so they never appear in the list
+// they are describing.
+const internalSessions = new Set<string>();
+
+export function markInternalSession(id: string): void {
+  internalSessions.add(id);
+}
+
 const listeners = new Set<() => void>();
 
 export function onSessionsChanged(cb: () => void): () => void {
@@ -95,7 +104,7 @@ const eventStatus: Record<string, SessionStatus> = {
 export function applyHook(payload: HookPayload, termId: string | null): void {
   const id = payload.session_id;
   const status = payload.hook_event_name ? eventStatus[payload.hook_event_name] : undefined;
-  if (!id || !status) return;
+  if (!id || !status || internalSessions.has(id)) return;
 
   const db = openDb();
   const now = Date.now();
