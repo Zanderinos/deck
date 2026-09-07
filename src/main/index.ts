@@ -245,6 +245,8 @@ app.whenReady().then(async () => {
   startPrInbox();
   onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
   ipcMain.handle("inbox:get", () => getPrInbox());
+  ipcMain.handle("window:fullscreen", (e, on: boolean) => BrowserWindow.fromWebContents(e.sender)?.setFullScreen(on));
+  ipcMain.handle("window:isFullscreen", (e) => BrowserWindow.fromWebContents(e.sender)?.isFullScreen() ?? false);
   ipcMain.handle("inbox:refresh", () => refreshPrInbox().catch(() => getPrInbox()));
   startPrWarmer();
   onPrsChanged((key, prs) => broadcast("prs:changed", key, prs));

@@ -147,6 +147,10 @@ const api = {
       return () => ipcRenderer.removeListener("ask:event", listener);
     },
   },
+  window: {
+    setFullScreen: (on: boolean): Promise<void> => ipcRenderer.invoke("window:fullscreen", on),
+    isFullScreen: (): Promise<boolean> => ipcRenderer.invoke("window:isFullscreen"),
+  },
   inbox: {
     get: (): Promise<PrInbox | undefined> => ipcRenderer.invoke("inbox:get"),
     refresh: (): Promise<PrInbox | undefined> => ipcRenderer.invoke("inbox:refresh"),

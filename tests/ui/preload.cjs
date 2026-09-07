@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const callbacks = { created: [], exit: [], data: [], sessions: [], settings: [], extensions: [], ask: [] };
 const pr = (number, extra) => ({ repo:'demo/api', number, title:'PR '+number, url:'https://example.test/'+number, author:'me', isDraft:false, updatedAt:new Date().toISOString(), headRefName:'f', baseRefName:'main', reviewDecision:null, mergeable:'MERGEABLE', checks:'SUCCESS', ...extra });
 const reviewed = [];
+const fullscreen = [];
 const inbox = { viewer:'me', at:Date.now(), mine:[pr(12,{checks:'FAILURE',title:'Retry uploads on timeout'}), pr(13,{title:'Add dark theme'})], reviewRequested:[pr(14,{author:'teammate',title:'Migrate sessions table',updatedAt:new Date(Date.now()-3600e3).toISOString()}), pr(15,{author:'teammate',title:'APP-42 Fix login expiry'}), pr(16,{author:'teammate',title:'Draft idea',isDraft:true})] };
 let next = 3;
 const terms = [
@@ -17,7 +18,7 @@ ipcRenderer.on('test:sessions', (_event, next) => { sessions.splice(0, sessions.
 const off = (kind,cb) => { callbacks[kind].push(cb); return () => callbacks[kind].splice(callbacks[kind].indexOf(cb),1); };
 const settings = {theme:'dark',defaultAgent:'codex',defaultView:'terminal',autoFix:{enabled:true,ci:true,conflicts:true,push:'review'},defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,jira:{onMerge:{enabled:false},doneWindowDays:7},github:{owner:''}};
 contextBridge.exposeInMainWorld('deck', {
- reviewedEvents:()=>reviewed,
+ reviewedEvents:()=>reviewed, window:{setFullScreen:async(on)=>{fullscreen.push(on)},isFullScreen:async()=>false}, fullscreenCalls:()=>fullscreen,
  getSettings:async()=>settings, updateSettings:async(patch)=>{Object.assign(settings,patch);callbacks.settings.forEach(cb=>cb(settings));return settings},onSettingsChanged:cb=>off('settings',cb),
  extensions:{get:()=>ipcRenderer.invoke('test:catalog'),onChanged:cb=>off('extensions',cb),saveTheme:value=>ipcRenderer.invoke('test:save-theme',value),enablePlugin:(_path,enabled)=>ipcRenderer.invoke('test:enable',enabled),installPlugin:async()=>null,importTheme:async()=>null,openFolder:async()=>{}},
  term:{list:async()=>terms,create:async(opts)=>{const meta={...opts,id:String(++next),cwd:opts.cwd||'/Users/demo/www/deck'};terms.push(meta);callbacks.created.forEach(cb=>cb(meta));return meta},onCreated:cb=>off('created',cb),onExit:cb=>off('exit',cb),onData:cb=>off('data',cb),attach:async(id)=> ({sequence:0,buffer:id==='1'? '\x1b[1mCodex\x1b[0m\r\n\r\n  /Users/demo/www/deck\r\n\r\n› Make Deck my everyday terminal.\r\n\r\n• Codex and Claude now share session tracking, history search,\r\n  and pull request review tools.\r\n\r\n• Running checks…\r\n\r\n\x1b[32m✓\x1b[0m TypeScript checks passed\r\n\x1b[32m✓\x1b[0m Session and transcript tests passed\r\n\r\n› ': '\x1b[32m~/www/deck\x1b[0m \x1b[90mgit:(main)\x1b[0m\r\n❯ '}), resize:()=>{},input:()=>{},kill:id=>{terms.splice(terms.findIndex(t=>t.id===id),1);callbacks.exit.forEach(cb=>cb(id))}},

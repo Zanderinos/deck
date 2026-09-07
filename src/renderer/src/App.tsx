@@ -28,7 +28,7 @@ export default function App() {
 }
 
 function Shell() {
-  const { mode, setMode } = useDisplayMode();
+  const { mode, setMode, presentationSize } = useDisplayMode();
   const [view, setViewRaw] = useState<View>("terminal");
   // The configured start page applies once, unless the user already moved on.
   useEffect(() => {
@@ -44,7 +44,6 @@ function Shell() {
   // View history for the mouse back/forward buttons.
   const history = useRef({ stack: ["terminal"] as View[], index: 0 });
   const setView = useCallback((v: View) => {
-    if (v !== "terminal") setMode("normal");
     setViewRaw((current) => {
       if (v !== current) {
         const h = history.current;
@@ -54,11 +53,18 @@ function Shell() {
       return v;
     });
   }, []);
-  useEffect(() => { if (mode !== "normal") setView("terminal"); }, [mode, setView]);
+  // Zen and Presentation go fullscreen like WebStorm's; leaving restores
+  // whatever the window was before.
+  const wasFullScreen = useRef(false);
+  useEffect(() => {
+    if (mode === "normal") { if (!wasFullScreen.current) void window.deck.window.setFullScreen(false); return; }
+    void window.deck.window.isFullScreen().then((on) => { wasFullScreen.current = on; if (!on) void window.deck.window.setFullScreen(true); });
+  }, [mode]);
   useEffect(() => {
     const onModeKey = (event: KeyboardEvent) => {
       if (searchOpen) return;
-      if (event.key === "Escape" && mode !== "normal") {
+      // Other pages use Escape themselves (closing composers and menus).
+      if (event.key === "Escape" && mode !== "normal" && view === "terminal") {
         event.preventDefault(); event.stopImmediatePropagation(); setMode("normal");
       } else if (event.metaKey && event.shiftKey && event.key === "Enter") {
         event.preventDefault(); event.stopImmediatePropagation(); setMode(mode === "zen" ? "normal" : "zen");
@@ -68,7 +74,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onModeKey, true);
     return () => window.removeEventListener("keydown", onModeKey, true);
-  }, [mode, setMode, searchOpen]);
+  }, [mode, setMode, searchOpen, view]);
 
   const goBack = useCallback(() => {
     if (requestNavBack()) return; // an overlay consumed it
@@ -140,12 +146,14 @@ function Shell() {
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
-      <FocusModeBar />
+      <FocusModeBar view={view} />
       <div className="workbench-chrome"><Titlebar onSearch={() => setSearchOpen(true)} sidebarOpen={sidebarOpen} onView={setView} onSidebar={() => setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; })} /></div>
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && <div className="workbench-chrome flex min-h-0"><Sidebar view={view} onView={setView} /></div>}
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <TerminalView visible={view === "terminal"} />
+          {/* The terminal scales its own font; every other page zooms by the same ratio. */}
+          <div className={`${view === "terminal" ? "hidden" : "flex"} min-h-0 min-w-0 flex-1 flex-col`} style={{ zoom: mode === "presentation" ? presentationSize / 13 : 1 }}>
           {view === "search" && (
             <div className="min-h-0 flex-1">
               <SearchView
@@ -158,6 +166,7 @@ function Shell() {
           <ReviewsView visible={view === "reviews"} />
           {view === "board" && <BoardView />}
           {view === "settings" && <SettingsView />}
+          </div>
         </main>
       </div>
       {searchOpen && (

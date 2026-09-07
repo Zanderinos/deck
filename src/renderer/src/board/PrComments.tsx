@@ -79,7 +79,9 @@ function TextBox({
 
 export { TextBox };
 
-/** One review thread (or a single top-level comment) as a card, GitHub-style. */
+/** One review thread (or a single top-level comment) as a card, GitHub-style.
+ *  Resolved and outdated threads start collapsed, like GitHub; any thread
+ *  folds to a one-line summary from its header. */
 export function ThreadCard({
   comments,
   actions,
@@ -90,67 +92,102 @@ export function ThreadCard({
   const first = comments[0];
   const settled = first.resolved || first.outdated;
   const [replying, setReplying] = useState(false);
+  const [collapsed, setCollapsed] = useState(settled);
+  const summary = first.body.replace(/\s+/g, " ").trim();
   return (
     <div
       className={`mx-2 my-1.5 rounded-lg border bg-card ${
         settled ? "border-edge2 opacity-60" : "border-edge3"
       }`}
     >
-      {comments.map((comment, i) => (
-        <div key={comment.id} className={`px-3 py-2 ${i > 0 ? "border-t border-edge" : ""}`}>
-          <div className="flex items-center gap-2 font-sans text-[11px]">
-            <Avatar name={comment.author} />
-            <span className="font-semibold text-soft">{comment.author}</span>
-            {comment.isBot && <span className="rounded bg-card2 px-1 text-[10px] text-dim">bot</span>}
-            <span className="text-dim">{relativeTime(comment.createdAt)}</span>
-            {i === 0 && comment.resolved && <span className="text-green">resolved</span>}
-            {i === 0 && comment.outdated && !comment.resolved && (
-              <span className="text-dim">outdated</span>
-            )}
-            <span className="ml-auto flex items-center gap-2">
-              {i === 0 && comment.threadId && actions && (
+      {collapsed ? (
+        <button
+          onClick={() => setCollapsed(false)}
+          aria-expanded={false}
+          aria-label={`Expand thread by ${first.author}`}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left font-sans text-[11px] hover:bg-card2"
+        >
+          <Icon name="chevronRight" size={11} className="text-dim" />
+          <Avatar name={first.author} />
+          <span className="font-semibold text-soft">{first.author}</span>
+          {first.resolved && <span className="text-green">resolved</span>}
+          {first.outdated && !first.resolved && <span className="text-dim">outdated</span>}
+          <span className="min-w-0 flex-1 truncate text-mut">{summary}</span>
+          {comments.length > 1 && <span className="shrink-0 text-dim">{comments.length} comments</span>}
+        </button>
+      ) : (
+        <>
+          {comments.map((comment, i) => (
+            <div key={comment.id} className={`px-3 py-2 ${i > 0 ? "border-t border-edge" : ""}`}>
+              <div className="flex items-center gap-2 font-sans text-[11px]">
+                {i === 0 && (
+                  <button
+                    onClick={() => setCollapsed(true)}
+                    aria-expanded
+                    aria-label={`Collapse thread by ${comment.author}`}
+                    title="Collapse thread"
+                    className="text-dim hover:text-ink"
+                  >
+                    <Icon name="chevronDown" size={11} />
+                  </button>
+                )}
+                <Avatar name={comment.author} />
+                <span className="font-semibold text-soft">{comment.author}</span>
+                {comment.isBot && <span className="rounded bg-card2 px-1 text-[10px] text-dim">bot</span>}
+                <span className="text-dim">{relativeTime(comment.createdAt)}</span>
+                {i === 0 && comment.resolved && <span className="text-green">resolved</span>}
+                {i === 0 && comment.outdated && !comment.resolved && (
+                  <span className="text-dim">outdated</span>
+                )}
+                <span className="ml-auto flex items-center gap-2">
+                  {i === 0 && comment.threadId && actions && (
+                    <button
+                      onClick={() => {
+                        actions.onResolve(comment.threadId!, !comment.resolved);
+                        if (!comment.resolved) setCollapsed(true);
+                      }}
+                      className="rounded border border-edge2 px-1.5 py-0.5 text-[10px] text-mut hover:border-edge3 hover:text-ink"
+                    >
+                      {comment.resolved ? "Unresolve" : "Resolve"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => window.open(comment.url)}
+                    className="text-dim hover:text-ink"
+                    title="Open on GitHub"
+                  >
+                    <Icon name="external" size={11} />
+                  </button>
+                </span>
+              </div>
+              <Markdown>{comment.body}</Markdown>
+            </div>
+          ))}
+          {first.threadId && actions && (
+            <div className="border-t border-edge px-3 py-2">
+              {replying ? (
+                <TextBox
+                  placeholder="Reply…"
+                  sendLabel="Reply"
+                  autoFocus
+                  onCancel={() => setReplying(false)}
+                  onSend={async (body) => {
+                    const ok = await actions.onReply(first.threadId!, body);
+                    if (ok) setReplying(false);
+                    return ok;
+                  }}
+                />
+              ) : (
                 <button
-                  onClick={() => actions.onResolve(comment.threadId!, !comment.resolved)}
-                  className="rounded border border-edge2 px-1.5 py-0.5 text-[10px] text-mut hover:border-edge3 hover:text-ink"
+                  onClick={() => setReplying(true)}
+                  className="w-full rounded border border-edge2 px-2 py-1 text-left font-sans text-[11px] text-dim hover:border-edge3 hover:text-mut"
                 >
-                  {comment.resolved ? "Unresolve" : "Resolve"}
+                  Reply…
                 </button>
               )}
-              <button
-                onClick={() => window.open(comment.url)}
-                className="text-dim hover:text-ink"
-                title="Open on GitHub"
-              >
-                <Icon name="external" size={11} />
-              </button>
-            </span>
-          </div>
-          <Markdown>{comment.body}</Markdown>
-        </div>
-      ))}
-      {first.threadId && actions && (
-        <div className="border-t border-edge px-3 py-2">
-          {replying ? (
-            <TextBox
-              placeholder="Reply…"
-              sendLabel="Reply"
-              autoFocus
-              onCancel={() => setReplying(false)}
-              onSend={async (body) => {
-                const ok = await actions.onReply(first.threadId!, body);
-                if (ok) setReplying(false);
-                return ok;
-              }}
-            />
-          ) : (
-            <button
-              onClick={() => setReplying(true)}
-              className="w-full rounded border border-edge2 px-2 py-1 text-left font-sans text-[11px] text-dim hover:border-edge3 hover:text-mut"
-            >
-              Reply…
-            </button>
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
