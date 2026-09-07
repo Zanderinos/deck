@@ -5,8 +5,8 @@
 <h1 align="center">Deck</h1>
 
 <p align="center">
-  <strong>Stop switching between GitHub, Jira, Claude Code and Codex.</strong><br>
-  Deck is the one window where your agents run, your pull requests get reviewed and your board stays in view.
+  <strong>An AI-native software delivery workflow for teams that run on Jira.</strong><br>
+  Jira, Claude Code, Codex and GitHub on one Kanban board. Pick a card, code it with an agent, review the PR, ship it. One screen.
 </p>
 
 <p align="center">
@@ -26,17 +26,17 @@
 
 ## Why Deck
 
-A normal day with coding agents means five tabs: a terminal running Claude Code, another running Codex, GitHub for the PRs piling up, and Jira for the board. Every switch costs you the thread you were holding.
+Most engineering teams run their delivery on Jira. Coding agents have made the writing part fast, but the loop around it is still slow: find the ticket in Jira, open a terminal for Claude Code or Codex, switch to GitHub to review, back to Jira to move the card. Every hop costs the thread you were holding, and none of these tools know about each other.
 
-Deck collapses that into one window:
+Deck's answer is a Kanban board that is also your terminal, your review queue and your orchestrator:
 
-- **Every agent, one sidebar.** Claude Code and Codex sessions with live status, so you see who needs you without tabbing around.
-- **Every PR waiting on you, one queue.** Diff, checks, linked Jira task and an agent helper, one PR at a time. Approve and the next one loads.
-- **Your board, already there.** Jira syncs in the background and feeds every agent question.
+- **Start from the card.** Every Jira issue on the board can launch a Claude Code or Codex session bound to that ticket, in the right repository. The agent's live status shows on the card.
+- **Move the card, move the ticket.** Drag between columns and Deck fires the Jira transition. The board syncs in the background, so Jira's slowness stays out of your way.
+- **Review where you code.** Pull requests waiting on you arrive as a queue with the diff, checks and linked ticket. Approve and the next one loads.
+- **Orchestrate the whole loop.** Ask Deck what needs attention and it can start agents, put one on a broken PR, or file the next issue. Every answer sees your sessions, your PR inbox and your board.
 - **Search everything you ever asked.** One palette over live sessions and the full chat history of Claude Code and Codex, so the answer from last week is a ⌘K away.
-- **An orchestrator that acts.** Ask it what needs attention and it can start agents, put one on a broken PR, or file the issue.
 
-Summon it with **⌥ Space**. Dismiss it the same way. Declutter, then get back to work.
+Summon it with **⌥ Space**. Code, review and orchestrate without leaving the screen.
 
 ## Features
 
@@ -46,6 +46,10 @@ Summon it with **⌥ Space**. Dismiss it the same way. Declutter, then get back 
 - **Vertical tabs** with search, rename, attention filters, Git status and keyboard navigation. A single "Continue your last session" suggestion appears for activity within the last 15 minutes; older sessions stay searchable.
 - **Splits and panes**: resizable nested splits, find in terminal, export, multiline input, and a local file explorer with text editing and Markdown preview.
 - **Zen and Presentation** on every page, WebStorm style. Both go fullscreen and hide the chrome; Presentation also enlarges the terminal font and zooms the other pages by the same ratio.
+
+### Board <kbd>⌘⇧2</kbd>
+
+Your Jira board as a Kanban view inside Deck. Cards carry the agents that have touched them; opening a card shows the ticket, its sessions and its pull requests, and starts a new Claude Code or Codex session on it. Dragging a card to another column fires the matching Jira transition, optimistically, with the sync catching up in the background.
 
 ### Agent page <kbd>⌘⇧3</kbd>
 
