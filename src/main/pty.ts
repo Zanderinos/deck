@@ -174,6 +174,7 @@ class PtyHostClient {
       // Host gone: every terminal went with it.
       for (const [id, owners] of this.owners) {
         endTermSessions(id);
+        for (const cb of exitListeners) cb(id);
         for (const owner of owners) if (!owner.isDestroyed()) owner.send("term:exit", id, -1);
       }
       this.sequences.clear();
@@ -195,6 +196,7 @@ class PtyHostClient {
     if (msg.type === "exit") {
       endTermSessions(msg.id);
       this.owners.delete(msg.id);
+      for (const cb of exitListeners) cb(msg.id);
     }
     const sequence = (this.sequences.get(msg.id) ?? 0) + 1;
     this.sequences.set(msg.id, sequence);
@@ -207,6 +209,13 @@ class PtyHostClient {
 }
 
 let client: PtyHostClient | undefined;
+const exitListeners = new Set<(id: string) => void>();
+
+/** Fires when a terminal's process exits (or the host goes away with it). */
+export function onTermExit(cb: (id: string) => void): () => void {
+  exitListeners.add(cb);
+  return () => exitListeners.delete(cb);
+}
 
 export async function startPtyHost(): Promise<void> {
   client = new PtyHostClient();
@@ -216,16 +225,7 @@ export async function startPtyHost(): Promise<void> {
   for (const t of terms) if (t.issueKey) linkTermToIssue(t.id, t.issueKey);
   clearTermLinks(terms.map((t) => t.id));
 
-  ipcMain.handle("term:create", async (_e, opts: TermCreateOptions = {}): Promise<TermMeta> => {
-    const spawn = spawnRequest(opts);
-    const reply = await client!.request<"created">({ type: "create", spawn });
-    // Hosts surviving a dev restart may predate structured agent metadata.
-    const meta = { ...reply.meta, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt };
-    if (meta.issueKey) linkTermToIssue(meta.id, meta.issueKey);
-    registerAgentTerm(meta);
-    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:created", meta);
-    return meta;
-  });
+  ipcMain.handle("term:create", (_e, opts: TermCreateOptions = {}) => createTerm(opts));
   ipcMain.handle("term:list", async (): Promise<TermMeta[]> => {
     return (await client!.request<"list">({ type: "list" })).terms;
   });
@@ -238,6 +238,25 @@ export async function startPtyHost(): Promise<void> {
     endTermSessions(id);
     client!.send({ type: "kill", id });
   });
+}
+
+/** Opens a terminal (optionally running an agent) and tells every window about it. */
+export async function createTerm(opts: TermCreateOptions = {}): Promise<TermMeta> {
+  const spawn = spawnRequest(opts);
+  const reply = await client!.request<"created">({ type: "create", spawn });
+  // Hosts surviving a dev restart may predate structured agent metadata.
+  const meta = { ...reply.meta, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt };
+  if (meta.issueKey) linkTermToIssue(meta.id, meta.issueKey);
+  registerAgentTerm(meta);
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:created", meta);
+  return meta;
+}
+
+/** Types into a terminal as one bracketed paste, then submits; agents fold a
+ *  trailing newline into pasted text, so Enter has to be its own keystroke. */
+export function sendToTerm(id: string, text: string): void {
+  client!.send({ type: "input", id, data: `\x1b[200~${text}\x1b[201~` });
+  setTimeout(() => client!.send({ type: "input", id, data: "\r" }), 200);
 }
 
 /** Packaged quit takes the shells along; in dev they stay for the restart. */

@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const callbacks = { created: [], exit: [], data: [], sessions: [], settings: [], extensions: [] };
+const callbacks = { created: [], exit: [], data: [], sessions: [], settings: [], extensions: [], ask: [] };
+const pr = (number, extra) => ({ repo:'demo/api', number, title:'PR '+number, url:'https://example.test/'+number, author:'me', isDraft:false, updatedAt:new Date().toISOString(), headRefName:'f', baseRefName:'main', reviewDecision:null, mergeable:'MERGEABLE', checks:'SUCCESS', ...extra });
+const inbox = { viewer:'me', at:Date.now(), mine:[pr(12,{checks:'FAILURE',title:'Retry uploads on timeout'}), pr(13,{title:'Add dark theme'})], reviewRequested:[pr(14,{author:'teammate',title:'Migrate sessions table'})] };
 let next = 3;
 const terms = [
  { id:'1', cwd:'/Users/demo/www/deck', agent:'codex', sessionId:'codex:demo', command:'codex' },
@@ -12,7 +14,7 @@ const sessions = [
 ];
 ipcRenderer.on('test:sessions', (_event, next) => { sessions.splice(0, sessions.length, ...next); callbacks.sessions.forEach(callback => callback(sessions)); });
 const off = (kind,cb) => { callbacks[kind].push(cb); return () => callbacks[kind].splice(callbacks[kind].indexOf(cb),1); };
-const settings = {theme:'dark',defaultAgent:'codex',defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,jira:{onMerge:{enabled:false},doneWindowDays:7},github:{owner:''}};
+const settings = {theme:'dark',defaultAgent:'codex',defaultView:'terminal',autoFix:{enabled:true,ci:true,conflicts:true,push:'review'},defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,jira:{onMerge:{enabled:false},doneWindowDays:7},github:{owner:''}};
 contextBridge.exposeInMainWorld('deck', {
  getSettings:async()=>settings, updateSettings:async(patch)=>{Object.assign(settings,patch);callbacks.settings.forEach(cb=>cb(settings));return settings},onSettingsChanged:cb=>off('settings',cb),
  extensions:{get:()=>ipcRenderer.invoke('test:catalog'),onChanged:cb=>off('extensions',cb),saveTheme:value=>ipcRenderer.invoke('test:save-theme',value),enablePlugin:(_path,enabled)=>ipcRenderer.invoke('test:enable',enabled),installPlugin:async()=>null,importTheme:async()=>null,openFolder:async()=>{}},
@@ -21,5 +23,6 @@ contextBridge.exposeInMainWorld('deck', {
  git:{summary:async()=>({branch:'main',added:529,removed:331,changedFiles:27}),changes:async()=>({diff:''})},
  search:{query:async()=>[{session_id:'codex:history',agent:'codex',cwd:'/Users/demo/www/deck',title:'Codex conversation',project:'deck',snippet:'Found ⟪terminal⟫',last_at:Date.now()}],session:async()=>[{role:'user',text:'A saved Codex conversation'}],listRepos:async()=>[],github:async()=>[],progress:async()=>({done:true,total:10,scanned:10}),onProgress:()=>()=>{}},
  files:{list:async()=>[{name:'src',path:'src',directory:true},{name:'package.json',path:'package.json',directory:false},{name:'README.md',path:'README.md',directory:false}],read:async()=>({text:'# Deck\n\nYour terminal, your agents.',modified:1}),save:async(root,file,contents)=>contents},
- board:{get:async()=>undefined,onChanged:()=>()=>{}},ask:{onDelta:()=>()=>{},reset:async()=>{},send:async()=>({ok:true,text:'Ready'})},gh:{onPrDrafts:()=>()=>{}}
+ board:{get:async()=>undefined,onChanged:()=>()=>{}},ask:{onEvent:cb=>off('ask',cb),reset:async()=>{},send:async()=>{callbacks.ask.forEach(cb=>cb({type:'tool',name:'pr_inbox',input:'{}'}));return {ok:true,text:'Ready'}}},
+ inbox:{get:async()=>inbox,refresh:async()=>inbox,onChanged:()=>()=>{}},gh:{onPrDrafts:()=>()=>{}}
 });

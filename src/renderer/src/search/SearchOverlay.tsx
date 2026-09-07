@@ -88,7 +88,7 @@ export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps
       { icon: "⌂", iconColor: "text-mut", title: "File explorer", meta: "Project files", open: () => { onView("terminal"); terminalAction("files"); } },
       { icon: "±", iconColor: "text-mut", title: "Working-tree changes", meta: "⌘E", open: () => { onView("terminal"); terminalAction("changes"); } },
       { icon: "◫", iconColor: "text-mut", title: "Open board", meta: "Jira + GitHub", open: () => onView("board") },
-      { icon: "✳", iconColor: "text-mut", title: "Agent sessions", meta: "Ask deck", open: () => onView("agents") },
+      { icon: "✳", iconColor: "text-mut", title: "Agent", meta: "Orchestrate your agents", open: () => onView("agent") },
       { icon: "⚙", iconColor: "text-mut", title: "Settings", meta: "⌘,", open: () => onView("settings") },
     ];
     const matchingActions = actions.filter((action) => `${action.title} ${action.meta}`.toLowerCase().includes(q));

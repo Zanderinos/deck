@@ -15,7 +15,9 @@ import fs from "node:fs";
 import path from "node:path";
 import appIcon from "../../resources/icon.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
-import { askDeck, resetAsk } from "./ask.js";
+import { askDeck, resetAsk, type AskEvent } from "./ask.js";
+import { startAutoFix } from "./autofix.js";
+import { getPrInbox, onPrInboxChanged, refreshPrInbox, startPrInbox, stopPrInbox } from "./prInbox.js";
 import { hooksInstalled, installHooks } from "./hooksInstall.js";
 import {
   getIndexProgress,
@@ -234,11 +236,16 @@ app.whenReady().then(async () => {
   ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
   ipcMain.handle("ask:send", (e, question: string, agent?: Agent) =>
-    askDeck(question, (delta) => {
-      if (!e.sender.isDestroyed()) e.sender.send("ask:delta", delta);
+    askDeck(question, (event: AskEvent) => {
+      if (!e.sender.isDestroyed()) e.sender.send("ask:event", event);
     }, agent),
   );
   ipcMain.handle("ask:reset", () => resetAsk());
+  startAutoFix();
+  startPrInbox();
+  onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
+  ipcMain.handle("inbox:get", () => getPrInbox());
+  ipcMain.handle("inbox:refresh", () => refreshPrInbox().catch(() => getPrInbox()));
   startPrWarmer();
   onPrsChanged((key, prs) => broadcast("prs:changed", key, prs));
   startBoardSync();
@@ -318,6 +325,7 @@ app.on("will-quit", () => {
   // touch globalShortcut — Electron throws pre-ready.
   if (app.isReady()) globalShortcut.unregisterAll();
   stopServer();
+  stopPrInbox();
   stopExtensions();
   stopPtyHost();
 });

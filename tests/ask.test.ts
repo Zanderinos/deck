@@ -1,7 +1,13 @@
 import type { BoardCache } from "../src/main/jira.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ board: undefined as BoardCache | undefined, configured: true, launches: [] as { bin: string; args: string[] }[] }));
+const state = vi.hoisted(() => ({
+  board: undefined as BoardCache | undefined,
+  configured: true,
+  launches: [] as { bin: string; args: string[] }[],
+  inbox: undefined as import("../src/main/prInbox.js").PrInbox | undefined,
+  toolCall: false,
+}));
 vi.mock("../src/main/jira.js", () => ({ getBoardCache: () => state.board, jiraConfigured: () => state.configured }));
 vi.mock("../src/main/settings.js", async () => {
   const { defaultSettings } = await import("../src/shared/settings.js");
@@ -9,6 +15,13 @@ vi.mock("../src/main/settings.js", async () => {
 });
 vi.mock("../src/main/sessions.js", () => ({ listSessions: () => [], markInternalSession: vi.fn() }));
 vi.mock("../src/main/indexer.js", () => ({ lastMessages: () => [] }));
+vi.mock("../src/main/autofix.js", () => ({ runningFixes: () => [{ repo: "acme/api", number: 7, problem: "ci_failed", termId: "t1", startedAt: 0 }] }));
+vi.mock("../src/main/orchestrator.js", () => ({ boardProjects: () => ["APP"], toolNames: () => ["list_sessions", "start_agent"] }));
+vi.mock("../src/main/server.js", () => ({ MCP_URL: "http://127.0.0.1:47800/api/mcp" }));
+vi.mock("../src/main/prInbox.js", async () => {
+  const { attentionReasons } = await import("../src/main/prInbox.js");
+  return { attentionReasons, getPrInbox: () => state.inbox };
+});
 vi.mock("node:child_process", async () => {
   const { promisify } = await import("node:util");
   const { EventEmitter } = await import("node:events");
@@ -19,6 +32,11 @@ vi.mock("node:child_process", async () => {
       state.launches.push({ bin, args });
       const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn() });
       queueMicrotask(() => {
+        if (state.toolCall) {
+          const tool = bin.endsWith("codex") ? { type: "item.started", item: { type: "mcp_tool_call", server: "deck", tool: "start_agent", arguments: { repo: "api" } } }
+            : { type: "assistant", message: { content: [{ type: "tool_use", name: "mcp__deck__start_agent", input: { repo: "api" } }] } };
+          child.stdout.write(JSON.stringify(tool) + "\n");
+        }
         const event = bin.endsWith("codex") ? { type: "item.completed", item: { type: "agent_message", text: "Fixture answer" } }
           : { type: "stream_event", event: { delta: { type: "text_delta", text: "Fixture answer" } } };
         child.stdout.write(JSON.stringify(event) + "\n");
@@ -28,12 +46,19 @@ vi.mock("node:child_process", async () => {
     },
   };
 });
-const { askDeck, boardSnapshot, resetAsk } = await import("../src/main/ask.js");
+const { askDeck, boardSnapshot, inboxSnapshot, resetAsk } = await import("../src/main/ask.js");
+
+const pr = (number: number, extra: Partial<import("../src/main/prInbox.js").InboxPr> = {}) => ({
+  repo: "acme/api", number, title: `PR ${number}`, url: `https://github.com/acme/api/pull/${number}`, author: "me", isDraft: false,
+  updatedAt: "2026-09-07T10:00:00Z", headRefName: `feature-${number}`, baseRefName: "main", reviewDecision: null, mergeable: "MERGEABLE", checks: "SUCCESS", ...extra,
+});
 
 beforeEach(() => {
   resetAsk();
   state.launches = [];
   state.configured = true;
+  state.toolCall = false;
+  state.inbox = { viewer: "me", at: Date.parse("2026-09-07T14:00:00Z"), mine: [pr(7, { checks: "FAILURE" }), pr(8)], reviewRequested: [pr(9, { author: "teammate" })] };
   state.board = {
     boardName: "Engineering", at: Date.parse("2026-09-07T14:00:00Z"), myAccountId: "me",
     columns: [{ name: "In review", statusIds: ["qa", "review"] }],
@@ -59,6 +84,32 @@ describe("Ask Deck Jira context", () => {
     state.board!.issues[0].summary = "Updated task title";
     await askDeck("And now?", () => {}, agent);
     expect(state.launches[1].args.join("\n")).toContain("Updated task title");
+  });
+  it.each(["claude", "codex"] as const)("hands %s deck's MCP tools and reports the tools it calls", async (agent) => {
+    state.toolCall = true;
+    const events: import("../src/main/ask.js").AskEvent[] = [];
+    await askDeck("Start an agent on the api repo", (e) => events.push(e), agent);
+    const args = state.launches[0].args;
+    if (agent === "claude") {
+      expect(args[args.indexOf("--mcp-config") + 1]).toContain("http://127.0.0.1:47800/api/mcp");
+      expect(args[args.indexOf("--allowedTools") + 1]).toContain("mcp__deck__start_agent");
+    } else {
+      expect(args).toContain('mcp_servers.deck.url="http://127.0.0.1:47800/api/mcp"');
+    }
+    expect(events[0]).toEqual({ type: "tool", name: "start_agent", input: '{"repo":"api"}' });
+    expect(events.at(-1)).toEqual({ type: "text", text: "Fixture answer" });
+  });
+  it("includes the PR inbox with attention reasons and running fixes", async () => {
+    await askDeck("Any PR of mine needing attention?", () => {}, "claude");
+    const prompt = state.launches[0].args[1];
+    expect(prompt).toContain("Jira projects on the board: APP");
+    const inbox = JSON.parse(inboxSnapshot());
+    expect(inbox.mine[0]).toMatchObject({ number: 7, needsAttention: ["ci_failed"], fixInProgress: ["ci_failed"] });
+    expect(inbox.mine[1]).toMatchObject({ number: 8, needsAttention: [], fixInProgress: [] });
+    expect(inbox.reviewRequested[0]).toMatchObject({ number: 9, author: "teammate" });
+    expect(prompt).toContain('"needsAttention":["ci_failed"]');
+    state.inbox = undefined;
+    expect(inboxSnapshot()).toContain("No PR data yet");
   });
   it("distinguishes missing setup, missing sync and a successfully synced empty board", () => {
     state.board = undefined;

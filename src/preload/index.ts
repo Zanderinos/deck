@@ -19,7 +19,8 @@ import type {
 import type { GitSummary, WorkingChanges } from "../main/git.js";
 import type { TermMeta } from "../main/pty.js";
 import type { BoardCache } from "../main/jira.js";
-import type { AskResult } from "../main/ask.js";
+import type { AskEvent, AskResult } from "../main/ask.js";
+import type { PrInbox } from "../main/prInbox.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
@@ -139,10 +140,20 @@ const api = {
     /** One turn of the deck conversation; text also streams via onDelta. */
     send: (question: string, agent?: Agent): Promise<AskResult> => ipcRenderer.invoke("ask:send", question, agent),
     reset: (): Promise<void> => ipcRenderer.invoke("ask:reset"),
-    onDelta: (cb: (text: string) => void): (() => void) => {
-      const listener = (_e: unknown, text: string) => cb(text);
-      ipcRenderer.on("ask:delta", listener);
-      return () => ipcRenderer.removeListener("ask:delta", listener);
+    /** Answer text as it streams, and the deck tools the assistant calls. */
+    onEvent: (cb: (event: AskEvent) => void): (() => void) => {
+      const listener = (_e: unknown, event: AskEvent) => cb(event);
+      ipcRenderer.on("ask:event", listener);
+      return () => ipcRenderer.removeListener("ask:event", listener);
+    },
+  },
+  inbox: {
+    get: (): Promise<PrInbox | undefined> => ipcRenderer.invoke("inbox:get"),
+    refresh: (): Promise<PrInbox | undefined> => ipcRenderer.invoke("inbox:refresh"),
+    onChanged: (cb: (inbox: PrInbox) => void): (() => void) => {
+      const listener = (_e: unknown, inbox: PrInbox) => cb(inbox);
+      ipcRenderer.on("inbox:changed", listener);
+      return () => ipcRenderer.removeListener("inbox:changed", listener);
     },
   },
   term: {

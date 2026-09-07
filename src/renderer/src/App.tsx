@@ -4,7 +4,7 @@ import { DisplayModeProvider, FocusModeBar, useDisplayMode } from "./chrome/Disp
 import { AgentSelect } from "./agents/AgentSelect.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckSettings, OnMergeMode, OnMergeSettings } from "../../shared/settings.js";
-import { AgentsView } from "./agents/AgentsView.js";
+import { AgentPage } from "./agents/AgentPage.js";
 import { BoardView } from "./board/BoardView.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
@@ -14,7 +14,7 @@ import { SearchView } from "./search/SearchView.js";
 import { TabProvider, useTabs } from "./store.js";
 import { TerminalView } from "./terminal/TerminalView.js";
 
-export type View = "terminal" | "board" | "agents" | "search" | "settings";
+export type View = "terminal" | "board" | "agent" | "search" | "settings";
 
 export default function App() {
   return (
@@ -29,6 +29,12 @@ export default function App() {
 function Shell() {
   const { mode, setMode } = useDisplayMode();
   const [view, setViewRaw] = useState<View>("terminal");
+  // The configured start page applies once, unless the user already moved on.
+  useEffect(() => {
+    void window.deck.getSettings().then(({ defaultView }) => {
+      if (history.current.stack.length === 1) { setViewRaw(defaultView); history.current.stack = [defaultView]; }
+    });
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("deck.sidebar") !== "hidden");
   const [searchOpen, setSearchOpen] = useState(false);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
@@ -113,7 +119,7 @@ function Shell() {
       } else if (meta && e.key === ",") setView("settings");
       else if (meta && e.shiftKey && e.key === "1") setView("terminal");
       else if (meta && e.shiftKey && e.key === "2") setView("board");
-      else if (meta && e.shiftKey && e.key === "3") setView("agents");
+      else if (meta && e.shiftKey && e.key === "3") setView("agent");
       else if (meta && e.key === "t") {
         e.preventDefault();
         setView("terminal");
@@ -146,7 +152,7 @@ function Shell() {
               />
             </div>
           )}
-          {view === "agents" && <AgentsView />}
+          <AgentPage visible={view === "agent"} />
           {view === "board" && <BoardView />}
           {view === "settings" && <SettingsView />}
         </main>
@@ -189,7 +195,29 @@ function SettingsView() {
             setSettings(await window.deck.updateSettings({ defaultAgent }));
           }} />
         </div>
-        <label className="block text-xs text-dim">Windows</label>
+        <div className="mb-4 flex items-center justify-between text-xs text-dim">
+          <span>Start page</span>
+          <select aria-label="Start page" className="rounded-md border border-edge2 bg-card px-2 py-1 text-[11px] text-body outline-none" value={settings.defaultView}
+            onChange={async (e) => setSettings(await window.deck.updateSettings({ defaultView: e.target.value as DeckSettings["defaultView"] }))}>
+            <option value="terminal">Terminal</option><option value="agent">Agent</option><option value="board">Board</option>
+          </select>
+        </div>
+        <div className="mb-1 text-xs font-bold text-ink">Auto-fix my pull requests</div>
+        {([["enabled", "Start an agent automatically when one of my PRs breaks"], ["ci", "…when CI fails"], ["conflicts", "…when it gets merge conflicts"]] as const).map(([field, text]) => (
+          <label key={field} className="mt-2 flex items-center gap-2 text-xs text-dim">
+            <input type="checkbox" checked={settings.autoFix[field]} disabled={field !== "enabled" && !settings.autoFix.enabled}
+              onChange={async (e) => setSettings(await window.deck.updateSettings({ autoFix: { ...settings.autoFix, [field]: e.target.checked } }))} />
+            {text}
+          </label>
+        ))}
+        <label className="mt-2 block text-xs text-dim">When the fix is ready</label>
+        <select className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent" value={settings.autoFix.push}
+          onChange={async (e) => setSettings(await window.deck.updateSettings({ autoFix: { ...settings.autoFix, push: e.target.value as DeckSettings["autoFix"]["push"] } }))}>
+          <option value="review">Show me the diff and wait for my approval before pushing</option>
+          <option value="push">Commit and push without asking</option>
+        </select>
+
+        <label className="mt-4 block text-xs text-dim">Windows</label>
         <select
           className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
           value={settings.windowMode}

@@ -39,8 +39,27 @@ export interface GithubSettings {
  *  - "per-entry": hotkey, tray and manual open each get their own window. */
 export type WindowMode = "shared" | "panel" | "per-entry";
 
+/** What an agent does with a fix it prepared for one of the user's PRs.
+ *  - "review": pauses with the diff for the user to approve the push.
+ *  - "push": commits and pushes unattended. */
+export type AutoFixPush = "review" | "push";
+
+export interface AutoFixSettings {
+  enabled: boolean;
+  /** Start an agent when CI fails on one of the user's open PRs. */
+  ci: boolean;
+  /** Start an agent when one of the user's open PRs gets merge conflicts. */
+  conflicts: boolean;
+  push: AutoFixPush;
+}
+
+/** The page deck opens on. */
+export type DefaultView = "terminal" | "board" | "agent";
+
 export interface DeckSettings {
   defaultAgent: Agent;
+  defaultView: DefaultView;
+  autoFix: AutoFixSettings;
   jira: JiraSettings;
   github: GithubSettings;
   windowMode: WindowMode;
@@ -62,6 +81,8 @@ export interface DeckSettings {
 
 export const defaultSettings: DeckSettings = {
   defaultAgent: "claude",
+  defaultView: "terminal",
+  autoFix: { enabled: true, ci: true, conflicts: true, push: "review" },
   jira: {
     baseUrl: "",
     email: "",

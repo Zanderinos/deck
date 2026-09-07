@@ -19,7 +19,7 @@ export function Titlebar({ onSearch, onSidebar, onView, sidebarOpen }: { onSearc
       </button>
     </div>
     {git && <button title="Working-tree changes" onClick={() => { onView("terminal"); terminalAction("changes"); }} className="flex items-center gap-1.5 px-2 text-[11px]"><span className="text-mut">±</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
-    <button onClick={() => onView("agents")} title="Agent sessions" aria-label="Agent sessions" className="toolbar-button"><Icon name="sparkle" size={16} /></button>
+    <button onClick={() => onView("agent")} title="Agent (⌘⇧3)" aria-label="Agent" className="toolbar-button"><Icon name="sparkle" size={16} /></button>
     <button onClick={() => setMode("zen")} title="Zen view (⌘⇧Enter)" aria-label="Zen view" className="toolbar-button"><Icon name="zen" size={16} /></button>
     <button onClick={() => setMode("presentation")} title="Presentation view (⌘⇧P)" aria-label="Presentation view" className="toolbar-button"><Icon name="presentation" size={16} /></button>
     <span className="ml-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#c9855d] text-[11px] font-semibold text-bg" title="Deck">D</span>

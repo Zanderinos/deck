@@ -334,3 +334,87 @@ export function stopBoardSync(): void {
   if (timer) clearInterval(timer);
   timer = undefined;
 }
+
+export interface JiraIssueHit {
+  key: string;
+  summary: string;
+  status: string;
+  type: string;
+  assignee: string | null;
+  priority: string | null;
+  parent: string | null;
+  updated: string;
+  description: string;
+}
+
+interface SearchPage {
+  issues: {
+    key: string;
+    fields: {
+      summary: string;
+      status: { name: string };
+      issuetype: { name: string };
+      assignee: { displayName: string } | null;
+      priority: { name: string } | null;
+      parent?: { key: string };
+      updated: string;
+      description?: unknown;
+    };
+  }[];
+}
+
+/** Flattens Atlassian Document Format to plain text; the agent only needs to read it. */
+function adfText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as { type?: string; text?: string; content?: unknown[] };
+  if (n.type === "text") return n.text ?? "";
+  const inner = (n.content ?? []).map(adfText).join(n.type === "paragraph" || n.type === "listItem" ? "" : "\n");
+  return n.type === "paragraph" || n.type === "heading" ? `${inner}\n` : inner;
+}
+
+/** Issues beyond the board mirror, for backlog grooming and epic planning. */
+export async function searchIssues(jql: string, max = 25): Promise<JiraIssueHit[]> {
+  const page = await request<SearchPage>("/rest/api/3/search/jql", {
+    jql,
+    maxResults: Math.min(Math.max(max, 1), 50),
+    fields: ["summary", "status", "issuetype", "assignee", "priority", "parent", "updated", "description"],
+  });
+  return page.issues.map((i) => ({
+    key: i.key,
+    summary: i.fields.summary,
+    status: i.fields.status.name,
+    type: i.fields.issuetype.name,
+    assignee: i.fields.assignee?.displayName ?? null,
+    priority: i.fields.priority?.name ?? null,
+    parent: i.fields.parent?.key ?? null,
+    updated: i.fields.updated,
+    description: adfText(i.fields.description).trim().slice(0, 1500),
+  }));
+}
+
+export interface NewIssue {
+  project: string;
+  type: string;
+  summary: string;
+  description?: string;
+  /** Epic (or other parent) key the issue belongs under. */
+  parent?: string;
+}
+
+export async function createIssue(issue: NewIssue): Promise<{ key: string; url: string }> {
+  const fields: Record<string, unknown> = {
+    project: { key: issue.project },
+    issuetype: { name: issue.type },
+    summary: issue.summary,
+  };
+  if (issue.description) {
+    fields.description = {
+      type: "doc",
+      version: 1,
+      content: issue.description.split(/\n{2,}/).map((p) => ({ type: "paragraph", content: [{ type: "text", text: p }] })),
+    };
+  }
+  if (issue.parent) fields.parent = { key: issue.parent };
+  const created = await request<{ key: string }>("/rest/api/3/issue", { fields });
+  return { key: created.key, url: `${config().baseUrl.replace(/\/$/, "")}/browse/${created.key}` };
+}

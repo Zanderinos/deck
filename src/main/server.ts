@@ -1,6 +1,7 @@
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
 import type { DraftComment } from "./github.js";
+import { handleMcp, type JsonRpc } from "./orchestrator.js";
 import { applyHook, requestReview, type HookPayload } from "./sessions.js";
 
 // deck's local HTTP surface. Claude Code hooks curl into it; later slices add
@@ -57,8 +58,21 @@ function buildApp(): Hono {
     return c.json({ ok: Boolean(term), accepted: drafts.length });
   });
 
+  // The agent page's assistant reaches deck's tools here (MCP over HTTP with
+  // plain JSON responses). Loopback only, like everything else on this server.
+  app.post("/api/mcp", async (c) => {
+    const message = (await c.req.json().catch(() => null)) as JsonRpc | null;
+    if (!message?.method) return c.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, 400);
+    const { status, body } = await handleMcp(message);
+    return body === undefined ? c.body(null, 202) : c.json(body, status as 200);
+  });
+  app.get("/api/mcp", (c) => c.body(null, 405));
+  app.delete("/api/mcp", (c) => c.body(null, 200));
+
   return app;
 }
+
+export const MCP_URL = `http://127.0.0.1:${SERVER_PORT}/api/mcp`;
 
 export function startServer(attempt = 0): void {
   const app = buildApp();
