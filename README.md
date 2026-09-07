@@ -26,13 +26,14 @@
 
 ## Why Deck
 
-A normal day with coding agents means five tabs: a terminal running Claude Code, another running Codex, GitHub for the PRs piling up, Jira for the board, and Slack for the "CI is red" ping. Every switch costs you the thread you were holding.
+A normal day with coding agents means five tabs: a terminal running Claude Code, another running Codex, GitHub for the PRs piling up, and Jira for the board. Every switch costs you the thread you were holding.
 
 Deck collapses that into one window:
 
 - **Every agent, one sidebar.** Claude Code and Codex sessions with live status, so you see who needs you without tabbing around.
 - **Every PR waiting on you, one queue.** Diff, checks, linked Jira task and an agent helper, one PR at a time. Approve and the next one loads.
 - **Your board, already there.** Jira syncs in the background and feeds every agent question.
+- **Search everything you ever asked.** One palette over live sessions and the full chat history of Claude Code and Codex, so the answer from last week is a ⌘K away.
 - **An orchestrator that acts.** Ask it what needs attention and it can start agents, put one on a broken PR, or file the issue.
 
 Summon it with **⌥ Space**. Dismiss it the same way. Declutter, then get back to work.
