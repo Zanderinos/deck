@@ -10,6 +10,7 @@ const sessions = [
  { session_id:'codex:demo', agent:'codex', cwd:terms[0].cwd, title:'Build a better terminal', status:'working', term_id:'1', issue_key:null, started_at:Date.now()-60000, updated_at:Date.now() },
  { session_id:'claude-demo', agent:'claude', cwd:terms[1].cwd, title:'Review authentication changes', status:'needs_review', term_id:'2', issue_key:'API-42', review_note:'Review the updated session expiry behavior.', started_at:Date.now()-60000, updated_at:Date.now() }
 ];
+ipcRenderer.on('test:sessions', (_event, next) => { sessions.splice(0, sessions.length, ...next); callbacks.sessions.forEach(callback => callback(sessions)); });
 const off = (kind,cb) => { callbacks[kind].push(cb); return () => callbacks[kind].splice(callbacks[kind].indexOf(cb),1); };
 const settings = {theme:'dark',defaultAgent:'codex',defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,jira:{onMerge:{enabled:false},doneWindowDays:7},github:{owner:''}};
 contextBridge.exposeInMainWorld('deck', {

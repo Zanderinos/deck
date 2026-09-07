@@ -136,7 +136,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
       {!searching && lastSession && <section aria-label="Session suggestions" className="mx-3 my-3 rounded-lg border border-edge2 bg-card/50 p-3">
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 text-[11px] font-medium text-mut">Continue your last session</span>
-          <button aria-label="Dismiss all session suggestions" title="Dismiss all suggestions" onClick={() => { dismissSessions(recent.map((session) => session.session_id)); setShowMore(false); }} className="shrink-0 rounded p-0.5 text-dim hover:bg-card2 hover:text-soft"><Icon name="x" size={11} /></button>
+          <button aria-label="Dismiss all session suggestions" title="Dismiss all suggestions" onClick={() => { dismissSessions(suggestions.filter(available).map((session) => session.session_id)); setShowMore(false); }} className="shrink-0 rounded p-0.5 text-dim hover:bg-card2 hover:text-soft"><Icon name="x" size={11} /></button>
         </div>
         <button aria-label={`Continue ${lastSession.title || agentLabels[lastSession.agent]}`} onClick={() => void resume(lastSession)} className="mt-3 flex w-full min-w-0 items-center gap-2 text-left">
           <SessionIcon agent={lastSession.agent} />

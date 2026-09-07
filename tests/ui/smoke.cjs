@@ -107,9 +107,13 @@ app.whenReady().then(async () => {
   await click('Resume in terminal →');
   const resumed = await run(`window.deck.term.list()`);
   if (!resumed.some(term => term.agent === 'codex' && term.sessionId === 'codex:history')) throw Error('Codex history resume failed');
+  await require('./sidebar.cjs')({ window, run, click, wait, screenshot });
+  await click('agents');
+  await click('Which of my Jira tasks are in review?');
+  if (!(await run(`[...document.querySelectorAll('.md')].some(element => element.innerText.includes('Ready'))`))) throw Error('Ask Deck did not render its completed answer');
   if (errors.length) throw Error(errors.join('\n'));
-  console.log('UI smoke passed: focus, splits, files, Zen, Presentation, font sizing, session navigation, Escape, sidebar, Codex launch, themes, custom preview/save, plugin worker panel, plugin themes, disable/enable agent command, Codex history preview and resume.');
+  console.log('UI smoke passed: focus, splits, files, Zen, Presentation, font sizing, session navigation, Escape, sidebar, Codex launch, themes, custom preview/save, plugin worker panel, plugin themes, disable/enable agent command, Codex history preview and resume, recent suggestions, expiry, dismissal, search and close all.');
   window.destroy();
   app.quit();
 }).catch((error) => { console.error(error); app.exit(1); });
-setTimeout(() => { console.error('UI smoke timed out'); app.exit(1); }, 30000).unref();
+setTimeout(() => { console.error('UI smoke timed out'); app.exit(1); }, 45000).unref();

@@ -3,11 +3,11 @@
 An agent workbench and desktop terminal. Summon it with **⌥Space**.
 
 - Claude Code and Codex sessions: launch, resume, live sidebar status, searchable local conversation history, and PR review agents.
-- Compact vertical tabs with search, rename, attention filters, Git status, and keyboard navigation.
+- Compact vertical tabs with search, rename, attention filters, Git status, and keyboard navigation. One optional “Continue your last session” suggestion for activity within 15 minutes; dismiss all suggestions or close all tabs from the session menu. Older sessions remain searchable.
 - Resizable nested terminal splits, terminal find/export, multiline input, and a local file explorer with text editing and Markdown previews.
 - Zen view for the active terminal; Presentation view with larger adjustable text and session navigation.
 - Five built-in themes, live custom JSON themes, and local plugins contributing themes, commands, agent prompts, and Markdown panels. See [the extension guide](docs/extensions.md) and [starter plugin](examples/plugins/workspace-kit).
-- Jira board and GitHub pull request tools.
+- Jira board and GitHub pull request tools. Ask Deck receives the synced board alongside agent activity, so either Claude or Codex can answer task/status questions with the snapshot time and your task ownership.
 
 ## Run
 

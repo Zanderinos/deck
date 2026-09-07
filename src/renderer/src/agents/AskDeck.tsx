@@ -10,7 +10,7 @@ import { Icon } from "../board/icons.js";
 
 const SUGGESTIONS = [
   "Which sessions need my attention, and what do I need to answer?",
-  "What did my agents get done while I was away?",
+  "Which of my Jira tasks are in review?",
   "Anything waiting on me that I can answer in one word?",
 ];
 
@@ -71,13 +71,17 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
     setDraft("");
     setBusy(true);
     setTurns((t) => [...t, { role: "user", text: question }, { role: "deck", text: "" }]);
-    const result = await window.deck.ask.send(question, agent);
-    setBusy(false);
-    setTurns((t) => {
-      const last = t.at(-1);
-      if (!last || last.role !== "deck" || last.text) return t;
-      return [...t.slice(0, -1), { role: "deck", text: result.error ?? "No answer.", error: true }];
-    });
+    try {
+      const result = await window.deck.ask.send(question, agent);
+      setTurns((turns) => {
+        const last = turns.at(-1);
+        if (!last || last.role !== "deck") return turns;
+        const text = result.ok ? result.text || last.text : result.error || "Could not get an answer.";
+        return [...turns.slice(0, -1), { role: "deck", text: text || "No answer.", error: !result.ok }];
+      });
+    } catch (error) {
+      setTurns((turns) => [...turns.slice(0, -1), { role: "deck", text: String(error), error: true }]);
+    } finally { setBusy(false); }
   };
 
   // The reply arrives as one paste; Enter has to be its own keystroke or
@@ -108,7 +112,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
         <fieldset disabled={busy}><AgentSelect value={agent} onChange={(next) => { setAgent(next); reset(); }} /></fieldset>
         <span className="ml-auto flex items-center gap-2.5 text-[11px] text-dim">
           {turns.length > 0 && (
-            <button onClick={reset} className="hover:text-ink" title="Start a new conversation">
+            <button disabled={busy} onClick={reset} className="hover:text-ink disabled:opacity-40" title="Start a new conversation">
               new
             </button>
           )}
@@ -122,8 +126,8 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
         {turns.length === 0 && (
           <>
             <p className="text-[11px] leading-relaxed text-dim">
-              deck knows every session it tracks — their status, their ticket and what they last
-              said. Ask about them, then answer one straight from here.
+              Ask about your agents or the tasks on your synced Jira board. Deck includes the latest
+              board snapshot and session activity with each question.
             </p>
             {SUGGESTIONS.map((s) => (
               <button
