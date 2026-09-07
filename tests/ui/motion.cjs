@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const frames = process.argv[2];
-const fps = 30, seconds = 24;
+const fps = 30, seconds = 28;
 fs.mkdirSync(frames, { recursive: true });
 app.whenReady().then(async () => {
   const window = new BrowserWindow({ width: 1280, height: 720, show: false, backgroundColor: '#080808', webPreferences: { offscreen: true } });
