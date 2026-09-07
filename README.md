@@ -1,59 +1,131 @@
-# Deck
+<p align="center">
+  <img src="resources/icon.png" width="96" alt="Deck icon">
+</p>
 
-An agent workbench and desktop terminal. Summon it with **⌥Space**.
+<h1 align="center">Deck</h1>
 
-- Claude Code and Codex sessions: launch, resume, live sidebar status, searchable local conversation history, and PR review agents.
-- Compact vertical tabs with search, rename, attention filters, Git status, and keyboard navigation. One optional “Continue your last session” suggestion for activity within 15 minutes; dismiss all suggestions or close all tabs from the session menu. Older sessions remain searchable.
-- Resizable nested terminal splits, terminal find/export, multiline input, and a local file explorer with text editing and Markdown previews.
-- Zen and Presentation views on every page, WebStorm style: both go fullscreen and hide the chrome; Presentation enlarges the terminal font and zooms the other pages by the same ratio. Escape exits from the terminal; elsewhere use the Exit button or the same shortcut.
-- Review threads collapse to one line like GitHub's; resolved and outdated threads start collapsed.
-- Five built-in themes, live custom JSON themes, and local plugins contributing themes, commands, agent prompts, and Markdown panels. See [the extension guide](docs/extensions.md) and [starter plugin](examples/plugins/workspace-kit).
-- Jira board and GitHub pull request tools, with the Jira board synced in the background.
-- **Agent page** (⌘⇧3): Deck's orchestrator, front and centre like Linear's Agent view. Each question gets the live sessions, your PR inbox (PRs waiting on your review, your own PRs with CI/conflict/review problems) and the synced Jira board. Through Deck's own MCP tools it can start Claude or Codex agents in Deck terminals, answer or steer running ones, read their transcripts, put an agent on a broken PR, search the Jira backlog and create issues (only after you agree). Example prompts cover PRs to review, PRs needing attention, agents needing you, planning the next epic and finding a backlog task to fix now. The rail lists what needs you and every live session; the sidebar badge counts it. Make it the start page from its header or **Settings → General**.
-- **Reviews page** (⌘⇧4): every pull request waiting on your review, one at a time like a mail client. Each shows the linked Jira task, the PR overview and diff, and the pinned agent helper (press `a`). Approve or request changes and the queue moves to the next one; `n`/`p` (or `]`/`[`) step through without leaving. The sidebar badge counts what is waiting.
-- **Auto-fix**: when CI fails or a PR of yours gets merge conflicts, Deck starts a fix agent in the repo's local checkout (found by name under your repo roots). By default the agent stops with the diff and waits for your approval before pushing; **Settings → General** can let it push unattended, or turn either trigger off.
+<p align="center">
+  <strong>Stop switching between GitHub, Jira, Claude Code and Codex.</strong><br>
+  Deck is the one window where your agents run, your pull requests get reviewed and your board stays in view.
+</p>
 
-## Run
+<p align="center">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-37-47848F?logo=electron&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="Status" src="https://img.shields.io/badge/status-early%20preview-orange">
+</p>
+
+<p align="center">
+  <img src="docs/media/deck.gif" width="900" alt="Deck tour: split terminals, the search palette, the Agent page, the review queue, Zen and Presentation views">
+</p>
+
+<p align="center"><sub>Screens show fixture data only. Source in <a href="docs/media/motion">docs/media/motion</a>, rendered with <code>npm run demo:gif</code>.</sub></p>
+
+---
+
+## Why Deck
+
+A normal day with coding agents means five tabs: a terminal running Claude Code, another running Codex, GitHub for the PRs piling up, Jira for the board, and Slack for the "CI is red" ping. Every switch costs you the thread you were holding.
+
+Deck collapses that into one window:
+
+- **Every agent, one sidebar.** Claude Code and Codex sessions with live status, so you see who needs you without tabbing around.
+- **Every PR waiting on you, one queue.** Diff, checks, linked Jira task and an agent helper, one PR at a time. Approve and the next one loads.
+- **Your board, already there.** Jira syncs in the background and feeds every agent question.
+- **An orchestrator that acts.** Ask it what needs attention and it can start agents, put one on a broken PR, or file the issue.
+
+Summon it with **⌥ Space**. Dismiss it the same way. Declutter, then get back to work.
+
+## Features
+
+### Terminal
+
+- **Agent sessions**: launch or resume Claude Code and Codex, see live status in the sidebar, and search your local conversation history across both.
+- **Vertical tabs** with search, rename, attention filters, Git status and keyboard navigation. A single "Continue your last session" suggestion appears for activity within the last 15 minutes; older sessions stay searchable.
+- **Splits and panes**: resizable nested splits, find in terminal, export, multiline input, and a local file explorer with text editing and Markdown preview.
+- **Zen and Presentation** on every page, WebStorm style. Both go fullscreen and hide the chrome; Presentation also enlarges the terminal font and zooms the other pages by the same ratio.
+
+### Agent page <kbd>⌘⇧3</kbd>
+
+Deck's orchestrator, front and centre. Every question gets the live sessions, your PR inbox and the synced Jira board as context. Through Deck's own MCP tools it can:
+
+- start Claude or Codex agents in Deck terminals, answer or steer running ones, and read their transcripts
+- put an agent on a broken PR
+- search the Jira backlog and create issues, only after you agree
+
+The rail lists what needs you and every live session. The sidebar badge counts it. Make it the start page from its header or **Settings → General**.
+
+### Reviews page <kbd>⌘⇧4</kbd>
+
+Every pull request waiting on your review, one at a time like a mail client. Each shows the linked Jira task, the overview, the diff and a pinned agent helper (<kbd>a</kbd>). Approve or request changes and the queue moves on. <kbd>n</kbd> / <kbd>p</kbd> step through without leaving. Review threads collapse to one line like GitHub's, and resolved or outdated threads start collapsed.
+
+### Auto-fix
+
+When CI fails or a PR of yours gets merge conflicts, Deck starts a fix agent in the repo's local checkout. By default the agent stops with the diff and waits for your approval before pushing. **Settings → General** can let it push unattended, or turn either trigger off.
+
+### Themes and plugins
+
+Five built-in themes, live custom JSON themes, and local plugins that contribute themes, commands, agent prompts and Markdown panels. See the [extension guide](docs/extensions.md) and the [starter plugin](examples/plugins/workspace-kit).
+
+## Getting started
 
 ```sh
+git clone https://github.com/fishuke/deck.git
+cd deck
 npm install
 npm run dev
 ```
 
-Install and authenticate `claude` and/or `codex` separately. Choose the default agent in **Settings → General**. New-session menus and PR review screens also let you choose either agent.
+Install and authenticate [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) separately. Pick the default agent in **Settings → General**; new-session menus and PR review screens let you choose either.
 
-Use the sidebar's live-status controls to install hooks for each provider. For Codex, trust Deck's installed hooks in Codex's `/hooks` interface; Deck preserves existing hooks and does not bypass agent permissions. The hook server accepts local connections only. History is indexed from `~/.claude/projects`, plus `$CODEX_HOME/sessions` and `archived_sessions` (default `~/.codex`). Codex subagent transcripts and internal environment messages are excluded from conversation results.
+**Live status hooks.** Use the sidebar's live-status controls to install hooks for each provider. For Codex, trust Deck's installed hooks in Codex's `/hooks` interface. Deck preserves existing hooks and does not bypass agent permissions. The hook server accepts local connections only.
+
+**History.** Indexed from `~/.claude/projects`, plus `$CODEX_HOME/sessions` and `archived_sessions` (default `~/.codex`). Codex subagent transcripts and internal environment messages are excluded from results.
+
+**GitHub and Jira.** Pull request tools use the `gh` CLI. The Jira board syncs in the background once configured in Settings.
 
 ## Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘K | Search sessions, history, commands, themes and repositories |
-| ⌘T | New terminal |
-| ⌘W | Close active terminal |
-| ⌘1–9 | Switch terminal |
-| ⌘B | Toggle sidebar |
-| ⌘⇧1 / ⌘⇧2 / ⌘⇧3 / ⌘⇧4 | Terminal / Board / Agent / Reviews |
-| ⌘D / ⌘⇧D | Split right / down |
-| ⌘F | Find in terminal |
-| ⌘J | Toggle multiline input |
-| ⌘⇧Enter | Toggle Zen view |
-| ⌘⇧P | Toggle Presentation view |
-| Escape | Exit Zen / Presentation |
+| <kbd>⌥ Space</kbd> | Summon or hide Deck |
+| <kbd>⌘K</kbd> | Search sessions, history, commands, themes and repositories |
+| <kbd>⌘T</kbd> / <kbd>⌘W</kbd> | New / close terminal |
+| <kbd>⌘1</kbd>–<kbd>⌘9</kbd> | Switch terminal |
+| <kbd>⌘B</kbd> | Toggle sidebar |
+| <kbd>⌘⇧1</kbd> <kbd>⌘⇧2</kbd> <kbd>⌘⇧3</kbd> <kbd>⌘⇧4</kbd> | Terminal / Board / Agent / Reviews |
+| <kbd>⌘D</kbd> / <kbd>⌘⇧D</kbd> | Split right / down |
+| <kbd>⌘F</kbd> | Find in terminal |
+| <kbd>⌘J</kbd> | Toggle multiline input |
+| <kbd>⌘⇧Enter</kbd> | Toggle Zen view |
+| <kbd>⌘⇧P</kbd> | Toggle Presentation view |
+| <kbd>Esc</kbd> | Exit Zen / Presentation from the terminal |
 
-Presentation controls adjust text size and switch sessions. Exiting restores your split layout. Drag pane dividers to resize; arrow keys resize a focused divider and double-click resets it.
+Drag pane dividers to resize; arrow keys resize a focused divider and double-click resets it. Presentation controls adjust text size and switch sessions, and exiting restores your split layout.
 
-## Validate
+## Development
 
 ```sh
-npm run typecheck
-npm test
-npm run test:ui
-npm run test:pty
+npm run typecheck   # both tsconfig projects
+npm test            # unit tests on Electron's Node runtime
+npm run test:ui     # Electron smoke test with fixture sessions, screenshots in artifacts/ui
+npm run test:pty    # native PTY input/output, replay, metadata and termination
+npm run demo:gif    # render docs/media/deck.gif and deck.mp4 from docs/media/motion (needs ffmpeg)
 ```
 
-Tests use Electron's Node runtime to match the native SQLite ABI. The UI smoke test opens an isolated Electron window with fixture sessions, exercises the interface, and writes screenshots to `artifacts/ui`. It does not launch paid agents or access your sessions. Run it in a desktop environment. The PTY smoke test uses a temporary local shell to check native input/output, replay, metadata, and termination.
+Tests use Electron's Node runtime to match the native SQLite ABI. The UI smoke test opens an isolated window with fixture sessions and never launches paid agents or touches your real sessions. Run it in a desktop environment.
 
-Deck is evolving toward an everyday terminal replacement. This implements the local terminal UI and agent workflows described above; it does not include Warp's cloud collaboration or Pi's model/tool extension compatibility.
+Stack: Electron, React, Tailwind, xterm.js, SQLite, Hono.
 
-Electron + React + Tailwind + xterm.js + SQLite. MIT.
+## Roadmap
+
+Deck is evolving toward an everyday terminal replacement. It implements the local terminal UI and agent workflows above. It does not include cloud collaboration or compatibility with other terminals' extension formats.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes small and focused, run the checks in [Development](#development), and add a test alongside any new behaviour. Extension authors should start with the [extension guide](docs/extensions.md).
+
+## License
+
+[MIT](LICENSE)
