@@ -64,6 +64,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
   const sessions = useAgentSessions();
   const inbox = usePrInbox();
   const attention = sessions.filter((session) => session.status !== "ended" && isWaiting(session)).length + (inbox?.mine ?? []).filter((pr) => prProblems(pr).length > 0).length;
+  const reviews = (inbox?.reviewRequested ?? []).filter((pr) => !pr.isDraft).length;
   const { suggestions, dismissSessions } = useSessionSuggestions(sessions);
   const [showMore, setShowMore] = useState(false);
   const [width, setWidth] = useState(() => Math.min(380, Math.max(220, Number(localStorage.getItem("deck.sidebar.width")) || 252)));
@@ -171,7 +172,10 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
     <div className="flex items-center gap-1 border-t border-edge px-2 py-2">
-      {(["terminal", "board", "agent"] as const).map((target) => <button key={target} onClick={() => onView(target)} title={target} className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : "sparkle"} size={12} />{target}{target === "agent" && attention > 0 && <span aria-label={`${attention} need attention`} className="rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{attention}</span>}</button>)}
+      {(["terminal", "board", "agent", "reviews"] as const).map((target) => {
+        const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
+        return <button key={target} onClick={() => onView(target)} title={target} className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} />{target}{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
+      })}
     </div>
   </aside>;
 }

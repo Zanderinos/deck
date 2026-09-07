@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckSettings, OnMergeMode, OnMergeSettings } from "../../shared/settings.js";
 import { AgentPage } from "./agents/AgentPage.js";
 import { BoardView } from "./board/BoardView.js";
+import { ReviewsView } from "./board/ReviewsView.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
 import { onOpenTerminalTab, requestNavBack } from "./lib/bus.js";
@@ -14,7 +15,7 @@ import { SearchView } from "./search/SearchView.js";
 import { TabProvider, useTabs } from "./store.js";
 import { TerminalView } from "./terminal/TerminalView.js";
 
-export type View = "terminal" | "board" | "agent" | "search" | "settings";
+export type View = "terminal" | "board" | "agent" | "reviews" | "search" | "settings";
 
 export default function App() {
   return (
@@ -120,6 +121,7 @@ function Shell() {
       else if (meta && e.shiftKey && e.key === "1") setView("terminal");
       else if (meta && e.shiftKey && e.key === "2") setView("board");
       else if (meta && e.shiftKey && e.key === "3") setView("agent");
+      else if (meta && e.shiftKey && e.key === "4") setView("reviews");
       else if (meta && e.key === "t") {
         e.preventDefault();
         setView("terminal");
@@ -153,6 +155,7 @@ function Shell() {
             </div>
           )}
           <AgentPage visible={view === "agent"} />
+          <ReviewsView visible={view === "reviews"} />
           {view === "board" && <BoardView />}
           {view === "settings" && <SettingsView />}
         </main>
@@ -199,7 +202,7 @@ function SettingsView() {
           <span>Start page</span>
           <select aria-label="Start page" className="rounded-md border border-edge2 bg-card px-2 py-1 text-[11px] text-body outline-none" value={settings.defaultView}
             onChange={async (e) => setSettings(await window.deck.updateSettings({ defaultView: e.target.value as DeckSettings["defaultView"] }))}>
-            <option value="terminal">Terminal</option><option value="agent">Agent</option><option value="board">Board</option>
+            <option value="terminal">Terminal</option><option value="agent">Agent</option><option value="reviews">Reviews</option><option value="board">Board</option>
           </select>
         </div>
         <div className="mb-1 text-xs font-bold text-ink">Auto-fix my pull requests</div>

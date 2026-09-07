@@ -59,9 +59,13 @@ export interface PrScreenProps {
   issue?: BoardIssue;
   jiraBaseUrl?: string;
   onClose: () => void;
+  /** Rendered inside a page (the review queue) instead of as a full-screen overlay. */
+  embedded?: boolean;
+  /** A review went out; the queue uses it to move on. */
+  onReviewed?: (event: ReviewEvent) => void;
 }
 
-export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
+export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, onReviewed }: PrScreenProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const [diffText, setDiffText] = useState<string>();
   const [detail, setDetail] = useState<PrDetail | null>();
@@ -176,6 +180,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
     setComposer(null);
     setRejectOpen(false);
     refresh();
+    onReviewed?.(event);
   };
 
   const merge = async () => {
@@ -257,12 +262,13 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
         else if (rejectOpen) setRejectOpen(false);
         else if (mergeOpen) setMergeOpen(false);
         else if (menuOpen) setMenuOpen(false);
-        else onClose();
+        else if (!embedded) onClose();
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "1") setTab("overview");
       else if (e.key === "2") setTab("diff");
+      else if (e.key === "a") setAgentOpen((o) => !o);
       else if (e.key === "j" || e.key === "k") {
         if (paths.length === 0) return;
         const current = activePath ? paths.indexOf(activePath) : -1;
@@ -289,7 +295,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const openThreads = comments.filter((c) => c.path && !c.resolved && !c.outdated).length;
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-bg pt-[38px]">
+    <div className={embedded ? "flex min-h-0 min-w-0 flex-1 flex-col bg-bg" : "fixed inset-0 z-40 flex flex-col bg-bg pt-[38px]"}>
       <div className="flex items-center gap-2 border-b border-edge px-5 py-2 font-sans text-[12px]">
         {issue && (
           <>
@@ -326,9 +332,11 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
           >
             <Icon name="dots" />
           </button>
-          <button onClick={onClose} className="flex items-center gap-1 hover:text-ink">
-            esc <Icon name="x" size={11} />
-          </button>
+          {!embedded && (
+            <button onClick={onClose} className="flex items-center gap-1 hover:text-ink">
+              esc <Icon name="x" size={11} />
+            </button>
+          )}
           {menuOpen && (
             <div
               className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-md border border-edge2 bg-panel p-1 font-sans text-[12px] text-body shadow-lg"
@@ -380,7 +388,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
           className={`ml-1 flex items-center gap-1.5 rounded-full px-3 py-1 ${
             agentOpen ? "bg-accent/15 text-accent" : "text-mut hover:text-ink"
           }`}
-          title="Agent session pinned to this PR"
+          title="Agent session pinned to this PR (a)"
         >
           <Icon name="sparkle" size={11} /> Agent
         </button>

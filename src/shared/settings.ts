@@ -54,7 +54,7 @@ export interface AutoFixSettings {
 }
 
 /** The page deck opens on. */
-export type DefaultView = "terminal" | "board" | "agent";
+export type DefaultView = "terminal" | "board" | "agent" | "reviews";
 
 export interface DeckSettings {
   defaultAgent: Agent;
