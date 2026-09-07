@@ -1,3 +1,7 @@
+import { ExtensionProvider } from "./extensions/ExtensionProvider.js";
+import { AppearanceSettings, PluginsSettings } from "./extensions/AppearanceSettings.js";
+import { DisplayModeProvider, FocusModeBar, useDisplayMode } from "./chrome/DisplayMode.js";
+import { AgentSelect } from "./agents/AgentSelect.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckSettings, OnMergeMode, OnMergeSettings } from "../../shared/settings.js";
 import { AgentsView } from "./agents/AgentsView.js";
@@ -14,21 +18,26 @@ export type View = "terminal" | "board" | "agents" | "search" | "settings";
 
 export default function App() {
   return (
-    <TabProvider>
-      <Shell />
-    </TabProvider>
+    <DisplayModeProvider>
+      <TabProvider>
+        <ExtensionProvider><Shell /></ExtensionProvider>
+      </TabProvider>
+    </DisplayModeProvider>
   );
 }
 
 function Shell() {
+  const { mode, setMode } = useDisplayMode();
   const [view, setViewRaw] = useState<View>("terminal");
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("deck.sidebar") !== "hidden");
   const [searchOpen, setSearchOpen] = useState(false);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
-  const { newTab, closeTab, activeId } = useTabs();
+  const { tabs, focusTab, newTab, closeTab, activeId } = useTabs();
 
   // View history for the mouse back/forward buttons.
   const history = useRef({ stack: ["terminal"] as View[], index: 0 });
   const setView = useCallback((v: View) => {
+    if (v !== "terminal") setMode("normal");
     setViewRaw((current) => {
       if (v !== current) {
         const h = history.current;
@@ -38,6 +47,22 @@ function Shell() {
       return v;
     });
   }, []);
+  useEffect(() => { if (mode !== "normal") setView("terminal"); }, [mode, setView]);
+  useEffect(() => {
+    const onModeKey = (event: KeyboardEvent) => {
+      if (searchOpen) return;
+      if (event.key === "Escape" && mode !== "normal") {
+        event.preventDefault(); event.stopImmediatePropagation(); setMode("normal");
+      } else if (event.metaKey && event.shiftKey && event.key === "Enter") {
+        event.preventDefault(); event.stopImmediatePropagation(); setMode(mode === "zen" ? "normal" : "zen");
+      } else if (event.metaKey && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault(); event.stopImmediatePropagation(); setMode(mode === "presentation" ? "normal" : "presentation");
+      }
+    };
+    window.addEventListener("keydown", onModeKey, true);
+    return () => window.removeEventListener("keydown", onModeKey, true);
+  }, [mode, setMode, searchOpen]);
+
   const goBack = useCallback(() => {
     if (requestNavBack()) return; // an overlay consumed it
     const h = history.current;
@@ -74,15 +99,21 @@ function Shell() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key.toLowerCase() === "k") {
+      if (meta && ["k", "p"].includes(e.key.toLowerCase())) {
         e.preventDefault();
         setSearchOpen((o) => !o);
         return;
       }
       if (searchOpen) return; // the overlay handles its own keys
-      if (meta && e.key === "1") setView("terminal");
-      else if (meta && e.key === "2") setView("board");
-      else if (meta && e.key === "3") setView("agents");
+      if (e.metaKey && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+        const tab = tabs[Number(e.key) - 1];
+        if (tab) { focusTab(tab.termId); setView("terminal"); }
+      } else if (meta && e.key.toLowerCase() === "b") {
+        setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; });
+      } else if (meta && e.key === ",") setView("settings");
+      else if (meta && e.shiftKey && e.key === "1") setView("terminal");
+      else if (meta && e.shiftKey && e.key === "2") setView("board");
+      else if (meta && e.shiftKey && e.key === "3") setView("agents");
       else if (meta && e.key === "t") {
         e.preventDefault();
         setView("terminal");
@@ -97,13 +128,14 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab]);
+  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab]);
 
   return (
-    <div className="flex h-full flex-col">
-      <Titlebar onSearch={() => setSearchOpen(true)} />
+    <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
+      <FocusModeBar />
+      <div className="workbench-chrome"><Titlebar onSearch={() => setSearchOpen(true)} sidebarOpen={sidebarOpen} onView={setView} onSidebar={() => setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; })} /></div>
       <div className="flex min-h-0 flex-1">
-        <Sidebar view={view} onView={setView} />
+        {sidebarOpen && <div className="workbench-chrome flex min-h-0"><Sidebar view={view} onView={setView} /></div>}
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <TerminalView visible={view === "terminal"} />
           {view === "search" && (
@@ -120,13 +152,14 @@ function Shell() {
         </main>
       </div>
       {searchOpen && (
-        <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} />
+        <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} onView={setView} />
       )}
     </div>
   );
 }
 
 function SettingsView() {
+  const [section, setSection] = useState<"appearance" | "plugins" | "general">("appearance");
   const [settings, setSettings] = useState<DeckSettings>();
   const [columns, setColumns] = useState<string[]>([]);
   useEffect(() => {
@@ -145,8 +178,17 @@ function SettingsView() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
         <span className="font-bold text-ink">Settings</span>
+        <div className="ml-4 flex gap-1 font-sans text-xs">{(["appearance", "plugins", "general"] as const).map((tab) => <button key={tab} onClick={() => setSection(tab)} className={`rounded-md px-3 py-1.5 ${section === tab ? "bg-card2 text-soft" : "text-mut hover:text-soft"}`}>{tab === "appearance" ? "Appearance" : tab === "plugins" ? "Plugins" : "General & integrations"}</button>)}</div>
       </div>
-      <div className="min-h-0 w-[420px] flex-1 overflow-y-auto px-6 py-5">
+      {section === "appearance" && <AppearanceSettings />}
+      {section === "plugins" && <PluginsSettings />}
+      <div className={`${section === "general" ? "" : "hidden"} min-h-0 w-[420px] flex-1 overflow-y-auto px-6 py-5`}>
+        <div className="mb-4 flex items-center justify-between text-xs text-dim">
+          <span>Default agent</span>
+          <AgentSelect value={settings.defaultAgent} onChange={async (defaultAgent) => {
+            setSettings(await window.deck.updateSettings({ defaultAgent }));
+          }} />
+        </div>
         <label className="block text-xs text-dim">Windows</label>
         <select
           className="mt-1 w-full rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"

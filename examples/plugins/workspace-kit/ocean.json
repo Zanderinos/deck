@@ -1,0 +1,18 @@
+{
+  "id": "ocean",
+  "name": "Ocean",
+  "extends": "midnight",
+  "colors": {
+    "bg": "#0b171e",
+    "panel": "#10212b",
+    "card": "#162b36",
+    "card2": "#203b46",
+    "overlay": "#162b36",
+    "edge": "#203540",
+    "edge2": "#304b58",
+    "edge3": "#496977",
+    "accent": "#64d8cb",
+    "green": "#93dab5"
+  },
+  "terminal": { "cyan": "#64d8cb", "brightCyan": "#90e7dc" }
+}

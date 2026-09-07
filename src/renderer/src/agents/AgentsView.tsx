@@ -56,7 +56,7 @@ export function AgentsView() {
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
           {sessions.length === 0 && (
             <div className="pt-4 text-xs text-dim">
-              No agent sessions yet — run <span className="font-mono text-soft">claude</span> in a
+              No agent sessions yet — run <span className="font-mono text-soft">claude or codex</span> in a
               terminal.
             </div>
           )}
@@ -64,11 +64,11 @@ export function AgentsView() {
             const r = rows[s.status];
             return (
               <button
-                key={s.claude_session_id}
+                key={s.session_id}
                 onClick={() =>
                   s.term_id && open.has(s.term_id)
                     ? focusTab(s.term_id)
-                    : void newTab({ cwd: s.cwd, sessionId: s.claude_session_id })
+                    : void newTab({ cwd: s.cwd, agent: s.agent, sessionId: s.session_id })
                 }
                 className="flex items-center gap-3.5 rounded-lg border border-edge2 bg-card px-4 py-3 text-left hover:border-edge3"
               >
@@ -77,7 +77,7 @@ export function AgentsView() {
                   <span className="block truncate text-xs text-ink">
                     {s.title ?? project(s.cwd)}
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-dim">{project(s.cwd)}</span>
+                  <span className="mt-0.5 block text-[10px] text-dim">{s.agent} · {project(s.cwd)}</span>
                 </span>
                 <span className={`w-[90px] text-[11px] ${r.color}`}>{r.label}</span>
                 <span className="w-[70px] text-right text-[11px] text-dim">{dur(s)}</span>

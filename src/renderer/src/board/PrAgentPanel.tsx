@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { agentLabels, type Agent } from "../../../shared/agents.js";
+import type { TermMeta } from "../../../main/pty.js";
+import { useEffect, useState } from "react";
 import type { IssuePr, PrDetail } from "../../../main/github.js";
 import type { AgentSession } from "../../../main/sessions.js";
 import { useAgentSessions } from "../lib/useSessions.js";
 import { TerminalPane } from "../terminal/TerminalPane.js";
 import { Icon } from "./icons.js";
-import { shellQuote } from "./prUi.js";
+
+const openingTerms = new Map<string, Promise<TermMeta>>();
 
 const DRAFTS_URL = "http://127.0.0.1:47800/api/pr-drafts";
 
@@ -41,14 +44,15 @@ const draftPrompt = (pr: IssuePr) =>
 const fixPrompt = (pr: IssuePr, detail: PrDetail | null | undefined) =>
   `Address the open review feedback on PR #${pr.number} in ${pr.repo}` +
   (detail ? ` (branch ${detail.headRefName})` : "") +
-  `: read the unresolved threads with \`gh api repos/${pr.repo}/pulls/${pr.number}/comments\` and \`gh pr view ${pr.number} --comments\`, check out the PR branch if this checkout is not on it, make the changes, run the project's checks, and commit in one line without Claude authorship. Show me the diff before pushing.`;
+  `: read the unresolved threads with \`gh api repos/${pr.repo}/pulls/${pr.number}/comments\` and \`gh pr view ${pr.number} --comments\`, check out the PR branch if this checkout is not on it, make the changes, run the project's checks, and commit in one line without agent authorship. Show me the diff before pushing.`;
 
 export interface PrAgentPanelProps {
+  agent: Agent;
   pr: IssuePr;
   detail: PrDetail | null | undefined;
   cwd: string | undefined;
   issueKey?: string;
-  /** Prompt handed in from elsewhere on the screen (the selection bar's Ask Claude). */
+  /** Prompt handed in from elsewhere on the screen (the selection bar's Ask agent). */
   pending: string | undefined;
   onPendingSent: () => void;
   onTermId: (termId: string | undefined) => void;
@@ -56,11 +60,12 @@ export interface PrAgentPanelProps {
 }
 
 /**
- * A Claude session pinned to this PR, living in a pty like every other deck
+ * An agent session pinned to this PR, living in a pty like every other deck
  * terminal so it survives reloads and shows up in the sessions list. The
  * terminal itself is the transcript and the input; quick actions type into it.
  */
 export function PrAgentPanel({
+  agent,
   pr,
   detail,
   cwd,
@@ -70,10 +75,10 @@ export function PrAgentPanel({
   onTermId,
   onClose,
 }: PrAgentPanelProps) {
-  const storageKey = `deck.pr.agent.${pr.repo}#${pr.number}`;
+  const storageKey = `deck.pr.agent.${pr.repo}#${pr.number}${agent === "codex" ? ":codex" : ""}`;
   const [termId, setTermId] = useState<string>();
-  const [title, setTitle] = useState("claude");
-  const spawning = useRef(false);
+  const [title, setTitle] = useState(agentLabels[agent]);
+  const [error, setError] = useState("");
   const sessions = useAgentSessions();
   const session = termId ? sessions.find((s) => s.term_id === termId) : undefined;
 
@@ -82,24 +87,23 @@ export function PrAgentPanel({
   useEffect(() => {
     if (detail === undefined) return;
     let cancelled = false;
-    void window.deck.term.list().then(async (terms) => {
-      if (cancelled) return;
-      const remembered = sessionStorage.getItem(storageKey);
-      if (remembered && terms.some((t) => t.id === remembered)) return setTermId(remembered);
-      if (spawning.current) return;
-      spawning.current = true;
-      const meta = await window.deck.term.create({
-        cwd,
-        command: `claude ${shellQuote(contextPrompt(pr, detail))}`,
-        issueKey,
+    let opening = openingTerms.get(storageKey);
+    if (!opening) {
+      opening = window.deck.term.list().then(async (terms) => {
+        const remembered = sessionStorage.getItem(storageKey);
+        const existing = terms.find((term) => term.id === remembered);
+        if (existing) return existing;
+        const meta = await window.deck.term.create({ cwd, agent, prompt: contextPrompt(pr, detail), issueKey });
+        sessionStorage.setItem(storageKey, meta.id);
+        return meta;
       });
-      spawning.current = false;
-      if (!cancelled) setTermId(meta.id);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      openingTerms.set(storageKey, opening);
+      void opening.finally(() => openingTerms.delete(storageKey)).catch(() => {});
+    }
+    void opening.then((meta) => { if (!cancelled) setTermId(meta.id); })
+      .catch((error) => { if (!cancelled) setError(String(error)); });
+    return () => { cancelled = true; };
+    // Detail content can refresh without replacing the active terminal.
   }, [storageKey, detail === undefined]);
 
   useEffect(() => {
@@ -122,7 +126,7 @@ export function PrAgentPanel({
   // or Claude's input folds it into the pasted text instead of submitting.
   const send = (prompt: string) => {
     if (!termId) return;
-    window.deck.term.input(termId, prompt);
+    window.deck.term.input(termId, `\x1b[200~${prompt}\x1b[201~`);
     setTimeout(() => window.deck.term.input(termId, "\r"), 200);
   };
 
@@ -156,7 +160,7 @@ export function PrAgentPanel({
             onClick={() => send(improvePrompt(pr, detail))}
             disabled={!termId}
             className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-            title="Claude goes over your own diff and improves it on the branch"
+            title="The selected agent improves your diff on the branch"
           >
             <Icon name="sparkle" size={10} /> Improve
           </button>
@@ -165,7 +169,7 @@ export function PrAgentPanel({
             onClick={() => send(draftPrompt(pr))}
             disabled={!termId}
             className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-            title="Claude reviews the diff and hands back line comments as drafts"
+            title="The selected agent reviews the diff and returns draft comments"
           >
             <Icon name="pencil" size={10} /> Draft review comments
           </button>
@@ -174,7 +178,7 @@ export function PrAgentPanel({
           onClick={() => send(fixPrompt(pr, detail))}
           disabled={!termId}
           className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-          title="Claude addresses the open review threads in the checkout"
+          title="The selected agent addresses open review threads"
         >
           <Icon name="check" size={10} /> Address feedback
         </button>
@@ -184,7 +188,7 @@ export function PrAgentPanel({
         {termId ? (
           <TerminalPane termId={termId} active onTitle={setTitle} />
         ) : (
-          <div className="p-3 font-sans text-[11px] text-dim">starting claude…</div>
+          <div className="p-3 font-sans text-[11px] text-dim">{error || `starting ${agentLabels[agent]}…`}</div>
         )}
       </div>
     </div>

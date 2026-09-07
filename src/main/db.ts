@@ -49,6 +49,11 @@ const migrations: string[] = [
   END;`,
   `ALTER TABLE agent_sessions ADD COLUMN issue_key TEXT`,
   `ALTER TABLE agent_sessions ADD COLUMN review_note TEXT`,
+  `ALTER TABLE agent_sessions RENAME COLUMN claude_session_id TO session_id;
+   ALTER TABLE conv_sessions ADD COLUMN agent TEXT NOT NULL DEFAULT 'claude';
+   ALTER TABLE indexed_files ADD COLUMN metadata TEXT;
+   ALTER TABLE conv_messages ADD COLUMN source_key TEXT;
+   CREATE UNIQUE INDEX idx_conv_source ON conv_messages(session_id, source_key);`,
 ];
 
 export function openDb(): Database.Database {
@@ -57,8 +62,10 @@ export function openDb(): Database.Database {
   db.pragma("journal_mode = WAL");
   const applied = db.pragma("user_version", { simple: true }) as number;
   for (let i = applied; i < migrations.length; i++) {
-    db.exec(migrations[i]);
-    db.pragma(`user_version = ${i + 1}`);
+    db.transaction(() => {
+      db!.exec(migrations[i]);
+      db!.pragma(`user_version = ${i + 1}`);
+    })();
   }
   return db;
 }

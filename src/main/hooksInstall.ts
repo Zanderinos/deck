@@ -1,3 +1,4 @@
+import type { Agent } from "../shared/agents.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,7 +8,7 @@ import { SERVER_PORT } from "./server.js";
 // Claude Code session on the machine reports lifecycle events to deck. The
 // curl times out fast and swallows failure: a dead deck never blocks Claude.
 
-const EVENTS = [
+const CLAUDE_EVENTS = [
   "SessionStart",
   "UserPromptSubmit",
   "Notification",
@@ -18,8 +19,8 @@ const EVENTS = [
 
 const MARKER = "/api/hook' -H 'x-deck-term:";
 
-function hookCommand(): string {
-  return `curl -s -m 3 -X POST 'http://127.0.0.1:${SERVER_PORT}/api/hook' -H 'x-deck-term: '"$DECK_TERM_ID" -H 'Content-Type: application/json' --data-binary @- >/dev/null || true`;
+function hookCommand(agent: Agent): string {
+  return `curl -s -m 3 -X POST 'http://127.0.0.1:${SERVER_PORT}/api/hook' -H 'x-deck-term: '"$DECK_TERM_ID" -H 'x-deck-agent: ${agent}' -H 'Content-Type: application/json' --data-binary @- >/dev/null || true`;
 }
 
 interface HookGroup {
@@ -55,43 +56,47 @@ message:
    not commit, push, or open the PR until the user explicitly confirms.
 `;
 
-function installReviewSkill(): void {
-  const dir = path.join(os.homedir(), ".claude", "skills", "deck-review");
+function installReviewSkill(agent: Agent): void {
+  const dir = path.join(agentHome(agent), "skills", "deck-review");
   const file = path.join(dir, "SKILL.md");
   if (fs.existsSync(file) && fs.readFileSync(file, "utf8") === SKILL) return;
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, SKILL);
 }
 
-export function installClaudeHooks(): { installed: boolean; path: string } {
-  installReviewSkill();
-  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
-  const settings = fs.existsSync(settingsPath)
-    ? (JSON.parse(fs.readFileSync(settingsPath, "utf8")) as Record<string, unknown>)
-    : {};
+const CODEX_EVENTS = ["SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SessionEnd"];
 
-  const hooks = (settings.hooks ?? {}) as Record<string, HookGroup[]>;
+function agentHome(agent: Agent): string {
+  return agent === "codex" ? process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex") : path.join(os.homedir(), ".claude");
+}
+
+function hooksPath(agent: Agent): string {
+  return path.join(agentHome(agent), agent === "codex" ? "hooks.json" : "settings.json");
+}
+
+export function installHooks(agent: Agent = "claude"): { installed: boolean; path: string } {
+  installReviewSkill(agent);
+  const file = hooksPath(agent);
+  const settings = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+  const hooks = settings.hooks ?? {};
   let changed = false;
-  for (const event of EVENTS) {
-    const groups = hooks[event] ?? [];
-    const already = groups.some((g) => g.hooks?.some((h) => h.command?.includes(MARKER)));
-    if (!already) {
-      groups.push({ hooks: [{ type: "command", command: hookCommand() }] });
+  for (const event of agent === "codex" ? CODEX_EVENTS : CLAUDE_EVENTS) {
+    const groups: HookGroup[] = hooks[event] ?? [];
+    if (!groups.some((group) => group.hooks?.some((hook) => hook.command?.includes(MARKER)))) {
+      groups.push({ hooks: [{ type: "command", command: hookCommand(agent) }] });
       hooks[event] = groups;
       changed = true;
     }
   }
-
   if (changed) {
     settings.hooks = hooks;
-    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
   }
-  return { installed: changed, path: settingsPath };
+  return { installed: changed, path: file };
 }
 
-export function hooksInstalled(): boolean {
-  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
-  if (!fs.existsSync(settingsPath)) return false;
-  return fs.readFileSync(settingsPath, "utf8").includes(MARKER);
+export function hooksInstalled(agent: Agent = "claude"): boolean {
+  const file = hooksPath(agent);
+  return fs.existsSync(file) && fs.readFileSync(file, "utf8").includes(MARKER);
 }

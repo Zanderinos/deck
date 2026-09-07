@@ -54,3 +54,30 @@ export async function workingChanges(rawCwd: string): Promise<WorkingChanges> {
     return { diff: "", error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export interface GitSummary {
+  branch: string;
+  added: number;
+  removed: number;
+  changedFiles: number;
+}
+
+const summaries = new Map<string, { expires: number; result: Promise<GitSummary | null> }>();
+
+export function gitSummary(cwd: string): Promise<GitSummary | null> {
+  const cached = summaries.get(cwd);
+  if (cached && cached.expires > Date.now()) return cached.result;
+  const result = Promise.all([
+    git(expandHome(cwd), ["rev-parse", "--abbrev-ref", "HEAD"]),
+    git(expandHome(cwd), ["diff", "--numstat", "HEAD"]),
+    git(expandHome(cwd), ["status", "--porcelain"]),
+  ]).then(([branch, diff, status]) => {
+    const counts = diff.split("\n").reduce((sum, line) => {
+      const [added, removed] = line.split("\t");
+      return { added: sum.added + (Number(added) || 0), removed: sum.removed + (Number(removed) || 0) };
+    }, { added: 0, removed: 0 });
+    return { branch: branch.trim(), ...counts, changedFiles: status.split("\n").filter(Boolean).length };
+  }).catch(() => null);
+  summaries.set(cwd, { expires: Date.now() + 4000, result });
+  return result;
+}

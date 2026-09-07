@@ -1,18 +1,27 @@
-export function Titlebar({ onSearch }: { onSearch: () => void }) {
-  return (
-    <div className="flex h-[38px] shrink-0 items-center gap-4 border-b border-edge pl-[84px] pr-3.5 drag-region">
-      <div className="font-bold tracking-widest text-ink">deck</div>
-      <div className="flex flex-1 justify-center">
-        <button
-          onClick={onSearch}
-          className="flex w-[340px] items-center gap-2.5 rounded-md border border-edge2 bg-overlay px-3 py-1 text-xs text-dim hover:border-edge3 hover:text-body"
-        >
-          <span>⌕</span>
-          <span className="flex-1 text-left">Search sessions, agents, files…</span>
-          <span className="rounded border border-edge2 px-1.5 text-[10px]">⌘K</span>
-        </button>
-      </div>
-      <div className="text-[11px] text-dim">⌘1/2/3 views</div>
+import { useDisplayMode } from "./DisplayMode.js";
+import { Icon } from "../board/icons.js";
+import { useTabs } from "../store.js";
+import { useGitSummary } from "../lib/useGitSummary.js";
+import { terminalAction } from "../terminal/actions.js";
+import type { View } from "../App.js";
+
+export function Titlebar({ onSearch, onSidebar, onView, sidebarOpen }: { onSearch: () => void; onSidebar: () => void; onView: (view: View) => void; sidebarOpen: boolean }) {
+  const { setMode } = useDisplayMode();
+  const { tabs, activeId } = useTabs();
+  const git = useGitSummary(tabs.find((tab) => tab.termId === activeId)?.cwd);
+  return <header className="drag-region flex h-[44px] shrink-0 items-center gap-1 border-b border-edge bg-bg pl-[100px] pr-3 font-sans">
+    <button onClick={onSidebar} aria-label="Toggle sidebar" aria-pressed={sidebarOpen} title="Toggle sidebar (⌘B)" className={`toolbar-button ${sidebarOpen ? "bg-card2 text-soft" : ""}`}><Icon name="sidebar" size={17} /></button>
+    <button onClick={() => onView("settings")} title="Settings" aria-label="Settings" className="toolbar-button"><Icon name="settings" size={17} /></button>
+    <button onClick={() => onView("board")} title="Board" aria-label="Board" className="toolbar-button"><Icon name="grid" size={16} /></button>
+    <div className="flex min-w-0 flex-1 justify-center px-8">
+      <button onClick={onSearch} className="flex h-7 w-full max-w-[390px] items-center gap-2 rounded-md bg-card px-3 text-[12px] text-mut hover:bg-card2 hover:text-soft">
+        <Icon name="search" size={14} /><span className="flex-1 truncate text-left">Search sessions, history, commands…</span><kbd className="text-[10px] text-dim">⌘K</kbd>
+      </button>
     </div>
-  );
+    {git && <button title="Working-tree changes" onClick={() => { onView("terminal"); terminalAction("changes"); }} className="flex items-center gap-1.5 px-2 text-[11px]"><span className="text-mut">±</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
+    <button onClick={() => onView("agents")} title="Agent sessions" aria-label="Agent sessions" className="toolbar-button"><Icon name="sparkle" size={16} /></button>
+    <button onClick={() => setMode("zen")} title="Zen view (⌘⇧Enter)" aria-label="Zen view" className="toolbar-button"><Icon name="zen" size={16} /></button>
+    <button onClick={() => setMode("presentation")} title="Presentation view (⌘⇧P)" aria-label="Presentation view" className="toolbar-button"><Icon name="presentation" size={16} /></button>
+    <span className="ml-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#c9855d] text-[11px] font-semibold text-bg" title="Deck">D</span>
+  </header>;
 }

@@ -1,3 +1,8 @@
+import type { DeckTheme } from "../shared/themes.js";
+import type { DeckPlugin, ExtensionCatalog } from "../shared/extensions.js";
+import type { FileEntry, LocalFile } from "../main/files.js";
+import type { Agent } from "../shared/agents.js";
+import type { TermCreateOptions } from "../main/pty.js";
 import { contextBridge, ipcRenderer } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
@@ -11,7 +16,7 @@ import type {
   PrTimelineEvent,
   ReviewEvent,
 } from "../main/github.js";
-import type { WorkingChanges } from "../main/git.js";
+import type { GitSummary, WorkingChanges } from "../main/git.js";
 import type { TermMeta } from "../main/pty.js";
 import type { BoardCache } from "../main/jira.js";
 import type { AskResult } from "../main/ask.js";
@@ -19,6 +24,24 @@ import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
 const api = {
+  onSettingsChanged: (cb: (settings: DeckSettings) => void): (() => void) => {
+    const listener = (_e: unknown, settings: DeckSettings) => cb(settings);
+    ipcRenderer.on("settings:changed", listener);
+    return () => ipcRenderer.removeListener("settings:changed", listener);
+  },
+  extensions: {
+    get: (): Promise<ExtensionCatalog> => ipcRenderer.invoke("extensions:get"),
+    openFolder: (kind: "themes" | "plugins"): Promise<void> => ipcRenderer.invoke("extensions:folder", kind),
+    saveTheme: (theme: unknown): Promise<DeckTheme> => ipcRenderer.invoke("themes:save", theme),
+    importTheme: (): Promise<DeckTheme | null> => ipcRenderer.invoke("themes:import"),
+    installPlugin: (): Promise<DeckPlugin | null> => ipcRenderer.invoke("plugins:install"),
+    enablePlugin: (root: string, enabled: boolean): Promise<void> => ipcRenderer.invoke("plugins:enable", root, enabled),
+    onChanged: (cb: () => void): (() => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("extensions:changed", listener);
+      return () => ipcRenderer.removeListener("extensions:changed", listener);
+    },
+  },
   getSettings: (): Promise<DeckSettings> => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: Partial<DeckSettings>): Promise<DeckSettings> =>
     ipcRenderer.invoke("settings:update", patch),
@@ -91,7 +114,13 @@ const api = {
       return () => ipcRenderer.removeListener("board:changed", listener);
     },
   },
+  files: {
+    list: (root: string, directory?: string): Promise<FileEntry[]> => ipcRenderer.invoke("files:list", root, directory),
+    read: (root: string, file: string): Promise<LocalFile> => ipcRenderer.invoke("files:read", root, file),
+    save: (root: string, file: string, contents: LocalFile): Promise<LocalFile> => ipcRenderer.invoke("files:save", root, file, contents),
+  },
   git: {
+    summary: (cwd: string): Promise<GitSummary | null> => ipcRenderer.invoke("git:summary", cwd),
     changes: (cwd: string): Promise<WorkingChanges> => ipcRenderer.invoke("git:changes", cwd),
   },
   sessions: {
@@ -102,13 +131,13 @@ const api = {
       ipcRenderer.on("sessions:changed", listener);
       return () => ipcRenderer.removeListener("sessions:changed", listener);
     },
-    hooksInstalled: (): Promise<boolean> => ipcRenderer.invoke("hooks:installed"),
-    installHooks: (): Promise<{ installed: boolean; path: string }> =>
-      ipcRenderer.invoke("hooks:install"),
+    hooksInstalled: (agent: Agent = "claude"): Promise<boolean> => ipcRenderer.invoke("hooks:installed", agent),
+    installHooks: (agent: Agent = "claude"): Promise<{ installed: boolean; path: string }> =>
+      ipcRenderer.invoke("hooks:install", agent),
   },
   ask: {
     /** One turn of the deck conversation; text also streams via onDelta. */
-    send: (question: string): Promise<AskResult> => ipcRenderer.invoke("ask:send", question),
+    send: (question: string, agent?: Agent): Promise<AskResult> => ipcRenderer.invoke("ask:send", question, agent),
     reset: (): Promise<void> => ipcRenderer.invoke("ask:reset"),
     onDelta: (cb: (text: string) => void): (() => void) => {
       const listener = (_e: unknown, text: string) => cb(text);
@@ -117,17 +146,22 @@ const api = {
     },
   },
   term: {
-    create: (opts?: { cwd?: string; command?: string; issueKey?: string }): Promise<TermMeta> =>
+    onCreated: (cb: (meta: TermMeta) => void): (() => void) => {
+      const listener = (_e: unknown, meta: TermMeta) => cb(meta);
+      ipcRenderer.on("term:created", listener);
+      return () => ipcRenderer.removeListener("term:created", listener);
+    },
+    create: (opts?: TermCreateOptions): Promise<TermMeta> =>
       ipcRenderer.invoke("term:create", opts),
     list: (): Promise<TermMeta[]> => ipcRenderer.invoke("term:list"),
     /** Replays the terminal's recent output to this window, then streams live. */
-    attach: (id: string): Promise<void> => ipcRenderer.invoke("term:attach", id),
+    attach: (id: string): Promise<{ buffer: string; sequence: number }> => ipcRenderer.invoke("term:attach", id),
     input: (id: string, data: string): void => ipcRenderer.send("term:input", id, data),
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send("term:resize", id, cols, rows),
     kill: (id: string): void => ipcRenderer.send("term:kill", id),
-    onData: (cb: (id: string, data: string) => void): (() => void) => {
-      const listener = (_e: unknown, id: string, data: string) => cb(id, data);
+    onData: (cb: (id: string, data: string, sequence: number) => void): (() => void) => {
+      const listener = (_e: unknown, id: string, data: string, sequence: number) => cb(id, data, sequence);
       ipcRenderer.on("term:data", listener);
       return () => ipcRenderer.removeListener("term:data", listener);
     },

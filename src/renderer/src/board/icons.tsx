@@ -1,5 +1,19 @@
 // Stroke icons on a 16×16 grid, sized by font-size so they sit inline with text.
 const paths = {
+  zen: "M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4",
+  presentation: "M2 2h12v9H2zM8 11v3M5 14h6M6 4.5v4l4-2z",
+  sidebar: "M2 2h12v12H2zM6 2v12",
+  search: "M7 2a5 5 0 110 10A5 5 0 017 2zM11 11l3 3",
+  plus: "M8 3v10M3 8h10",
+  terminal: "M3 4l4 4-4 4M9 12h4",
+  grid: "M2 2h4v4H2zM10 2h4v4h-4zM2 10h4v4H2zM10 10h4v4h-4z",
+  folder: "M2 4h5l1.5 2H14v7H2z",
+  file: "M4 2h5l3 3v9H4zM9 2v4h3",
+  splitRight: "M2 2h12v12H2zM8 2v12",
+  splitDown: "M2 2h12v12H2zM2 8h12",
+  settings: "M3 4h10M3 8h10M3 12h10M6 2v4M10 6v4M6 10v4",
+  download: "M8 2v8M5 7l3 3 3-3M3 11v3h10v-3",
+
   branch:
     "M5 5.5v5M5 2.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM5 10.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11 2.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11 5.5c0 3.5-6 2.5-6 5",
   checkSquare: "M2.5 2.5h11v11h-11zM5 8l2 2 4-4",

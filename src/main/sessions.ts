@@ -1,13 +1,14 @@
+import { sessionKey, type Agent } from "../shared/agents.js";
 import { openDb } from "./db.js";
 
-// Registry of agent (Claude Code) sessions, fed by hook callbacks. Sessions
+// Registry of Claude Code and Codex sessions, fed by hook callbacks. Sessions
 // started outside deck are tracked too — they just carry no term_id.
 
 export type SessionStatus = "working" | "needs_input" | "needs_review" | "idle" | "ended";
 
 export interface AgentSession {
-  claude_session_id: string;
-  agent: string;
+  session_id: string;
+  agent: Agent;
   cwd: string;
   title: string | null;
   status: SessionStatus;
@@ -45,8 +46,9 @@ export function requestReview(termId: string, note: string): void {
 export function clearTermLinks(liveTermIds: string[]): void {
   const keep = liveTermIds.map(() => "?").join(",") || "''";
   openDb()
-    .prepare(`UPDATE agent_sessions SET term_id = NULL WHERE term_id IS NOT NULL AND term_id NOT IN (${keep})`)
+    .prepare(`UPDATE agent_sessions SET status = 'ended', term_id = NULL WHERE term_id IS NOT NULL AND term_id NOT IN (${keep})`)
     .run(...liveTermIds);
+  openDb().prepare("DELETE FROM agent_sessions WHERE session_id LIKE 'pending:%' AND term_id IS NULL").run();
 }
 
 const ISSUE_KEY_RE = /\b[A-Z][A-Z0-9]+-\d+\b/;
@@ -57,6 +59,8 @@ export interface HookPayload {
   transcript_path?: string;
   cwd?: string;
   prompt?: string;
+  tool_name?: string;
+  source?: string;
 }
 
 // Sessions deck itself runs (the "Ask deck" assistant) fire the same hooks
@@ -80,7 +84,7 @@ function notify(): void {
 }
 
 export function removeSession(id: string): void {
-  openDb().prepare("DELETE FROM agent_sessions WHERE claude_session_id = ?").run(id);
+  openDb().prepare("DELETE FROM agent_sessions WHERE session_id = ?").run(id);
   notify();
 }
 
@@ -94,6 +98,9 @@ const eventStatus: Record<string, SessionStatus> = {
   SessionStart: "idle",
   UserPromptSubmit: "working",
   Notification: "needs_input",
+  PermissionRequest: "needs_input",
+  Interrupt: "idle",
+  PreToolUse: "working",
   // A completed tool call is the proof the agent resumed after a permission
   // prompt — without it, needs_input would stick until the next Stop.
   PostToolUse: "working",
@@ -101,10 +108,13 @@ const eventStatus: Record<string, SessionStatus> = {
   SessionEnd: "ended",
 };
 
-export function applyHook(payload: HookPayload, termId: string | null): void {
-  const id = payload.session_id;
-  const status = payload.hook_event_name ? eventStatus[payload.hook_event_name] : undefined;
+export function applyHook(payload: HookPayload, termId: string | null, agent: Agent = "claude"): void {
+  const id = payload.session_id ? sessionKey(agent, payload.session_id) : undefined;
+  const status = payload.hook_event_name === "PreToolUse" && /(?:request_user_input|AskUserQuestion)/.test(payload.tool_name ?? "")
+    ? "needs_input"
+    : payload.hook_event_name ? eventStatus[payload.hook_event_name] : undefined;
   if (!id || !status || internalSessions.has(id)) return;
+  if (payload.hook_event_name === "SessionStart" && payload.source === "compact") return;
 
   const db = openDb();
   const now = Date.now();
@@ -113,11 +123,11 @@ export function applyHook(payload: HookPayload, termId: string | null): void {
   // turn's own PostToolUse/Stop events must not downgrade it. It clears when
   // the user replies (UserPromptSubmit) or the session ends.
   db.prepare(
-    `INSERT INTO agent_sessions (claude_session_id, cwd, status, term_id, transcript_path, issue_key, started_at, updated_at)
-     VALUES (@id, @cwd, @status, @termId, @transcript, @issueKey, @now, @now)
-     ON CONFLICT(claude_session_id) DO UPDATE SET
+    `INSERT INTO agent_sessions (session_id, agent, cwd, status, term_id, transcript_path, issue_key, started_at, updated_at)
+     VALUES (@id, @agent, @cwd, @status, @termId, @transcript, @issueKey, @now, @now)
+     ON CONFLICT(session_id) DO UPDATE SET
        status = CASE
-         WHEN agent_sessions.status = 'needs_review' AND @event IN ('PostToolUse', 'Stop')
+         WHEN agent_sessions.status = 'needs_review' AND @event IN ('PreToolUse', 'PostToolUse', 'Stop', 'Interrupt')
            THEN 'needs_review'
          ELSE @status
        END,
@@ -132,6 +142,7 @@ export function applyHook(payload: HookPayload, termId: string | null): void {
        issue_key = COALESCE(agent_sessions.issue_key, @issueKey)`,
   ).run({
     id,
+    agent,
     cwd: payload.cwd ?? "",
     status,
     event: payload.hook_event_name,
@@ -144,9 +155,10 @@ export function applyHook(payload: HookPayload, termId: string | null): void {
   // One live session per terminal: a new session id in the same deck tab
   // supersedes whatever ran there before (e.g. `claude --resume` forks a new
   // session id and would otherwise leave the old row dangling forever).
-  if (termId) {
+  if (termId && payload.hook_event_name !== "SessionEnd") {
+    db.prepare("DELETE FROM agent_sessions WHERE session_id = ?").run(`pending:${termId}`);
     db.prepare(
-      "UPDATE agent_sessions SET status = 'ended', updated_at = ? WHERE term_id = ? AND claude_session_id != ?",
+      "UPDATE agent_sessions SET status = 'ended', updated_at = ? WHERE term_id = ? AND session_id != ?",
     ).run(now, termId, id);
   }
 
@@ -154,14 +166,34 @@ export function applyHook(payload: HookPayload, termId: string | null): void {
   // mentioned in it links the session to that ticket.
   if (payload.hook_event_name === "UserPromptSubmit" && payload.prompt) {
     db.prepare(
-      "UPDATE agent_sessions SET title = COALESCE(title, ?) WHERE claude_session_id = ?",
+      "UPDATE agent_sessions SET title = COALESCE(title, ?) WHERE session_id = ?",
     ).run(payload.prompt.slice(0, 120), id);
     const key = ISSUE_KEY_RE.exec(payload.prompt)?.[0];
     if (key) {
       db.prepare(
-        "UPDATE agent_sessions SET issue_key = COALESCE(issue_key, ?) WHERE claude_session_id = ?",
+        "UPDATE agent_sessions SET issue_key = COALESCE(issue_key, ?) WHERE session_id = ?",
       ).run(key, id);
     }
   }
+  notify();
+}
+
+export function registerAgentTerm(term: { id: string; cwd: string; agent?: Agent; sessionId?: string; prompt?: string; issueKey?: string }): void {
+  if (!term.agent) return;
+  // A fast startup hook can arrive before the create response.
+  if (openDb().prepare("SELECT 1 FROM agent_sessions WHERE term_id = ? AND status != 'ended' AND session_id NOT LIKE 'pending:%'").get(term.id)) return;
+  const id = term.sessionId ?? `pending:${term.id}`;
+  openDb().prepare(`INSERT INTO agent_sessions (session_id, agent, cwd, title, status, term_id, issue_key, started_at, updated_at)
+    VALUES (?, ?, ?, ?, 'idle', ?, ?, ?, ?)
+    ON CONFLICT(session_id) DO UPDATE SET term_id = excluded.term_id, status = 'idle', updated_at = excluded.updated_at`)
+    .run(id, term.agent, term.cwd, term.prompt?.slice(0, 120) ?? null, term.id, term.issueKey ?? null, Date.now(), Date.now());
+  notify();
+}
+
+export function endTermSessions(termId: string): void {
+  pendingLinks.delete(termId);
+  openDb().prepare("DELETE FROM agent_sessions WHERE session_id = ?").run(`pending:${termId}`);
+  openDb().prepare("UPDATE agent_sessions SET status = 'ended', term_id = NULL, updated_at = ? WHERE term_id = ?")
+    .run(Date.now(), termId);
   notify();
 }

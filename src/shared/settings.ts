@@ -1,3 +1,5 @@
+import type { Agent } from "./agents.js";
+
 // Settings shape shared between main and renderer. Everything user-tunable
 // lives here — deck ships no hardcoded personal or company config.
 
@@ -38,6 +40,7 @@ export interface GithubSettings {
 export type WindowMode = "shared" | "panel" | "per-entry";
 
 export interface DeckSettings {
+  defaultAgent: Agent;
   jira: JiraSettings;
   github: GithubSettings;
   windowMode: WindowMode;
@@ -53,11 +56,12 @@ export interface DeckSettings {
   repoRoots: string[];
   /** Where a new terminal tab starts. Supports ~. */
   defaultCwd: string;
-  /** Theme is dark-only for now; kept as a setting so light mode can land later. */
-  theme: "dark";
+  /** Built-in id, custom:<id>, or <plugin-id>:<theme-id>. */
+  theme: string;
 }
 
 export const defaultSettings: DeckSettings = {
+  defaultAgent: "claude",
   jira: {
     baseUrl: "",
     email: "",

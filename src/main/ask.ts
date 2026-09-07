@@ -1,3 +1,5 @@
+import { type Agent } from "../shared/agents.js";
+import { getSettings } from "./settings.js";
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
@@ -7,11 +9,11 @@ import { listSessions, markInternalSession, type AgentSession } from "./sessions
 
 const exec = promisify(execFile);
 
-// "Ask deck": a headless Claude Code turn that answers questions about the
+// "Ask deck": a headless agent turn that answers questions about the
 // agent sessions deck tracks. Every turn carries a fresh snapshot of the
 // registry, so the answer is about the sessions running right now.
 
-const SYSTEM_PROMPT = `You are deck's assistant. deck is a terminal and agent workbench that tracks every Claude Code session on this machine.
+const SYSTEM_PROMPT = `You are deck's assistant. deck is a terminal and agent workbench that tracks Claude Code and Codex sessions on this machine.
 Each user message starts with a live snapshot of those sessions. Answer from the snapshot: short, concrete, markdown, no preamble.
 Refer to a session by its title and project, the way the snapshot names it. Never invent a session the snapshot does not list.
 When the user asks what needs attention, lead with the sessions that are waiting: for each, say what it is waiting on and what a good answer would be.`;
@@ -21,22 +23,25 @@ const READ_ONLY_TOOLS = "Read,Grep,Glob";
 
 /** The conversation deck is having with the user; null until the first ask. */
 let conversationId: string | undefined;
+let codexHistory: string[] = [];
 
 export function resetAsk(): void {
   conversationId = undefined;
+  codexHistory = [];
 }
 
-let resolvedBin: Promise<string> | undefined;
+const resolvedBins = new Map<Agent, Promise<string>>();
 
 /** A packaged app inherits a bare PATH, so claude is resolved the way the
  *  user's own shell would resolve it. */
-function claudeBin(): Promise<string> {
-  resolvedBin ??= exec(process.env.SHELL ?? "/bin/zsh", ["-lc", "command -v claude"], {
-    timeout: 10_000,
-  })
-    .then(({ stdout }) => stdout.trim().split("\n").pop() || "claude")
-    .catch(() => "claude");
-  return resolvedBin;
+function agentBin(agent: Agent): Promise<string> {
+  let resolved = resolvedBins.get(agent);
+  if (!resolved) {
+    resolved = exec(process.env.SHELL ?? "/bin/zsh", ["-lc", `command -v ${agent}`], { timeout: 10_000 })
+      .then(({ stdout }) => stdout.trim().split("\n").pop() || agent).catch(() => agent);
+    resolvedBins.set(agent, resolved);
+  }
+  return resolved;
 }
 
 function ago(ts: number): string {
@@ -60,7 +65,7 @@ function lastExchange(sessionId: string): string {
 
 function describe(session: AgentSession, index: number): string {
   const lines = [
-    `${index + 1}. "${session.title ?? "untitled"}" — ${project(session.cwd)} — status: ${session.status} — last activity ${ago(session.updated_at)}`,
+    `${index + 1}. "${session.title ?? "untitled"}" — ${project(session.cwd)} — ${session.agent} — status: ${session.status} — last activity ${ago(session.updated_at)}`,
     `   cwd: ${session.cwd}`,
     session.issue_key ? `   ticket: ${session.issue_key}` : "",
     session.term_id
@@ -69,7 +74,7 @@ function describe(session: AgentSession, index: number): string {
     session.review_note ? `   decisions it wants reviewed:\n${session.review_note}` : "",
   ];
   if (WAITING.includes(session.status)) {
-    const tail = lastExchange(session.claude_session_id);
+    const tail = lastExchange(session.session_id);
     if (tail) lines.push(`   last messages:\n${tail}`);
   }
   return lines.filter(Boolean).join("\n");
@@ -97,8 +102,8 @@ export interface AskResult {
 let turn: Promise<unknown> = Promise.resolve();
 
 /** Runs one turn against the sessions snapshot, streaming text as it arrives. */
-export function askDeck(question: string, onDelta: (text: string) => void): Promise<AskResult> {
-  const result = turn.then(() => runTurn(question, onDelta));
+export function askDeck(question: string, onDelta: (text: string) => void, agent: Agent = getSettings().defaultAgent): Promise<AskResult> {
+  const result = turn.then(() => agent === "codex" ? runCodexTurn(question, onDelta) : runTurn(question, onDelta));
   turn = result.catch(() => {});
   return result;
 }
@@ -132,7 +137,15 @@ function runTurn(question: string, onDelta: (text: string) => void): Promise<Ask
   // would show up in the very list they are describing.
   markInternalSession(conversationId);
 
-  return run(args, onDelta);
+  return run(args, onDelta, "claude");
+}
+
+async function runCodexTurn(question: string, onDelta: (text: string) => void): Promise<AskResult> {
+  const prompt = `${SYSTEM_PROMPT}\n\n${codexHistory.join("\n\n")}\n\n<sessions>\n${sessionSnapshot()}\n</sessions>\n\nuser: ${question}`;
+  const result = await run(["exec", "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "read-only",
+    "--config", 'approval_policy="never"', "--config", "features.hooks=false", "--skip-git-repo-check", "--", prompt], onDelta, "codex");
+  if (result.ok) codexHistory = [...codexHistory, `user: ${question}`, `assistant: ${result.text}`].slice(-20);
+  return result;
 }
 
 interface StreamLine {
@@ -140,11 +153,14 @@ interface StreamLine {
   subtype?: string;
   result?: string;
   is_error?: boolean;
+  item?: { type?: string; text?: string };
+  error?: { message?: string };
+  message?: string;
   event?: { type?: string; delta?: { type?: string; text?: string } };
 }
 
-async function run(args: string[], onDelta: (text: string) => void): Promise<AskResult> {
-  const bin = await claudeBin();
+async function run(args: string[], onDelta: (text: string) => void, agent: Agent): Promise<AskResult> {
+  const bin = await agentBin(agent);
   return new Promise((resolve) => {
     // Home is a neutral working directory: the question is about sessions,
     // not about whatever repo happens to be open.
@@ -158,6 +174,7 @@ async function run(args: string[], onDelta: (text: string) => void): Promise<Ask
     const timer = setTimeout(() => child.kill(), TURN_TIMEOUT_MS);
     let text = "";
     let stderr = "";
+    let failed = false;
     let buffered = "";
 
     child.stdout.setEncoding("utf8");
@@ -174,11 +191,19 @@ async function run(args: string[], onDelta: (text: string) => void): Promise<Ask
         } catch {
           continue;
         }
-        if (msg.type === "stream_event" && msg.event?.delta?.type === "text_delta") {
+        if (agent === "codex" && msg.type === "item.completed" && msg.item?.type === "agent_message") {
+          const delta = (text ? "\n\n" : "") + (msg.item.text ?? "");
+          text += delta;
+          onDelta(delta);
+        } else if (agent === "codex" && (msg.type === "turn.failed" || msg.type === "error")) {
+          failed = true;
+          stderr = msg.error?.message ?? msg.message ?? "Codex turn failed";
+        } else if (msg.type === "stream_event" && msg.event?.delta?.type === "text_delta") {
           const delta = msg.event.delta.text ?? "";
           text += delta;
           onDelta(delta);
         } else if (msg.type === "result" && msg.is_error) {
+          failed = true;
           stderr = msg.result ?? stderr;
         }
       }
@@ -188,15 +213,15 @@ async function run(args: string[], onDelta: (text: string) => void): Promise<Ask
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      resolve({ ok: false, text: "", error: `Could not run claude: ${err.message}` });
+      resolve({ ok: false, text: "", error: `Could not run ${agent}: ${err.message}` });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (text.trim()) return resolve({ ok: true, text });
+      if (text.trim() && code === 0 && !failed) return resolve({ ok: true, text });
       resolve({
         ok: false,
-        text: "",
-        error: stderr.trim() || `claude exited with code ${code}`,
+        text,
+        error: stderr.trim() || `${agent} exited with code ${code}`,
       });
     });
   });

@@ -1,19 +1,21 @@
+import type { AgentLaunch } from "../shared/agents.js";
 // Standalone pty host. Runs detached from Electron (via ELECTRON_RUN_AS_NODE)
 // so shells survive main-process restarts in dev, window reloads and closed
 // windows. Deck's main process is a thin client over a unix socket; the
 // protocol is newline-delimited JSON. Keeps recent output per terminal so a
 // reconnecting renderer can replay it.
 import net from "node:net";
+import { randomUUID } from "node:crypto";
 import pty, { type IPty } from "node-pty";
 
-export interface TermMeta {
+export interface TermMeta extends AgentLaunch {
   id: string;
   cwd: string;
   command?: string;
   issueKey?: string;
 }
 
-export interface SpawnRequest {
+export interface SpawnRequest extends AgentLaunch {
   shell: string;
   args: string[];
   cwd: string;
@@ -57,7 +59,6 @@ if (!socketPath) {
 
 const terms = new Map<string, Term>();
 const clients = new Set<net.Socket>();
-let nextId = 1;
 
 function send(socket: net.Socket, msg: HostMessage): void {
   if (!socket.destroyed) socket.write(JSON.stringify(msg) + "\n");
@@ -77,7 +78,7 @@ function exitIfIdle(): void {
 }
 
 function create(spawn: SpawnRequest): TermMeta {
-  const id = String(nextId++);
+  const id = randomUUID();
   const proc = pty.spawn(spawn.shell, spawn.args, {
     name: "xterm-256color",
     cols: 80,
@@ -85,7 +86,7 @@ function create(spawn: SpawnRequest): TermMeta {
     cwd: spawn.cwd,
     env: { ...spawn.env, DECK_TERM_ID: id },
   });
-  const meta: TermMeta = { id, cwd: spawn.cwd, command: spawn.command, issueKey: spawn.issueKey };
+  const meta: TermMeta = { id, cwd: spawn.cwd, command: spawn.command, issueKey: spawn.issueKey, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt };
   const term: Term = { proc, meta, chunks: [], buffered: 0 };
 
   proc.onData((data) => {

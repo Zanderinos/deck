@@ -1,3 +1,4 @@
+import { AgentSelect, useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDiff, type FileData, type ViewType } from "react-diff-view";
 import type {
@@ -12,7 +13,7 @@ import type { BoardIssue } from "../../../main/jira.js";
 import type { RepoDir } from "../../../main/providers.js";
 import { openTerminalTab } from "../lib/bus.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
-import { PrDiffTab, type AskClaudeRequest } from "./PrDiffTab.js";
+import { PrDiffTab, type AskAgentRequest } from "./PrDiffTab.js";
 import { PrOverview } from "./PrOverview.js";
 import { Icon } from "./icons.js";
 import { PrAgentPanel } from "./PrAgentPanel.js";
@@ -80,6 +81,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<MergeMethod>();
   const [repos, setRepos] = useState<RepoDir[]>([]);
+  const [agent, setAgent] = useAgentChoice();
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentTermId, setAgentTermId] = useState<string>();
   const [agentPending, setAgentPending] = useState<string>();
@@ -118,7 +120,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const paths = useMemo(() => files.map((f) => f.newPath || f.oldPath), [files]);
   const checkoutCwd = repos.find((r) => r.name === pr.repo.split("/")[1])?.path;
 
-  // Review comments the agent panel's Claude hands back become drafts here.
+  // Review comments the agent panel's agent hands back become drafts here.
   useEffect(
     () =>
       window.deck.gh.onPrDrafts((termId, incoming) => {
@@ -215,8 +217,8 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
   const addComment = (body: string) => window.deck.gh.addComment(pr.repo, pr.number, body).then(report);
 
   // Hands the selected lines to the agent panel when it is open, otherwise to
-  // a Claude session in the PR's checkout, the way the issue panel spins one up.
-  const askClaude = ({ path, side, start, end, snippet, question }: AskClaudeRequest) => {
+  // an agent session in the PR's checkout, the way the issue panel spins one up.
+  const askAgent = ({ path, side, start, end, snippet, question }: AskAgentRequest) => {
     const where = start === end ? `line ${start}` : `lines ${start}–${end}`;
     const which = side === "LEFT" ? "the old version" : "the new version";
     const prompt = [
@@ -229,7 +231,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
       question,
     ].join("\n");
     if (agentOpen) setAgentPending(prompt);
-    else openTerminalTab({ cwd: checkoutCwd, command: `claude ${shellQuote(prompt)}`, issueKey: issue?.key });
+    else openTerminalTab({ cwd: checkoutCwd, agent, prompt, issueKey: issue?.key });
   };
 
   const openComposer = (target: ComposerTarget, extend: boolean) => {
@@ -372,12 +374,13 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
             )}
           </button>
         ))}
+        <AgentSelect value={agent} onChange={(next) => { setAgent(next); setAgentTermId(undefined); }} />
         <button
           onClick={() => setAgentOpen((o) => !o)}
           className={`ml-1 flex items-center gap-1.5 rounded-full px-3 py-1 ${
             agentOpen ? "bg-accent/15 text-accent" : "text-mut hover:text-ink"
           }`}
-          title="Claude session pinned to this PR"
+          title="Agent session pinned to this PR"
         >
           <Icon name="sparkle" size={11} /> Agent
         </button>
@@ -558,11 +561,13 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose }: PrScreenProps) {
             }}
             onDeleteDraft={(id) => setDrafts((ds) => ds.filter((d) => d.id !== id))}
             threadActions={threadActions}
-            onAskClaude={askClaude}
+            onAskAgent={askAgent}
           />
         )}
         {agentOpen && (
           <PrAgentPanel
+            key={`${pr.repo}#${pr.number}:${agent}`}
+            agent={agent}
             pr={pr}
             detail={detail}
             cwd={checkoutCwd}

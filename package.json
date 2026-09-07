@@ -11,8 +11,10 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "vitest run",
-    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/brand-dev-electron.mjs"
+    "test": "node scripts/test.mjs",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/brand-dev-electron.mjs",
+    "test:ui": "npm run build && node scripts/ui-smoke.mjs",
+    "test:pty": "npm run build && node scripts/pty-smoke.mjs"
   },
   "dependencies": {
     "@fontsource/space-mono": "^5.3.0",

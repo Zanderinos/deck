@@ -136,7 +136,7 @@ interface LineSelection {
   focus: number;
 }
 
-export interface AskClaudeRequest {
+export interface AskAgentRequest {
   path: string;
   side: Side;
   start: number;
@@ -193,7 +193,7 @@ function SelectionBar({
               asking ? "border-accent text-accent" : "border-edge2 text-body hover:border-edge3 hover:text-ink"
             }`}
           >
-            <Icon name="sparkle" size={11} /> Ask Claude
+            <Icon name="sparkle" size={11} /> Ask agent
           </button>
           <button
             onClick={onCopy}
@@ -210,7 +210,7 @@ function SelectionBar({
         <div className="mt-2">
           <TextBox
             placeholder="What do you want to know or change about these lines?"
-            sendLabel="Open in Claude"
+            sendLabel="Open in agent"
             autoFocus
             onCancel={() => setAsking(false)}
             onSend={(question) => onAsk(question)}
@@ -234,7 +234,7 @@ interface FileDiffProps {
   threadActions: ThreadActions;
   loadSource: () => Promise<string[] | null>;
   githubUrl: string;
-  onAskClaude: (request: AskClaudeRequest) => void;
+  onAskAgent: (request: AskAgentRequest) => void;
   onToggleViewed: () => void;
   onToggleCollapsed: () => void;
   onOpenComposer: (target: ComposerTarget, extend: boolean) => void;
@@ -256,7 +256,7 @@ function FileDiff({
   threadActions,
   loadSource,
   githubUrl,
-  onAskClaude,
+  onAskAgent,
   onToggleViewed,
   onToggleCollapsed,
   onOpenComposer,
@@ -416,7 +416,7 @@ function FileDiff({
           canComment={canComment}
           onComment={() => onOpenComposer({ path, line: end, side, startLine: start }, false)}
           onAsk={(question) => {
-            onAskClaude({ path, side, start, end, snippet: text, question });
+            onAskAgent({ path, side, start, end, snippet: text, question });
             setSelection(null);
           }}
           onCopy={() => void navigator.clipboard.writeText(text)}
@@ -437,7 +437,7 @@ function FileDiff({
     path,
     threadActions,
     onOpenComposer,
-    onAskClaude,
+    onAskAgent,
     onCancelComposer,
     onSaveDraft,
     onDeleteDraft,
@@ -640,7 +640,7 @@ export interface PrDiffTabProps {
   onSaveDraft: (body: string) => void;
   onDeleteDraft: (id: number) => void;
   threadActions: ThreadActions;
-  onAskClaude: (request: AskClaudeRequest) => void;
+  onAskAgent: (request: AskAgentRequest) => void;
 }
 
 export function PrDiffTab(props: PrDiffTabProps) {
@@ -753,7 +753,7 @@ export function PrDiffTab(props: PrDiffTabProps) {
                   drafts={props.drafts.filter((d) => d.path === path)}
                   composer={props.composer?.path === path ? props.composer : null}
                   threadActions={props.threadActions}
-                  onAskClaude={props.onAskClaude}
+                  onAskAgent={props.onAskAgent}
                   loadSource={loadSource(path)}
                   githubUrl={detail ? `${detail.url}/files#diff-${path}` : `https://github.com/${repo}`}
                   onToggleViewed={() => props.onToggleViewed(path)}

@@ -1,0 +1,34 @@
+{
+  "apiVersion": 1,
+  "id": "workspace-kit",
+  "name": "Workspace Kit",
+  "version": "1.0.0",
+  "description": "A theme, a workspace panel, and review commands for either agent.",
+  "entry": "index.js",
+  "themes": ["ocean.json"],
+  "commands": [
+    {
+      "id": "ocean",
+      "title": "Switch to Ocean",
+      "action": { "type": "theme", "theme": "ocean" }
+    },
+    {
+      "id": "review-codex",
+      "title": "Review workspace with Codex",
+      "action": {
+        "type": "terminal",
+        "agent": "codex",
+        "prompt": "Review the current working tree. Explain bugs, regressions, and missing tests with file references. Do not modify files."
+      }
+    },
+    {
+      "id": "review-claude",
+      "title": "Review workspace with Claude",
+      "action": {
+        "type": "terminal",
+        "agent": "claude",
+        "prompt": "Review the current working tree. Explain bugs, regressions, and missing tests with file references. Do not modify files."
+      }
+    }
+  ]
+}

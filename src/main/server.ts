@@ -32,7 +32,7 @@ function buildApp(): Hono {
 
   app.post("/api/hook", async (c) => {
     const payload = (await c.req.json().catch(() => ({}))) as HookPayload;
-    applyHook(payload, c.req.header("x-deck-term") || null);
+    applyHook(payload, c.req.header("x-deck-term") || null, c.req.header("x-deck-agent") === "codex" ? "codex" : "claude");
     return c.json({ ok: true });
   });
 

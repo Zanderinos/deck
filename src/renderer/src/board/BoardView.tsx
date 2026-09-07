@@ -134,7 +134,7 @@ export function BoardView() {
 
   const spinUp = (issue: BoardIssue) => {
     const prompt = `${issue.key}: ${issue.summary} — the code was rejected in review. Look at the PR feedback and address it.`;
-    void newTab({ command: `claude ${JSON.stringify(prompt)}`, issueKey: issue.key });
+    void newTab({ prompt, issueKey: issue.key });
   };
 
   if (!configured) {
@@ -284,7 +284,7 @@ export function BoardView() {
                           }}
                           className="mt-2 text-[10px] text-red hover:underline"
                         >
-                          ✗ code rejected — ⏎ spin up claude
+                          ✗ code rejected — ⏎ spin up agent
                         </button>
                       )}
                     </div>

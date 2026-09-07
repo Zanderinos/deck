@@ -1,41 +1,29 @@
-import { useEffect, useRef } from "react";
+import { useExtensions } from "../extensions/ExtensionProvider.js";
+import { useDisplayMode } from "../chrome/DisplayMode.js";
+import { onTerminalAction } from "./actions.js";
+import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
-const theme = {
-  background: "#0c0d10",
-  foreground: "#e6e6e9",
-  cursor: "#7aa2f7",
-  selectionBackground: "#33467c",
-  black: "#15151a",
-  red: "#f7768e",
-  green: "#9ece6a",
-  yellow: "#e0af68",
-  blue: "#7aa2f7",
-  magenta: "#bb9af7",
-  cyan: "#7dcfff",
-  white: "#c0caf5",
-  brightBlack: "#414868",
-  brightRed: "#f7768e",
-  brightGreen: "#9ece6a",
-  brightYellow: "#e0af68",
-  brightBlue: "#7aa2f7",
-  brightMagenta: "#bb9af7",
-  brightCyan: "#7dcfff",
-  brightWhite: "#e6e6e9",
-};
 
 export interface TerminalPaneProps {
   termId: string;
   active: boolean;
+  focused?: boolean;
   onTitle: (title: string) => void;
 }
 
 // One xterm instance per pty, mounted once and kept alive across tab
 // switches (hidden, not unmounted) so scrollback survives.
-export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
+export function TerminalPane({ termId, active, focused = active, onTitle }: TerminalPaneProps) {
+  const { theme } = useExtensions();
+  const { mode, presentationSize } = useDisplayMode();
+  const [finding, setFinding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [match, setMatch] = useState("");
+  const searchPosition = useRef(-1);
   const hostRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon>();
   const termRef = useRef<Terminal>();
@@ -43,7 +31,7 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
   useEffect(() => {
     const host = hostRef.current!;
     const term = new Terminal({
-      theme,
+      theme: theme.terminal,
       fontFamily: "ui-monospace, Menlo, monospace",
       fontSize: 13,
       cursorBlink: true,
@@ -53,6 +41,8 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
+    term.attachCustomKeyEventHandler((event) => !(event.metaKey && /^(?:[1-9]|[bdefjkpstw]|,)$/i.test(event.key)));
+
     try {
       term.loadAddon(new WebglAddon());
     } catch {
@@ -62,15 +52,23 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
     termRef.current = term;
     fitRef.current = fit;
 
-    const offData = window.deck.term.onData((id, data) => {
-      if (id === termId) term.write(data);
+    let restored = false;
+    let disposed = false;
+    let live: { data: string; sequence: number }[] = [];
+    const offData = window.deck.term.onData((id, data, sequence) => {
+      if (id !== termId) return;
+      if (restored) term.write(data); else live.push({ data, sequence });
     });
     const onInput = term.onData((data) => window.deck.term.input(termId, data));
     const onTitleChange = term.onTitleChange(onTitle);
     const onResize = term.onResize(({ cols, rows }) => window.deck.term.resize(termId, cols, rows));
     window.deck.term.resize(termId, term.cols, term.rows);
-    // Subscribed above, so the replayed buffer lands before any live data.
-    void window.deck.term.attach(termId);
+    void window.deck.term.attach(termId).then(({ buffer, sequence }) => {
+      if (disposed) return;
+      if (buffer) term.write(buffer);
+      for (const chunk of live) if (chunk.sequence > sequence) term.write(chunk.data);
+      live = []; restored = true;
+    }).catch((error) => { if (!disposed) term.writeln(`\r\nCould not restore terminal: ${String(error)}`); });
 
     const observer = new ResizeObserver(() => {
       if (host.clientWidth > 0) fit.fit();
@@ -78,6 +76,7 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
     observer.observe(host);
 
     return () => {
+      disposed = true;
       observer.disconnect();
       offData();
       onInput.dispose();
@@ -90,9 +89,61 @@ export function TerminalPane({ termId, active, onTitle }: TerminalPaneProps) {
   useEffect(() => {
     if (active) {
       fitRef.current?.fit();
-      termRef.current?.focus();
+      if (focused && !finding) termRef.current?.focus();
     }
-  }, [active]);
+  }, [active, focused, finding]);
 
-  return <div ref={hostRef} className={`h-full w-full ${active ? "" : "hidden"}`} />;
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.fontSize = mode === "presentation" ? presentationSize : 13;
+    term.options.lineHeight = mode === "presentation" ? 1.25 : 1;
+    const frame = requestAnimationFrame(() => { if (active) fitRef.current?.fit(); });
+    return () => cancelAnimationFrame(frame);
+  }, [mode, presentationSize, active]);
+
+  useEffect(() => { if (termRef.current) termRef.current.options.theme = theme.terminal; }, [theme]);
+
+  const find = (backwards = false) => {
+    const term = termRef.current;
+    if (!term || !query) return;
+    const matches: { line: number; column: number }[] = [];
+    for (let line = 0; line < term.buffer.active.length; line++) {
+      const text = term.buffer.active.getLine(line)?.translateToString(true) ?? "";
+      let column = text.toLowerCase().indexOf(query.toLowerCase());
+      while (column >= 0) {
+        matches.push({ line, column });
+        column = text.toLowerCase().indexOf(query.toLowerCase(), column + Math.max(query.length, 1));
+      }
+    }
+    if (!matches.length) { setMatch("No matches"); term.clearSelection(); return; }
+    searchPosition.current = (searchPosition.current + (backwards ? -1 : 1) + matches.length) % matches.length;
+    const found = matches[searchPosition.current];
+    term.select(found.column, found.line, query.length);
+    term.scrollToLine(Math.max(0, found.line - 2));
+    setMatch(`${searchPosition.current + 1} / ${matches.length}`);
+  };
+
+  useEffect(() => onTerminalAction((action) => {
+    if (!active || !focused) return;
+    const term = termRef.current;
+    if (!term) return;
+    if (action === "find") setFinding((open) => !open);
+    if (action === "clear") term.clear();
+    if (action === "focus") term.focus();
+    if (action === "export") {
+      const lines = Array.from({ length: term.buffer.active.length }, (_, index) => term.buffer.active.getLine(index)?.translateToString(true) ?? "");
+      const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain" }));
+      const link = document.createElement("a"); link.href = url; link.download = `deck-terminal-${termId}.txt`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }), [active, focused, termId]);
+
+  return <div className={`relative h-full w-full ${active ? "" : "hidden"}`}>
+    {finding && <div className="absolute right-1 top-0 z-20 flex items-center gap-2 rounded-md border border-edge3 bg-overlay px-2 py-1.5 font-sans text-[11px] shadow-lg">
+      <input aria-label="Find terminal output" autoFocus placeholder="Find in terminal…" value={query} onChange={(event) => { setQuery(event.target.value); searchPosition.current = -1; setMatch(""); }} onKeyDown={(event) => { if (event.key === "Enter") find(event.shiftKey); if (event.key === "Escape") { setFinding(false); termRef.current?.focus(); } }} className="w-40 bg-transparent text-soft outline-none" />
+      <span className="text-dim">{match}</span><button title="Previous match" onClick={() => find(true)}>↑</button><button title="Next match" onClick={() => find()}>↓</button><button title="Close find" onClick={() => setFinding(false)}>×</button>
+    </div>}
+    <div ref={hostRef} className="h-full w-full" />
+  </div>;
 }

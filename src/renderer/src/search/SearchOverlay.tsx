@@ -1,3 +1,7 @@
+import { useExtensions } from "../extensions/ExtensionProvider.js";
+import { useDisplayMode } from "../chrome/DisplayMode.js";
+import type { View } from "../App.js";
+import { terminalAction } from "../terminal/actions.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchHit } from "../../../main/indexer.js";
 import type { GithubHit, RepoDir } from "../../../main/providers.js";
@@ -21,11 +25,14 @@ interface Group {
 
 export interface SearchOverlayProps {
   onClose: () => void;
+  onView: (view: View) => void;
   onPreview: (sessionId: string, query: string) => void;
 }
 
-export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
-  const { newTab } = useTabs();
+export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps) {
+  const { commands, runCommand, themes, selectTheme } = useExtensions();
+  const { setMode } = useDisplayMode();
+  const { newTab, tabs, focusTab } = useTabs();
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const [convHits, setConvHits] = useState<SearchHit[]>([]);
@@ -63,6 +70,35 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
     const conv = new Map<string, SearchHit>();
     for (const h of convHits) if (!conv.has(h.session_id)) conv.set(h.session_id, h);
     const out: Group[] = [];
+    const liveTabs = tabs.filter((tab) => `${tab.customTitle ?? ""} ${tab.title} ${tab.cwd ?? ""} ${tab.agent ?? ""}`.toLowerCase().includes(q));
+    if (liveTabs.length) out.push({ label: "OPEN SESSIONS", items: liveTabs.slice(0, 6).map((tab) => ({
+      icon: tab.agent ? "✳" : "❯", iconColor: "text-mut", title: tab.customTitle || tab.title, meta: tab.cwd?.replace(/^\/Users\/[^/]+/, "~") ?? "",
+      open: () => { focusTab(tab.termId); onView("terminal"); },
+    })) });
+    const actions: Item[] = [
+      { icon: "⛶", iconColor: "text-mut", title: "Zen view", meta: "⌘⇧Enter", open: () => setMode("zen") },
+      { icon: "▣", iconColor: "text-mut", title: "Presentation view", meta: "⌘⇧P", open: () => setMode("presentation") },
+      { icon: "×", iconColor: "text-mut", title: "Exit zen or presentation view", meta: "Escape", open: () => setMode("normal") },
+      { icon: "❯", iconColor: "text-mut", title: "New terminal", meta: "⌘T", open: () => { void newTab(); onView("terminal"); } },
+      { icon: "✳", iconColor: "text-mut", title: "New Codex session", meta: "Codex", open: () => { void newTab({ agent: "codex" }); onView("terminal"); } },
+      { icon: "✳", iconColor: "text-mut", title: "New Claude session", meta: "Claude", open: () => { void newTab({ agent: "claude" }); onView("terminal"); } },
+      { icon: "◫", iconColor: "text-mut", title: "Split pane right", meta: "⌘D", open: () => { onView("terminal"); terminalAction("split-right"); } },
+      { icon: "◫", iconColor: "text-mut", title: "Split pane down", meta: "⌘⇧D", open: () => { onView("terminal"); terminalAction("split-down"); } },
+      { icon: "⌕", iconColor: "text-mut", title: "Search chat history", meta: "Claude + Codex", open: () => onView("search") },
+      { icon: "⌂", iconColor: "text-mut", title: "File explorer", meta: "Project files", open: () => { onView("terminal"); terminalAction("files"); } },
+      { icon: "±", iconColor: "text-mut", title: "Working-tree changes", meta: "⌘E", open: () => { onView("terminal"); terminalAction("changes"); } },
+      { icon: "◫", iconColor: "text-mut", title: "Open board", meta: "Jira + GitHub", open: () => onView("board") },
+      { icon: "✳", iconColor: "text-mut", title: "Agent sessions", meta: "Ask deck", open: () => onView("agents") },
+      { icon: "⚙", iconColor: "text-mut", title: "Settings", meta: "⌘,", open: () => onView("settings") },
+    ];
+    const matchingActions = actions.filter((action) => `${action.title} ${action.meta}`.toLowerCase().includes(q));
+    if (matchingActions.length) out.push({ label: "ACTIONS", items: matchingActions });
+    const pluginCommands = commands.filter((command) => `${command.title} ${command.description ?? ""} ${command.pluginName}`.toLowerCase().includes(q));
+    if (pluginCommands.length) out.push({ label: "PLUGINS", items: pluginCommands.map((command) => ({ icon: "◈", iconColor: "text-accent", title: command.title, meta: command.pluginName, open: () => void runCommand(command) })) });
+    if (q) {
+      const matchingThemes = themes.filter((theme) => `theme ${theme.name}`.toLowerCase().includes(q));
+      if (matchingThemes.length) out.push({ label: "THEMES", items: matchingThemes.map((theme) => ({ icon: "◐", iconColor: "text-mut", title: theme.name, meta: "Apply theme", open: () => void selectTheme(theme.id) })) });
+    }
     if (conv.size) {
       out.push({
         label: "CONVERSATIONS",
@@ -70,10 +106,10 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
           icon: "✳",
           iconColor: "text-accent",
           title: h.title ?? h.session_id,
-          meta: h.project.replace(/^-Users-[^-]+-/, ""),
+          meta: `${h.agent} · ${h.project.replace(/^-Users-[^-]+-/, "")}`,
           open: (newPane) =>
             newPane
-              ? void newTab({ cwd: h.cwd ?? undefined, sessionId: h.session_id })
+              ? void newTab({ agent: h.agent, cwd: h.cwd ?? undefined, sessionId: h.session_id })
               : onPreview(h.session_id, query),
         })),
       });
@@ -104,7 +140,7 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
       });
     }
     return out;
-  }, [convHits, repos, ghHits, query, newTab, onPreview]);
+  }, [convHits, repos, ghHits, query, newTab, onPreview, tabs, focusTab, onView, setMode, commands, runCommand, themes, selectTheme]);
 
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
@@ -148,7 +184,8 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search conversations, repos, PRs, Jira…"
+            aria-label="Search Deck"
+            placeholder="Search sessions, history, commands, repos…"
             className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-dim"
           />
           <span className="rounded border border-edge2 px-1.5 py-px text-[10px] text-dim">esc</span>
@@ -163,6 +200,7 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
                 return (
                   <button
                     key={`${g.label}${i}`}
+                    aria-label={item.title}
                     onClick={(e) => {
                       item.open(e.metaKey);
                       onClose();
@@ -190,7 +228,7 @@ export function SearchOverlay({ onClose, onPreview }: SearchOverlayProps) {
           <span>↑↓ navigate</span>
           <span>⏎ open</span>
           <span>⌘⏎ open in new session</span>
-          <span className="ml-auto">conversations first · then repos / PRs</span>
+          <span className="ml-auto">sessions · commands · conversations</span>
         </div>
       </div>
     </div>

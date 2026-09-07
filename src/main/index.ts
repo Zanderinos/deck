@@ -1,3 +1,6 @@
+import { startExtensions, stopExtensions, onExtensionsChanged, extensionCatalog, saveTheme, importTheme, installPlugin, enablePlugin, openExtensionFolder } from "./extensions.js";
+import { listFiles, readLocalFile, saveLocalFile, type LocalFile } from "./files.js";
+import type { Agent } from "../shared/agents.js";
 import {
   app,
   BrowserWindow,
@@ -13,7 +16,7 @@ import path from "node:path";
 import appIcon from "../../resources/icon.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
 import { askDeck, resetAsk } from "./ask.js";
-import { hooksInstalled, installClaudeHooks } from "./hooksInstall.js";
+import { hooksInstalled, installHooks } from "./hooksInstall.js";
 import {
   getIndexProgress,
   onIndexProgress,
@@ -41,7 +44,7 @@ import {
   type MergeMethod,
   type ReviewEvent,
 } from "./github.js";
-import { workingChanges } from "./git.js";
+import { gitSummary, workingChanges } from "./git.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import {
   afterPrMerged,
@@ -206,6 +209,14 @@ app.whenReady().then(async () => {
   await startPtyHost();
   startServer();
   startIndexer();
+  startExtensions();
+  onExtensionsChanged(() => broadcast("extensions:changed"));
+  ipcMain.handle("extensions:get", () => extensionCatalog());
+  ipcMain.handle("extensions:folder", (_e, kind: "themes" | "plugins") => openExtensionFolder(kind));
+  ipcMain.handle("themes:save", (_e, theme: unknown) => saveTheme(theme));
+  ipcMain.handle("themes:import", () => importTheme());
+  ipcMain.handle("plugins:install", () => installPlugin());
+  ipcMain.handle("plugins:enable", (_e, root: string, enabled: boolean) => enablePlugin(root, enabled));
   onIndexProgress((p) => broadcast("index:progress", p));
   ipcMain.handle("index:progress", () => getIndexProgress());
   ipcMain.handle("search:query", (_e, q: string) => searchConversations(q));
@@ -217,11 +228,15 @@ app.whenReady().then(async () => {
   onPrDrafts((termId, drafts) => broadcast("pr:drafts", termId, drafts));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
+  ipcMain.handle("files:list", (_e, root: string, directory?: string) => listFiles(root, directory));
+  ipcMain.handle("files:read", (_e, root: string, file: string) => readLocalFile(root, file));
+  ipcMain.handle("files:save", (_e, root: string, file: string, contents: LocalFile) => saveLocalFile(root, file, contents));
+  ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
-  ipcMain.handle("ask:send", (e, question: string) =>
+  ipcMain.handle("ask:send", (e, question: string, agent?: Agent) =>
     askDeck(question, (delta) => {
       if (!e.sender.isDestroyed()) e.sender.send("ask:delta", delta);
-    }),
+    }, agent),
   );
   ipcMain.handle("ask:reset", () => resetAsk());
   startPrWarmer();
@@ -277,12 +292,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
   // An existing install predates events added since; appending is a no-op
   // when nothing is missing, and consent was given by the original install.
-  if (hooksInstalled()) installClaudeHooks();
-  ipcMain.handle("hooks:installed", () => hooksInstalled());
-  ipcMain.handle("hooks:install", () => installClaudeHooks());
+  for (const agent of ["claude", "codex"] as const) if (hooksInstalled(agent)) installHooks(agent);
+  ipcMain.handle("hooks:installed", (_e, agent: Agent = "claude") => hooksInstalled(agent));
+  ipcMain.handle("hooks:install", (_e, agent: Agent = "claude") => installHooks(agent));
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);
+    broadcast("settings:changed", next);
     if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch) applyHotkey();
     return next;
   });
@@ -302,5 +318,6 @@ app.on("will-quit", () => {
   // touch globalShortcut — Electron throws pre-ready.
   if (app.isReady()) globalShortcut.unregisterAll();
   stopServer();
+  stopExtensions();
   stopPtyHost();
 });

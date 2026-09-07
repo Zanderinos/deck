@@ -1,7 +1,8 @@
+import type { AgentLaunch } from "../../../shared/agents.js";
 // Minimal cross-view event bus: lets search (or later, the board) open a
 // terminal tab without threading callbacks through the whole tree.
 
-export interface OpenTabDetail {
+export interface OpenTabDetail extends AgentLaunch {
   cwd?: string;
   command?: string;
   issueKey?: string;

@@ -79,7 +79,8 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
 
   const resumeSelected = () => {
     const hit = selected;
-    openTerminalTab({ cwd: hit?.cwd ?? undefined, sessionId: selectedId });
+    if (!selectedId) return;
+    openTerminalTab({ agent: hit?.agent, cwd: hit?.cwd ?? undefined, sessionId: selectedId });
   };
 
   return (
@@ -90,7 +91,7 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your Claude conversations…"
+          placeholder="Search Claude and Codex conversations…"
           className="w-full max-w-2xl bg-transparent text-sm text-ink outline-none placeholder:text-dim"
         />
         {progress && !progress.done && (
@@ -120,7 +121,7 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
                 <Snippet text={hit.snippet} />
               </div>
               <div className="mt-0.5 text-[10px] text-dim">
-                {hit.project.replace(/^-Users-[^-]+-/, "")} · {ago(hit.last_at)}
+                {hit.agent} · {hit.project.replace(/^-Users-[^-]+-/, "")} · {ago(hit.last_at)}
               </div>
             </button>
           ))}

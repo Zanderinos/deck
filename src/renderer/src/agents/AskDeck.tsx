@@ -1,10 +1,11 @@
+import { AgentSelect, useAgentChoice } from "./AgentSelect.js";
 import { useEffect, useRef, useState } from "react";
 import type { AgentSession } from "../../../main/sessions.js";
 import { Markdown } from "../board/Markdown.js";
 import { Icon } from "../board/icons.js";
 
 // A conversation with deck about the sessions it tracks. Answers come from a
-// headless Claude Code turn that is handed the live session registry, so
+// headless agent turn that is handed the live session registry, so
 // "which sessions need me?" is answerable without opening a single tab.
 
 const SUGGESTIONS = [
@@ -30,6 +31,7 @@ function label(s: AgentSession): string {
 }
 
 export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClose: () => void }) {
+  const [agent, setAgent] = useAgentChoice();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
 
   // A session that stopped waiting is no longer a reply target.
   useEffect(() => {
-    if (replyTo && !sessions.some((s) => s.claude_session_id === replyTo.claude_session_id)) {
+    if (replyTo && !sessions.some((s) => s.session_id === replyTo.session_id)) {
       setReplyTo(undefined);
     }
   }, [sessions, replyTo]);
@@ -69,7 +71,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
     setDraft("");
     setBusy(true);
     setTurns((t) => [...t, { role: "user", text: question }, { role: "deck", text: "" }]);
-    const result = await window.deck.ask.send(question);
+    const result = await window.deck.ask.send(question, agent);
     setBusy(false);
     setTurns((t) => {
       const last = t.at(-1);
@@ -83,7 +85,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
   const reply = (session: AgentSession, text: string) => {
     const term = session.term_id;
     if (!term || !text.trim()) return;
-    window.deck.term.input(term, text);
+    window.deck.term.input(term, `\x1b[200~${text}\x1b[201~`);
     setTimeout(() => window.deck.term.input(term, "\r"), 200);
     setDraft("");
     setTurns((t) => [...t, { role: "user", text: `→ ${label(session)}: ${text}` }]);
@@ -103,6 +105,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
       <div className="flex items-center gap-2 border-b border-edge px-4 py-3.5">
         <Icon name="sparkle" className="text-accent" />
         <span className="font-bold text-ink">Ask deck</span>
+        <fieldset disabled={busy}><AgentSelect value={agent} onChange={(next) => { setAgent(next); reset(); }} /></fieldset>
         <span className="ml-auto flex items-center gap-2.5 text-[11px] text-dim">
           {turns.length > 0 && (
             <button onClick={reset} className="hover:text-ink" title="Start a new conversation">
@@ -162,7 +165,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
           <span className="w-full text-[10px] tracking-widest text-dim">REPLY TO</span>
           {waiting.map((s) => (
             <button
-              key={s.claude_session_id}
+              key={s.session_id}
               onClick={() => {
                 setReplyTo(s);
                 input.current?.focus();
@@ -174,7 +177,7 @@ export function AskDeck({ sessions, onClose }: { sessions: AgentSession[]; onClo
                   : "Not running in a deck terminal — open it to reply"
               }
               className={`max-w-full truncate rounded-md border px-2 py-0.5 text-[11px] disabled:opacity-40 ${
-                replyTo?.claude_session_id === s.claude_session_id
+                replyTo?.session_id === s.session_id
                   ? "border-accent/50 bg-accent/10 text-accent"
                   : "border-edge2 text-body hover:border-edge3 hover:text-ink"
               }`}

@@ -1,11 +1,12 @@
-import { app, ipcMain, type WebContents } from "electron";
+import { agentCommand, sessionAgent, sessionKey, type AgentLaunch } from "../shared/agents.js";
+import { app, BrowserWindow, ipcMain, type WebContents } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import type { ClientMessage, HostMessage, SpawnRequest, TermMeta } from "./ptyHost.js";
-import { clearTermLinks, linkTermToIssue } from "./sessions.js";
+import { clearTermLinks, linkTermToIssue, registerAgentTerm, endTermSessions } from "./sessions.js";
 import { getSettings } from "./settings.js";
 
 export type { TermMeta } from "./ptyHost.js";
@@ -26,7 +27,7 @@ function startCwd(requested?: string): string {
   return os.homedir();
 }
 
-export interface TermCreateOptions {
+export interface TermCreateOptions extends AgentLaunch {
   cwd?: string;
   /** Command to run instead of the login shell (e.g. `claude --resume <id>`). */
   command?: string;
@@ -36,19 +37,22 @@ export interface TermCreateOptions {
 
 function spawnRequest(opts: TermCreateOptions): SpawnRequest {
   const shell = process.env.SHELL ?? "/bin/zsh";
+  const agent = opts.agent ?? (opts.sessionId ? sessionAgent(opts.sessionId) : opts.prompt ? getSettings().defaultAgent : undefined);
+  const sessionId = opts.sessionId && agent ? sessionKey(agent, opts.sessionId) : opts.sessionId;
+  const command = agent ? agentCommand({ agent, sessionId, prompt: opts.prompt }) : opts.command;
   // Deck itself may have been launched from inside a Claude Code session
   // (dev mode); its CLAUDE* markers would make claude in this terminal
   // think it's a child session and disable transcript saving.
   const cleanEnv = Object.fromEntries(
     Object.entries(process.env).filter(
-      (entry): entry is [string, string] => !entry[0].startsWith("CLAUDE") && entry[1] !== undefined,
+      (entry): entry is [string, string] => !entry[0].startsWith("CLAUDE") && !["CODEX_THREAD_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "DECK_TERM_ID"].includes(entry[0]) && entry[1] !== undefined,
     ),
   );
   return {
     shell,
     // A command still runs inside a login shell so PATH and profile apply,
     // and the tab drops back to the prompt when it exits.
-    args: opts.command ? ["-l", "-i", "-c", `${opts.command}; exec ${shell} -l`] : ["-l"],
+    args: command ? ["-l", "-i", "-c", `${command}; exec ${shell} -l`] : ["-l"],
     cwd: startCwd(opts.cwd),
     env: {
       ...cleanEnv,
@@ -60,7 +64,10 @@ function spawnRequest(opts: TermCreateOptions): SpawnRequest {
       TERM_PROGRAM: "deck",
       COLORTERM: "truecolor",
     },
-    command: opts.command,
+    command,
+    agent,
+    sessionId,
+    prompt: opts.prompt,
     issueKey: opts.issueKey,
   };
 }
@@ -75,16 +82,17 @@ class PtyHostClient {
   private nextReq = 1;
   private readonly pending = new Map<number, (reply: Reply) => void>();
   /** The renderer currently showing each terminal; set on attach. */
-  private readonly owners = new Map<string, WebContents>();
+  private readonly owners = new Map<string, Set<WebContents>>();
+  private readonly sequences = new Map<string, number>();
 
   private readonly socketPath = path.join(app.getPath("userData"), "pty.sock");
   private readonly logPath = path.join(app.getPath("userData"), "pty-host.log");
 
-  async request<T extends Reply["type"]>(msg: RequestBody): Promise<Extract<Reply, { type: T }>> {
+  async request<T extends Reply["type"]>(msg: RequestBody, onReply?: () => void): Promise<Extract<Reply, { type: T }>> {
     const socket = await this.connect();
     const req = this.nextReq++;
     return new Promise((resolve) => {
-      this.pending.set(req, (reply) => resolve(reply as Extract<Reply, { type: T }>));
+      this.pending.set(req, (reply) => { onReply?.(); resolve(reply as Extract<Reply, { type: T }>); });
       socket.write(JSON.stringify({ ...msg, req }) + "\n");
     });
   }
@@ -94,12 +102,17 @@ class PtyHostClient {
   }
 
   /** Attaches a renderer: it receives the replayed buffer, then live data. */
-  async attach(id: string, owner: WebContents): Promise<void> {
-    const { buffer } = await this.request<"attached">({ type: "attach", id });
-    // Ordering holds because the host writes "attached" before any later
-    // "data" for the same terminal on the one socket stream.
-    this.owners.set(id, owner);
-    if (buffer && !owner.isDestroyed()) owner.send("term:data", id, buffer);
+  async attach(id: string, owner: WebContents): Promise<{ buffer: string; sequence: number }> {
+    const owners = this.owners.get(id) ?? new Set<WebContents>();
+    owners.add(owner);
+    this.owners.set(id, owners);
+    let sequence = 0;
+    // Capture the replay boundary synchronously while reading the socket.
+    // Renderers discard queued live chunks already included in this replay.
+    const { buffer } = await this.request<"attached">({ type: "attach", id }, () => {
+      sequence = this.sequences.get(id) ?? 0;
+    });
+    return { buffer, sequence };
   }
 
   private connect(): Promise<net.Socket> {
@@ -159,9 +172,11 @@ class PtyHostClient {
     socket.on("error", () => {});
     socket.on("close", () => {
       // Host gone: every terminal went with it.
-      for (const [id, owner] of this.owners) {
-        if (!owner.isDestroyed()) owner.send("term:exit", id, -1);
+      for (const [id, owners] of this.owners) {
+        endTermSessions(id);
+        for (const owner of owners) if (!owner.isDestroyed()) owner.send("term:exit", id, -1);
       }
+      this.sequences.clear();
       this.owners.clear();
       this.pending.clear();
       this.socket = undefined;
@@ -176,11 +191,18 @@ class PtyHostClient {
       resolve?.(msg);
       return;
     }
-    const owner = this.owners.get(msg.id);
-    if (msg.type === "exit") this.owners.delete(msg.id);
-    if (!owner || owner.isDestroyed()) return;
-    if (msg.type === "data") owner.send("term:data", msg.id, msg.data);
-    else owner.send("term:exit", msg.id, msg.code);
+    const owners = this.owners.get(msg.id);
+    if (msg.type === "exit") {
+      endTermSessions(msg.id);
+      this.owners.delete(msg.id);
+    }
+    const sequence = (this.sequences.get(msg.id) ?? 0) + 1;
+    this.sequences.set(msg.id, sequence);
+    for (const owner of owners ?? []) {
+      if (owner.isDestroyed()) { owners?.delete(owner); continue; }
+      if (msg.type === "data") owner.send("term:data", msg.id, msg.data, sequence);
+      else owner.send("term:exit", msg.id, msg.code);
+    }
   }
 }
 
@@ -195,8 +217,13 @@ export async function startPtyHost(): Promise<void> {
   clearTermLinks(terms.map((t) => t.id));
 
   ipcMain.handle("term:create", async (_e, opts: TermCreateOptions = {}): Promise<TermMeta> => {
-    const { meta } = await client!.request<"created">({ type: "create", spawn: spawnRequest(opts) });
+    const spawn = spawnRequest(opts);
+    const reply = await client!.request<"created">({ type: "create", spawn });
+    // Hosts surviving a dev restart may predate structured agent metadata.
+    const meta = { ...reply.meta, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt };
     if (meta.issueKey) linkTermToIssue(meta.id, meta.issueKey);
+    registerAgentTerm(meta);
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:created", meta);
     return meta;
   });
   ipcMain.handle("term:list", async (): Promise<TermMeta[]> => {
@@ -207,7 +234,10 @@ export async function startPtyHost(): Promise<void> {
   ipcMain.on("term:resize", (_e, id: string, cols: number, rows: number) =>
     client!.send({ type: "resize", id, cols, rows }),
   );
-  ipcMain.on("term:kill", (_e, id: string) => client!.send({ type: "kill", id }));
+  ipcMain.on("term:kill", (_e, id: string) => {
+    endTermSessions(id);
+    client!.send({ type: "kill", id });
+  });
 }
 
 /** Packaged quit takes the shells along; in dev they stay for the restart. */

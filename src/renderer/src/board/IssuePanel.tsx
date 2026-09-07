@@ -1,3 +1,4 @@
+import { AgentSelect, useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useState } from "react";
 import type { IssuePr } from "../../../main/github.js";
 import type { RepoDir } from "../../../main/providers.js";
@@ -29,6 +30,7 @@ export interface IssuePanelProps {
 
 export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }: IssuePanelProps) {
   const { newTab, tabs, focusTab } = useTabs();
+  const [agent, setAgent] = useAgentChoice();
   const [prs, setPrs] = useState<IssuePr[]>();
   const [repos, setRepos] = useState<RepoDir[]>([]);
   const [repoPath, setRepoPath] = useState<string>("");
@@ -67,7 +69,8 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
       : `${issue.key}: ${issue.summary}`;
     void newTab({
       cwd: repoPath || undefined,
-      command: `claude ${JSON.stringify(prompt)}`,
+      agent,
+      prompt,
       issueKey: issue.key,
     });
   };
@@ -75,7 +78,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
   const continueSession = (s: AgentSession) => {
     if (s.term_id && openTermIds.has(s.term_id)) focusTab(s.term_id);
     else
-      void newTab({ cwd: s.cwd, sessionId: s.claude_session_id, issueKey: issue.key });
+      void newTab({ cwd: s.cwd, agent: s.agent, sessionId: s.session_id, issueKey: issue.key });
   };
 
   return (
@@ -109,7 +112,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
           const g = agentGlyph[s.status];
           return (
             <button
-              key={s.claude_session_id}
+              key={s.session_id}
               onClick={() => continueSession(s)}
               title={
                 s.term_id && openTermIds.has(s.term_id) ? "Focus session" : "Continue session"
@@ -118,7 +121,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
             >
               <span className={`text-[11px] ${g.color}`}>{g.dot}</span>
               <span className="min-w-0 flex-1 truncate text-[11px] text-soft">
-                {s.title ?? s.claude_session_id.slice(0, 8)}
+                {s.title ?? s.session_id.slice(0, 8)}
               </span>
               <span className={`shrink-0 text-[10px] ${g.color}`}>
                 {s.term_id && openTermIds.has(s.term_id) ? "focus →" : `${g.label} · continue →`}
@@ -141,6 +144,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
               </option>
             ))}
           </select>
+          <AgentSelect value={agent} onChange={setAgent} />
           <button
             onClick={spinUp}
             className={`shrink-0 rounded-md border px-3 py-1.5 text-[11px] ${
@@ -149,7 +153,7 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
                 : "border-edge2 text-accent hover:border-accent"
             }`}
           >
-            {rejected ? "✗ fix rejection" : "✳ spin up claude"}
+            {rejected ? "✗ fix rejection" : `✳ spin up ${agent}`}
           </button>
         </div>
 
