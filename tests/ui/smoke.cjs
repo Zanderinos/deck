@@ -140,6 +140,7 @@ app.whenReady().then(async () => {
   if (!(await run(`document.querySelector('[data-display-mode="zen"]')`))) throw Error('Escape outside the terminal should not exit Zen');
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', {key:'p',metaKey:true,shiftKey:true,bubbles:true,cancelable:true}))`);
   await wait(200);
+  if (await run(`Boolean(document.querySelector('input[aria-label="Search Deck"]'))`)) throw Error('⌘⇧P must not open search');
   if (!(await run(`document.querySelector('[data-display-mode="presentation"]') && getComputedStyle(document.querySelector('main > div:not(.hidden)')).zoom !== '1'`))) throw Error('Presentation did not zoom the reviews page');
   await screenshot('presentation-reviews');
   await click('Exit presentation view');

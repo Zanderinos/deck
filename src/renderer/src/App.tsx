@@ -112,7 +112,7 @@ function Shell() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (meta && ["k", "p"].includes(e.key.toLowerCase())) {
+      if (meta && !e.shiftKey && ["k", "p"].includes(e.key.toLowerCase())) {
         e.preventDefault();
         setSearchOpen((o) => !o);
         return;
