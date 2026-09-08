@@ -17,7 +17,7 @@ async function withinRoot(root: string, relative = ""): Promise<string> {
 export async function listFiles(root: string, directory = ""): Promise<FileEntry[]> {
   const target = await withinRoot(root, directory);
   const entries = await fs.readdir(target, { withFileTypes: true });
-  return entries.filter((entry) => ![".git", "node_modules", ".DS_Store"].includes(entry.name))
+  return entries.filter((entry) => !entry.name.startsWith(".") && entry.name !== "node_modules")
     .map((entry) => ({ name: entry.name, path: path.join(directory, entry.name), directory: entry.isDirectory() }))
     .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
 }
