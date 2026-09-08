@@ -158,7 +158,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     }
   }), [active, focused, termId]);
 
-  return <div className={`relative h-full w-full ${active ? "" : "hidden"}`}>
+  return <div style={{ background: theme.terminal.background }} className={`relative h-full w-full px-4 py-3 ${active ? "" : "hidden"}`}>
     {finding && <div className="absolute right-1 top-0 z-20 flex items-center gap-2 rounded-md border border-edge3 bg-overlay px-2 py-1.5 font-sans text-[11px] shadow-lg">
       <input aria-label="Find terminal output" autoFocus placeholder="Find in terminal…" value={query} onChange={(event) => { setQuery(event.target.value); searchPosition.current = -1; setMatch(""); }} onKeyDown={(event) => { if (event.key === "Enter") find(event.shiftKey); if (event.key === "Escape") { setFinding(false); termRef.current?.focus(); } }} className="w-40 bg-transparent text-soft outline-none" />
       <span className="text-dim">{match}</span><button title="Previous match" onClick={() => find(true)}>↑</button><button title="Next match" onClick={() => find()}>↓</button><button title="Close find" onClick={() => setFinding(false)}>×</button>
