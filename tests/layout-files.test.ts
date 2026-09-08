@@ -28,6 +28,9 @@ describe("local file explorer", () => {
       const root = path.join(dir, "project");
       await fs.mkdir(root);
       await fs.writeFile(path.join(root, "notes.md"), "original");
+      await fs.writeFile(path.join(root, ".env"), "SECRET=1");
+      await fs.mkdir(path.join(root, ".git"));
+      await fs.mkdir(path.join(root, "node_modules"));
       await fs.writeFile(path.join(dir, "outside.txt"), "outside");
       await fs.symlink(path.join(dir, "outside.txt"), path.join(root, "link.txt"));
       expect((await listFiles(root)).map((entry) => entry.name)).toEqual(["link.txt", "notes.md"]);
