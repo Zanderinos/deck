@@ -15,7 +15,8 @@ import fs from "node:fs";
 import path from "node:path";
 import appIcon from "../../resources/icon.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
-import { askDeck, resetAsk, type AskEvent } from "./ask.js";
+import { askDeck, resetAsk } from "./ask.js";
+import type { AskEvent } from "./agentTurn.js";
 import { startAutoFix } from "./autofix.js";
 import { getPrInbox, onPrInboxChanged, refreshPrInbox, startPrInbox, stopPrInbox } from "./prInbox.js";
 import { hooksInstalled, installHooks } from "./hooksInstall.js";
@@ -28,7 +29,8 @@ import {
 } from "./indexer.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import { startPtyHost, stopPtyHost } from "./pty.js";
-import { onPrDrafts, startServer, stopServer } from "./server.js";
+import { startServer, stopServer } from "./server.js";
+import { addDrafts, askReview, clearDrafts, getDrafts, onDraftsChanged, removeDraft, resetReview, type ReviewPr } from "./review.js";
 import {
   mergePr,
   addPrComment,
@@ -50,6 +52,7 @@ import { gitSummary, workingChanges } from "./git.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import {
   afterPrMerged,
+  fetchBoardColumns,
   getBoardCache,
   moveIssue,
   onBoardChanged,
@@ -227,7 +230,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("search:github", (_e, q: string) => searchGithub(q));
   ipcMain.handle("repos:list", () => listRepos());
   onSessionsChanged(() => broadcast("sessions:changed", listSessions()));
-  onPrDrafts((termId, drafts) => broadcast("pr:drafts", termId, drafts));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
   ipcMain.handle("files:list", (_e, root: string, directory?: string) => listFiles(root, directory));
@@ -235,12 +237,23 @@ app.whenReady().then(async () => {
   ipcMain.handle("files:save", (_e, root: string, file: string, contents: LocalFile) => saveLocalFile(root, file, contents));
   ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
-  ipcMain.handle("ask:send", (e, question: string, agent?: Agent) =>
+  ipcMain.handle("ask:send", (e, question: string, agent?: Agent, model?: string) =>
     askDeck(question, (event: AskEvent) => {
       if (!e.sender.isDestroyed()) e.sender.send("ask:event", event);
-    }, agent),
+    }, agent, model),
   );
   ipcMain.handle("ask:reset", () => resetAsk());
+  ipcMain.handle("review:send", (e, pr: ReviewPr, question: string, agent?: Agent) =>
+    askReview(pr, question, (event: AskEvent) => {
+      if (!e.sender.isDestroyed()) e.sender.send("review:event", `${pr.repo}#${pr.number}`, event);
+    }, agent),
+  );
+  ipcMain.handle("review:reset", (_e, repo: string, number: number) => resetReview(repo, number));
+  ipcMain.handle("review:drafts", (_e, repo: string, number: number) => getDrafts(repo, number));
+  ipcMain.handle("review:addDraft", (_e, repo: string, number: number, draft: DraftComment) => addDrafts(repo, number, [draft]));
+  ipcMain.handle("review:removeDraft", (_e, repo: string, number: number, id: number) => removeDraft(repo, number, id));
+  ipcMain.handle("review:clearDrafts", (_e, repo: string, number: number) => clearDrafts(repo, number));
+  onDraftsChanged((repo, number, drafts) => broadcast("review:drafts", repo, number, drafts));
   startAutoFix();
   startPrInbox();
   onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
@@ -253,6 +266,7 @@ app.whenReady().then(async () => {
   startBoardSync();
   onBoardChanged((b) => broadcast("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
+  ipcMain.handle("board:columns", () => fetchBoardColumns());
   ipcMain.handle("board:move", (_e, key: string, column: string) => moveIssue(key, column));
   ipcMain.handle("gh:prsForIssue", (_e, key: string) =>
     prsForIssue(key, getBoardCache()?.issues.find((i) => i.key === key)),

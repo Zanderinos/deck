@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { DraftComment, PrComment } from "../../../main/github.js";
+import type { PrComment } from "../../../main/github.js";
+import type { ReviewDraft } from "../../../main/review.js";
 import { Icon } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 import { Avatar, relativeTime } from "./prUi.js";
@@ -203,9 +204,7 @@ export function threadsOf(comments: PrComment[]): PrComment[][] {
   return [...byThread.values()];
 }
 
-export interface Draft extends DraftComment {
-  id: number;
-}
+export type Draft = ReviewDraft;
 
 export function DraftCard({ draft, onDelete }: { draft: Draft; onDelete: () => void }) {
   return (

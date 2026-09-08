@@ -1,4 +1,4 @@
-import { AgentSelect, useAgentChoice } from "../agents/AgentSelect.js";
+import { useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDiff, type FileData, type ViewType } from "react-diff-view";
 import type {
@@ -11,12 +11,12 @@ import type {
 } from "../../../main/github.js";
 import type { BoardIssue } from "../../../main/jira.js";
 import type { RepoDir } from "../../../main/providers.js";
-import { openTerminalTab } from "../lib/bus.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
 import { PrDiffTab, type AskAgentRequest } from "./PrDiffTab.js";
 import { PrOverview } from "./PrOverview.js";
 import { Icon } from "./icons.js";
 import { PrAgentPanel } from "./PrAgentPanel.js";
+import { useReviewChat } from "./useReviewChat.js";
 import { checksSummary, shellQuote, Stat, toneColor } from "./prUi.js";
 
 // GitHub enables its merge button for exactly these merge-box states.
@@ -42,6 +42,7 @@ const mergeBlocker = (detail: PrDetail): string | undefined => {
 };
 
 const VIEW_TYPE_KEY = "deck.pr.viewType";
+const ASSISTANT_KEY = "deck.pr.assistant";
 
 const mergeLabel: Record<MergeMethod, string> = {
   merge: "Merge",
@@ -86,10 +87,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
   const [mergeMethod, setMergeMethod] = useState<MergeMethod>();
   const [repos, setRepos] = useState<RepoDir[]>([]);
   const [agent, setAgent] = useAgentChoice();
-  const [agentOpen, setAgentOpen] = useState(false);
-  const [agentTermId, setAgentTermId] = useState<string>();
-  const [agentPending, setAgentPending] = useState<string>();
-  const draftSeq = useRef(0);
+  const [agentOpen, setAgentOpen] = useState(() => localStorage.getItem(ASSISTANT_KEY) === "open");
   const rejectRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -112,6 +110,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
   }, [pr.repo, pr.number]);
 
   useEffect(() => localStorage.setItem(VIEW_TYPE_KEY, viewType), [viewType]);
+  useEffect(() => localStorage.setItem(ASSISTANT_KEY, agentOpen ? "open" : "closed"), [agentOpen]);
 
   const files = useMemo<FileData[]>(() => {
     if (!diffText || diffText.startsWith("diff unavailable")) return [];
@@ -124,15 +123,20 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
   const paths = useMemo(() => files.map((f) => f.newPath || f.oldPath), [files]);
   const checkoutCwd = repos.find((r) => r.name === pr.repo.split("/")[1])?.path;
 
-  // Review comments the agent panel's agent hands back become drafts here.
-  useEffect(
-    () =>
-      window.deck.gh.onPrDrafts((termId, incoming) => {
-        if (termId !== agentTermId) return;
-        setDrafts((ds) => [...ds, ...incoming.map((d) => ({ ...d, id: draftSeq.current++ }))]);
-      }),
-    [agentTermId],
-  );
+  // Drafts belong to the PR, not to this screen: the main process keeps them
+  // (the review assistant adds its own there too), so they survive leaving
+  // the PR and restarting deck.
+  useEffect(() => {
+    void window.deck.review.drafts(pr.repo, pr.number).then(setDrafts);
+    return window.deck.review.onDrafts((repo, number, next) => {
+      if (repo === pr.repo && number === pr.number) setDrafts(next);
+    });
+  }, [pr.repo, pr.number]);
+
+  const chat = useReviewChat({
+    repo: pr.repo, number: pr.number, title: pr.title, author: detail?.author ?? pr.author, viewer: detail?.viewer,
+    headRefName: detail?.headRefName, baseRefName: detail?.baseRefName, cwd: checkoutCwd,
+  }, agent);
 
   const methods = detail?.mergeMethods ?? ["merge"];
   const chosenMethod = mergeMethod && methods.includes(mergeMethod) ? mergeMethod : methods[0];
@@ -176,7 +180,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
     );
     setBusy(undefined);
     if (!result.ok) return setActionError(result.error);
-    setDrafts([]);
+    void window.deck.review.clearDrafts(pr.repo, pr.number);
     setComposer(null);
     setRejectOpen(false);
     refresh();
@@ -221,8 +225,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
 
   const addComment = (body: string) => window.deck.gh.addComment(pr.repo, pr.number, body).then(report);
 
-  // Hands the selected lines to the agent panel when it is open, otherwise to
-  // an agent session in the PR's checkout, the way the issue panel spins one up.
+  // Selected lines go to the review assistant, opening it if needed.
   const askAgent = ({ path, side, start, end, snippet, question }: AskAgentRequest) => {
     const where = start === end ? `line ${start}` : `lines ${start}–${end}`;
     const which = side === "LEFT" ? "the old version" : "the new version";
@@ -235,8 +238,8 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
       "```",
       question,
     ].join("\n");
-    if (agentOpen) setAgentPending(prompt);
-    else openTerminalTab({ cwd: checkoutCwd, agent, prompt, issueKey: issue?.key });
+    setAgentOpen(true);
+    void chat.ask(prompt);
   };
 
   const openComposer = (target: ComposerTarget, extend: boolean) => {
@@ -382,15 +385,14 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
             )}
           </button>
         ))}
-        <AgentSelect value={agent} onChange={(next) => { setAgent(next); setAgentTermId(undefined); }} />
         <button
           onClick={() => setAgentOpen((o) => !o)}
           className={`ml-1 flex items-center gap-1.5 rounded-full px-3 py-1 ${
             agentOpen ? "bg-accent/15 text-accent" : "text-mut hover:text-ink"
           }`}
-          title="Agent session pinned to this PR (a)"
+          title="Review assistant for this PR (a)"
         >
-          <Icon name="sparkle" size={11} /> Agent
+          <Icon name="sparkle" size={11} /> Assistant
         </button>
         {actionError && <span className="ml-3 truncate text-[11px] text-red">{actionError}</span>}
 
@@ -564,25 +566,23 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
             onCancelComposer={() => setComposer(null)}
             onSaveDraft={(body) => {
               if (!composer) return;
-              setDrafts((ds) => [...ds, { ...composer, id: draftSeq.current++, body }]);
+              void window.deck.review.addDraft(pr.repo, pr.number, { ...composer, body });
               setComposer(null);
             }}
-            onDeleteDraft={(id) => setDrafts((ds) => ds.filter((d) => d.id !== id))}
+            onDeleteDraft={(id) => void window.deck.review.removeDraft(pr.repo, pr.number, id)}
             threadActions={threadActions}
             onAskAgent={askAgent}
           />
         )}
         {agentOpen && (
           <PrAgentPanel
-            key={`${pr.repo}#${pr.number}:${agent}`}
-            agent={agent}
             pr={pr}
             detail={detail}
             cwd={checkoutCwd}
             issueKey={issue?.key}
-            pending={agentPending}
-            onPendingSent={() => setAgentPending(undefined)}
-            onTermId={setAgentTermId}
+            agent={agent}
+            onAgent={(next) => { setAgent(next); chat.reset(); }}
+            chat={chat}
             onClose={() => setAgentOpen(false)}
           />
         )}

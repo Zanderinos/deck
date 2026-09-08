@@ -8,6 +8,11 @@ const state = vi.hoisted(() => ({
   inbox: undefined as import("../src/main/prInbox.js").PrInbox | undefined,
   toolCall: false,
 }));
+const kv = vi.hoisted(() => new Map<string, string>());
+vi.mock("../src/main/db.js", () => ({
+  kvGet: (key: string) => (kv.has(key) ? JSON.parse(kv.get(key)!) : undefined),
+  kvSet: (key: string, value: unknown) => kv.set(key, JSON.stringify(value)),
+}));
 vi.mock("../src/main/jira.js", () => ({ getBoardCache: () => state.board, jiraConfigured: () => state.configured }));
 vi.mock("../src/main/settings.js", async () => {
   const { defaultSettings } = await import("../src/shared/settings.js");
@@ -98,6 +103,20 @@ describe("Ask Deck Jira context", () => {
     }
     expect(events[0]).toEqual({ type: "tool", name: "start_agent", input: '{"repo":"api"}' });
     expect(events.at(-1)).toEqual({ type: "text", text: "Fixture answer" });
+  });
+  it("resumes the same claude conversation after the module is reloaded", async () => {
+    await askDeck("First question", () => {}, "claude");
+    const started = state.launches[0].args;
+    const id = started[started.indexOf("--session-id") + 1];
+    vi.resetModules();
+    const reloaded = await import("../src/main/ask.js");
+    await reloaded.askDeck("Second question", () => {}, "claude");
+    expect(state.launches[1].args).toContain("--resume");
+    expect(state.launches[1].args).toContain(id);
+    reloaded.resetAsk();
+    await reloaded.askDeck("Fresh start", () => {}, "claude");
+    expect(state.launches[2].args).toContain("--session-id");
+    expect(state.launches[2].args).not.toContain(id);
   });
   it("includes the PR inbox with attention reasons and running fixes", async () => {
     await askDeck("Any PR of mine needing attention?", () => {}, "claude");

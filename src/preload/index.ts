@@ -18,8 +18,9 @@ import type {
 } from "../main/github.js";
 import type { GitSummary, WorkingChanges } from "../main/git.js";
 import type { TermMeta } from "../main/pty.js";
-import type { BoardCache } from "../main/jira.js";
-import type { AskEvent, AskResult } from "../main/ask.js";
+import type { BoardCache, BoardColumnStatuses } from "../main/jira.js";
+import type { AskEvent, AskResult } from "../main/agentTurn.js";
+import type { ReviewDraft, ReviewPr } from "../main/review.js";
 import type { PrInbox } from "../main/prInbox.js";
 import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
@@ -96,16 +97,12 @@ const api = {
       ipcRenderer.invoke("gh:setThreadResolved", threadId, resolved),
     addComment: (repo: string, n: number, body: string): Promise<PrActionResult> =>
       ipcRenderer.invoke("gh:addComment", repo, n, body),
-    onPrDrafts: (cb: (termId: string, drafts: DraftComment[]) => void): (() => void) => {
-      const listener = (_e: unknown, termId: string, drafts: DraftComment[]) => cb(termId, drafts);
-      ipcRenderer.on("pr:drafts", listener);
-      return () => ipcRenderer.removeListener("pr:drafts", listener);
-    },
     fileContent: (repo: string, ref: string, path: string): Promise<string | null> =>
       ipcRenderer.invoke("gh:fileContent", repo, ref, path),
   },
   board: {
     get: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:get"),
+    columns: (): Promise<BoardColumnStatuses[]> => ipcRenderer.invoke("board:columns"),
     sync: (): Promise<BoardCache | undefined> => ipcRenderer.invoke("board:sync"),
     move: (key: string, column: string): Promise<BoardCache> =>
       ipcRenderer.invoke("board:move", key, column),
@@ -138,13 +135,32 @@ const api = {
   },
   ask: {
     /** One turn of the deck conversation; text also streams via onDelta. */
-    send: (question: string, agent?: Agent): Promise<AskResult> => ipcRenderer.invoke("ask:send", question, agent),
+    send: (question: string, agent?: Agent, model?: string): Promise<AskResult> => ipcRenderer.invoke("ask:send", question, agent, model),
     reset: (): Promise<void> => ipcRenderer.invoke("ask:reset"),
     /** Answer text as it streams, and the deck tools the assistant calls. */
     onEvent: (cb: (event: AskEvent) => void): (() => void) => {
       const listener = (_e: unknown, event: AskEvent) => cb(event);
       ipcRenderer.on("ask:event", listener);
       return () => ipcRenderer.removeListener("ask:event", listener);
+    },
+  },
+  review: {
+    /** One turn of a PR's review assistant; text streams via onEvent with the PR key. */
+    send: (pr: ReviewPr, question: string, agent?: Agent): Promise<AskResult> => ipcRenderer.invoke("review:send", pr, question, agent),
+    reset: (repo: string, number: number): Promise<void> => ipcRenderer.invoke("review:reset", repo, number),
+    onEvent: (cb: (key: string, event: AskEvent) => void): (() => void) => {
+      const listener = (_e: unknown, key: string, event: AskEvent) => cb(key, event);
+      ipcRenderer.on("review:event", listener);
+      return () => ipcRenderer.removeListener("review:event", listener);
+    },
+    drafts: (repo: string, number: number): Promise<ReviewDraft[]> => ipcRenderer.invoke("review:drafts", repo, number),
+    addDraft: (repo: string, number: number, draft: DraftComment): Promise<ReviewDraft[]> => ipcRenderer.invoke("review:addDraft", repo, number, draft),
+    removeDraft: (repo: string, number: number, id: number): Promise<ReviewDraft[]> => ipcRenderer.invoke("review:removeDraft", repo, number, id),
+    clearDrafts: (repo: string, number: number): Promise<ReviewDraft[]> => ipcRenderer.invoke("review:clearDrafts", repo, number),
+    onDrafts: (cb: (repo: string, number: number, drafts: ReviewDraft[]) => void): (() => void) => {
+      const listener = (_e: unknown, repo: string, number: number, drafts: ReviewDraft[]) => cb(repo, number, drafts);
+      ipcRenderer.on("review:drafts", listener);
+      return () => ipcRenderer.removeListener("review:drafts", listener);
     },
   },
   window: {

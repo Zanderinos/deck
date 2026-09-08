@@ -62,7 +62,11 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     const onInput = term.onData((data) => window.deck.term.input(termId, data));
     const onTitleChange = term.onTitleChange(onTitle);
     const onResize = term.onResize(({ cols, rows }) => window.deck.term.resize(termId, cols, rows));
-    window.deck.term.resize(termId, term.cols, term.rows);
+    // One pty can be shown by two panes (a PR's agent panel and its terminal
+    // tab). Only a visible pane may size the pty; a hidden one cannot measure
+    // itself and would push a bogus size to the process.
+    const claimSize = () => { if (host.clientWidth > 0) window.deck.term.resize(termId, term.cols, term.rows); };
+    claimSize();
     void window.deck.term.attach(termId).then(({ buffer, sequence }) => {
       if (disposed) return;
       if (buffer) term.write(buffer);
@@ -70,8 +74,12 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
       live = []; restored = true;
     }).catch((error) => { if (!disposed) term.writeln(`\r\nCould not restore terminal: ${String(error)}`); });
 
+    // Reclaim the pty on every reveal too: another pane may have resized it
+    // meanwhile, and xterm only reports a resize when its own grid changed.
     const observer = new ResizeObserver(() => {
-      if (host.clientWidth > 0) fit.fit();
+      if (host.clientWidth === 0) return;
+      fit.fit();
+      claimSize();
     });
     observer.observe(host);
 

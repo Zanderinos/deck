@@ -6,11 +6,15 @@ const state = vi.hoisted(() => ({
   push: "review" as "review" | "push",
   inboxListeners: [] as ((inbox: PrInbox) => void)[],
   exitListeners: [] as ((id: string) => void)[],
+  kv: undefined as Record<string, string> | undefined,
+  sessions: [] as { status: string; term_id: string | null; title: string | null }[],
 }));
+vi.mock("../src/main/sessions.js", () => ({ listSessions: () => state.sessions }));
 vi.mock("../src/main/settings.js", async () => {
   const { defaultSettings } = await import("../src/shared/settings.js");
   return { getSettings: () => ({ ...defaultSettings, autoFix: { ...defaultSettings.autoFix, push: state.push } }) };
 });
+vi.mock("../src/main/db.js", () => ({ kvGet: () => state.kv, kvSet: (_key: string, value: Record<string, string>) => { state.kv = value; } }));
 vi.mock("../src/main/providers.js", () => ({ listRepos: () => [{ name: "api", path: "/repos/api" }, { name: "web", path: "/repos/Web" }] }));
 vi.mock("../src/main/pty.js", () => ({
   createTerm: async (opts: { cwd?: string; agent?: string; prompt?: string }) => { state.created.push(opts); return { id: `t${state.created.length}`, cwd: opts.cwd }; },
@@ -29,7 +33,7 @@ const pr = (number: number, extra: Partial<InboxPr> = {}): InboxPr => ({
 const inbox = (mine: InboxPr[]): PrInbox => ({ viewer: "me", at: 0, mine, reviewRequested: [] });
 const settings = { enabled: true, ci: true, conflicts: true, push: "review" as const };
 
-beforeEach(() => { state.created = []; state.push = "review"; });
+beforeEach(() => { state.created = []; state.push = "review"; state.sessions = []; });
 
 describe("auto-fix", () => {
   it("finds checkouts by directory name, case-insensitively", () => {
@@ -64,6 +68,25 @@ describe("auto-fix", () => {
     expect(runningFixes()).toEqual([]);
     expect(pendingAutoFixes(inbox([failing]), settings)).toEqual([]);
     expect(pendingAutoFixes(inbox([{ ...failing, updatedAt: "2026-09-07T11:00:00Z" }]), settings)).toHaveLength(1);
+  });
+  it("starts one agent when two refreshes race on the same problem, and remembers it across launches", async () => {
+    const conflicting = pr(5, { mergeable: "CONFLICTING" });
+    const [a, b] = await Promise.all([startFix(conflicting, "conflicts"), startFix(conflicting, "conflicts")]);
+    expect(a).toBe(b);
+    expect(state.created).toHaveLength(1);
+    expect(state.kv).toMatchObject({ "acme/api#5:conflicts": conflicting.updatedAt });
+  });
+  it("leaves a PR alone while a fix agent from before a restart is still alive in a terminal", () => {
+    const conflicting = pr(7, { mergeable: "CONFLICTING" });
+    state.sessions = [{ status: "working", term_id: "t1", title: fixPrompt(conflicting, "conflicts").slice(0, 120) }];
+    expect(pendingAutoFixes(inbox([conflicting]), settings)).toEqual([]);
+    state.sessions = [{ status: "ended", term_id: null, title: fixPrompt(conflicting, "conflicts").slice(0, 120) }];
+    expect(pendingAutoFixes(inbox([conflicting]), settings)).toHaveLength(1);
+  });
+  it("is off until the user opts in", async () => {
+    const { defaultSettings } = await import("../src/shared/settings.js");
+    expect(defaultSettings.autoFix.enabled).toBe(false);
+    expect(pendingAutoFixes(inbox([pr(6, { checks: "FAILURE" })]), defaultSettings.autoFix)).toEqual([]);
   });
   it("refuses PRs without a local checkout", async () => {
     await expect(startFix(pr(9, { repo: "acme/missing" }), "conflicts")).rejects.toThrow("No local checkout");

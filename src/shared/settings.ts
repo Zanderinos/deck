@@ -12,6 +12,10 @@ export interface JiraSettings {
   rejectedPattern: string;
   /** How many days of Done issues stay on the board. */
   doneWindowDays: number;
+  /** Board columns whose issues count as reviewable: a review request only
+   *  reaches the queue when its PR belongs to a card in one of these. Empty
+   *  keeps every review request. */
+  reviewColumns: string[];
   /** What happens to an issue when one of its PRs is merged from deck. */
   onMerge: OnMergeSettings;
 }
@@ -56,8 +60,18 @@ export interface AutoFixSettings {
 /** The page deck opens on. */
 export type DefaultView = "terminal" | "board" | "agent" | "reviews";
 
+/** Models the orchestrator can run on: aliases claude accepts plus the full id where no alias exists. */
+export const askModels = [
+  { id: "sonnet", label: "Sonnet" },
+  { id: "opus", label: "Opus" },
+  { id: "claude-fable-5-1", label: "Fable 5.1" },
+  { id: "haiku", label: "Haiku" },
+] as const;
+
 export interface DeckSettings {
   defaultAgent: Agent;
+  /** Claude model alias or id used by deck's own orchestrator turns. */
+  askModel: string;
   defaultView: DefaultView;
   autoFix: AutoFixSettings;
   jira: JiraSettings;
@@ -81,8 +95,9 @@ export interface DeckSettings {
 
 export const defaultSettings: DeckSettings = {
   defaultAgent: "claude",
+  askModel: "sonnet",
   defaultView: "terminal",
-  autoFix: { enabled: true, ci: true, conflicts: true, push: "review" },
+  autoFix: { enabled: false, ci: true, conflicts: true, push: "review" },
   jira: {
     baseUrl: "",
     email: "",
@@ -90,6 +105,7 @@ export const defaultSettings: DeckSettings = {
     boardId: "",
     rejectedPattern: "reject",
     doneWindowDays: 7,
+    reviewColumns: [],
     onMerge: { enabled: false, column: "", mode: "local" },
   },
   github: { owner: "" },

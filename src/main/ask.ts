@@ -1,18 +1,15 @@
 import { type Agent } from "../shared/agents.js";
+import { kvGet, kvSet } from "./db.js";
 import { getSettings } from "./settings.js";
 import { getBoardCache, jiraConfigured } from "./jira.js";
-import { execFile, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import os from "node:os";
-import { promisify } from "node:util";
+import { newConversation, runTurn, type AskResult, type Conversation, type OnEvent } from "./agentTurn.js";
 import { lastMessages } from "./indexer.js";
 import { runningFixes } from "./autofix.js";
 import { boardProjects, toolNames } from "./orchestrator.js";
 import { attentionReasons, getPrInbox } from "./prInbox.js";
 import { MCP_URL } from "./server.js";
-import { listSessions, markInternalSession, type AgentSession } from "./sessions.js";
-
-const exec = promisify(execFile);
+import { listSessions, type AgentSession } from "./sessions.js";
 
 // Each turn receives Deck's current session registry, the PR inbox and the
 // same cached Jira board shown in the app, plus deck's MCP tools for acting.
@@ -25,30 +22,23 @@ Questions about tasks or tickets in review refer to Jira board columns/statuses;
 For planning ("plan our next epic"): use jira_search for the project's open epics and backlog, ask what the goal is if unclear, propose a titled epic with 4-8 small tasks (one PR each, each leaving main working), and only create them after the user agrees. For "find a task we can fix now": jira_search the backlog (statusCategory = "To Do", unassigned or assigned to me, small and well-described), pick one with a matching local checkout, explain why, and offer to start_agent on it.
 State the board snapshot time for status answers; do not claim you fetched live Jira data unless you used a tool. For session questions, refer to sessions by title and project. Lead with waiting sessions when asked which agents need attention and explain what each is waiting for. Do not infer Jira task status from agent activity.`;
 
-const TURN_TIMEOUT_MS = 600_000;
-const READ_ONLY_TOOLS = "Read,Grep,Glob";
-
-/** The conversation deck is having with the user; null until the first ask. */
-let conversationId: string | undefined;
-let codexHistory: string[] = [];
-
-export function resetAsk(): void {
-  conversationId = undefined;
-  codexHistory = [];
+interface AskState {
+  conversation: Conversation;
 }
 
-const resolvedBins = new Map<Agent, Promise<string>>();
+const STATE_KEY = "ask";
 
-/** A packaged app inherits a bare PATH, so claude is resolved the way the
- *  user's own shell would resolve it. */
-function agentBin(agent: Agent): Promise<string> {
-  let resolved = resolvedBins.get(agent);
-  if (!resolved) {
-    resolved = exec(process.env.SHELL ?? "/bin/zsh", ["-lc", `command -v ${agent}`], { timeout: 10_000 })
-      .then(({ stdout }) => stdout.trim().split("\n").pop() || agent).catch(() => agent);
-    resolvedBins.set(agent, resolved);
-  }
-  return resolved;
+/** The conversation deck is having with the user. It outlives the process so
+ *  a restarted deck (or a dev reload) continues the same chat. */
+let state: AskState = { conversation: kvGet<AskState>(STATE_KEY)?.conversation ?? newConversation() };
+
+function saveState(conversation: Conversation): void {
+  state = { conversation };
+  kvSet(STATE_KEY, state);
+}
+
+export function resetAsk(): void {
+  saveState(newConversation());
 }
 
 function ago(ts: number): string {
@@ -148,160 +138,26 @@ function askContext(): string {
   return `<deck_context>\nNow: ${new Date().toISOString()}${projects.length ? `\nJira projects on the board: ${projects.join(", ")}` : ""}\n\n<agent_sessions>\n${sessionSnapshot()}\n</agent_sessions>\n\n<pull_requests>\n${inboxSnapshot()}\n</pull_requests>\n\n<jira_board>\n${boardSnapshot()}\n</jira_board>\n</deck_context>`;
 }
 
-export interface AskResult {
-  ok: boolean;
-  text: string;
-  error?: string;
-}
-
-/** What the agent page shows while a turn runs: answer text, or a tool the assistant is using. */
-export type AskEvent = { type: "text"; text: string } | { type: "tool"; name: string; input: string };
-
-type OnEvent = (event: AskEvent) => void;
+export type { AskEvent, AskResult } from "./agentTurn.js";
 
 const MCP_SERVER = "deck";
-const mcpToolNames = () => toolNames().map((t) => `mcp__${MCP_SERVER}__${t}`);
 
 /** One conversation, so overlapping asks queue instead of resuming the same
  *  session twice at once. */
 let turn: Promise<unknown> = Promise.resolve();
 
 /** Runs one turn against the sessions snapshot, streaming text as it arrives. */
-export function askDeck(question: string, onEvent: OnEvent, agent: Agent = getSettings().defaultAgent): Promise<AskResult> {
-  const result = turn.then(() => agent === "codex" ? runCodexTurn(question, onEvent) : runTurn(question, onEvent));
-  turn = result.catch(() => {});
-  return result;
-}
-
-function runTurn(question: string, onEvent: OnEvent): Promise<AskResult> {
-  const prompt = `${askContext()}\n\n${question}`;
-  const args = [
-    "-p",
-    prompt,
-    "--output-format",
-    "stream-json",
-    "--include-partial-messages",
-    "--verbose",
-    "--append-system-prompt",
-    SYSTEM_PROMPT,
-    // Built-in tools stay read-only: acting happens through deck's own MCP
-    // tools, which the user can see and audit in the agent page.
-    "--tools",
-    READ_ONLY_TOOLS,
-    "--allowedTools",
-    [READ_ONLY_TOOLS, ...mcpToolNames()].join(","),
-    "--mcp-config",
-    JSON.stringify({ mcpServers: { [MCP_SERVER]: { type: "http", url: MCP_URL } } }),
-    "--strict-mcp-config",
-  ];
-  if (conversationId) {
-    args.push("--resume", conversationId);
-  } else {
-    conversationId = randomUUID();
-    args.push("--session-id", conversationId);
-  }
-  // deck's own turns fire the same hooks as any session; without this they
-  // would show up in the very list they are describing.
-  markInternalSession(conversationId);
-
-  return run(args, onEvent, "claude");
-}
-
-async function runCodexTurn(question: string, onEvent: OnEvent): Promise<AskResult> {
-  const prompt = `${SYSTEM_PROMPT}\n\n${codexHistory.join("\n\n")}\n\n${askContext()}\n\nuser: ${question}`;
-  const result = await run(["exec", "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "read-only",
-    "--config", 'approval_policy="never"', "--config", "features.hooks=false",
-    "--config", `mcp_servers.${MCP_SERVER}.url="${MCP_URL}"`, "--skip-git-repo-check", "--", prompt], onEvent, "codex");
-  if (result.ok) codexHistory = [...codexHistory, `user: ${question}`, `assistant: ${result.text}`].slice(-20);
-  return result;
-}
-
-interface StreamLine {
-  type?: string;
-  subtype?: string;
-  result?: string;
-  is_error?: boolean;
-  item?: { type?: string; text?: string; tool?: string; server?: string; arguments?: unknown };
-  error?: { message?: string };
-  message?: string | { content?: { type?: string; name?: string; input?: unknown }[] };
-  event?: { type?: string; delta?: { type?: string; text?: string } };
-}
-
-const toolEvent = (name: string, input: unknown): AskEvent => ({
-  type: "tool",
-  name: name.replace(new RegExp(`^mcp__${MCP_SERVER}__`), ""),
-  input: JSON.stringify(input ?? {}).slice(0, 200),
-});
-
-async function run(args: string[], onEvent: OnEvent, agent: Agent): Promise<AskResult> {
-  const onDelta = (text: string) => onEvent({ type: "text", text });
-  const bin = await agentBin(agent);
-  return new Promise((resolve) => {
+export function askDeck(question: string, onEvent: OnEvent, agent: Agent = getSettings().defaultAgent, model: string = getSettings().askModel): Promise<AskResult> {
+  const result = turn.then(async () => {
     // Home is a neutral working directory: the question is about sessions,
     // not about whatever repo happens to be open.
-    // stdin is closed, not piped: claude waits three seconds for piped input
-    // before giving up on it.
-    const child = spawn(bin, args, {
-      cwd: os.homedir(),
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
+    const outcome = await runTurn({
+      agent, model, systemPrompt: SYSTEM_PROMPT, context: askContext(), question, cwd: os.homedir(),
+      mcp: { name: MCP_SERVER, url: MCP_URL, tools: toolNames() }, conversation: state.conversation, onEvent,
     });
-    const timer = setTimeout(() => child.kill(), TURN_TIMEOUT_MS);
-    let text = "";
-    let stderr = "";
-    let failed = false;
-    let buffered = "";
-
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      buffered += chunk;
-      let nl: number;
-      while ((nl = buffered.indexOf("\n")) >= 0) {
-        const line = buffered.slice(0, nl);
-        buffered = buffered.slice(nl + 1);
-        if (!line) continue;
-        let msg: StreamLine;
-        try {
-          msg = JSON.parse(line) as StreamLine;
-        } catch {
-          continue;
-        }
-        if (agent === "codex" && msg.type === "item.started" && msg.item?.type === "mcp_tool_call") {
-          onEvent(toolEvent(msg.item.tool ?? "tool", msg.item.arguments));
-        } else if (agent === "claude" && msg.type === "assistant" && typeof msg.message === "object") {
-          for (const block of msg.message.content ?? []) if (block.type === "tool_use") onEvent(toolEvent(block.name ?? "tool", block.input));
-        } else if (agent === "codex" && msg.type === "item.completed" && msg.item?.type === "agent_message") {
-          const delta = (text ? "\n\n" : "") + (msg.item.text ?? "");
-          text += delta;
-          onDelta(delta);
-        } else if (agent === "codex" && (msg.type === "turn.failed" || msg.type === "error")) {
-          failed = true;
-          stderr = msg.error?.message ?? (typeof msg.message === "string" ? msg.message : "Codex turn failed");
-        } else if (msg.type === "stream_event" && msg.event?.delta?.type === "text_delta") {
-          const delta = msg.event.delta.text ?? "";
-          text += delta;
-          onDelta(delta);
-        } else if (msg.type === "result" && msg.is_error) {
-          failed = true;
-          stderr = msg.result ?? stderr;
-        }
-      }
-    });
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => (stderr += chunk));
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      resolve({ ok: false, text: "", error: `Could not run ${agent}: ${err.message}` });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (text.trim() && code === 0 && !failed) return resolve({ ok: true, text });
-      resolve({
-        ok: false,
-        text,
-        error: stderr.trim() || `${agent} exited with code ${code}`,
-      });
-    });
+    saveState(outcome.conversation);
+    return outcome.result;
   });
+  turn = result.catch(() => {});
+  return result;
 }

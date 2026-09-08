@@ -1,45 +1,28 @@
-import { agentLabels, type Agent } from "../../../shared/agents.js";
-import type { TermMeta } from "../../../main/pty.js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IssuePr, PrDetail } from "../../../main/github.js";
-import type { AgentSession } from "../../../main/sessions.js";
-import { useAgentSessions } from "../lib/useSessions.js";
-import { TerminalPane } from "../terminal/TerminalPane.js";
+import type { Agent } from "../../../shared/agents.js";
+import { AgentSelect } from "../agents/AgentSelect.js";
+import { ChatTurns } from "../agents/ChatTurns.js";
+import { openTerminalTab } from "../lib/bus.js";
 import { Icon } from "./icons.js";
+import type { ReviewChat } from "./useReviewChat.js";
 
-const openingTerms = new Map<string, Promise<TermMeta>>();
-
-const DRAFTS_URL = "http://127.0.0.1:47800/api/pr-drafts";
-
-const statusLabel: Record<AgentSession["status"], { label: string; color: string }> = {
-  working: { label: "working", color: "text-blue" },
-  needs_input: { label: "needs input", color: "text-orange" },
-  needs_review: { label: "needs review", color: "text-orange" },
-  idle: { label: "idle", color: "text-green" },
-  ended: { label: "ended", color: "text-dim" },
-};
+// The review assistant next to the diff: a conversation about this PR whose
+// findings arrive as draft comments in the review screen. It is not a
+// terminal session, so it never shows up in the sidebar; work that edits the
+// branch (improving your own PR, addressing feedback) still goes to a proper
+// coding agent in a terminal tab.
 
 const isAuthor = (detail: PrDetail | null | undefined) =>
   Boolean(detail && detail.viewer && detail.viewer === detail.author);
 
-const contextPrompt = (pr: IssuePr, detail: PrDetail | null | undefined) =>
-  `We are working on PR #${pr.number} in ${pr.repo} — "${pr.title}"` +
-  (detail ? ` (${detail.headRefName} → ${detail.baseRefName}).` : ".") +
-  (isAuthor(detail)
-    ? " It is my own PR: I may ask you to continue the task, improve the code, or address feedback."
-    : " I am reviewing it and may ask you about the change, to draft comments, or to address feedback.") +
-  ` This checkout is the PR's repository. Use \`gh pr diff ${pr.number}\` and \`gh pr view ${pr.number} --comments\` for the change and its discussion. Wait for instructions.`;
+const DRAFT_PROMPT = "Review the diff for real problems — bugs, missed cases, unclear naming, duplicated logic, missing tests — and add each finding as a draft comment on the right line. Skip style nits. Then summarise what you drafted in a few lines.";
+const EXPLAIN_PROMPT = "Walk me through this change: what it does, how the pieces fit together, and anything risky or surprising I should look at first.";
 
 const improvePrompt = (pr: IssuePr, detail: PrDetail | null | undefined) =>
   `Read the diff of my PR #${pr.number} in ${pr.repo} (\`gh pr diff ${pr.number}\`)` +
   (detail ? `, on branch ${detail.headRefName},` : "") +
   ` and look for what is worth improving before others review it: bugs, missed edge cases, unclear names, duplicated logic, missing tests. Make the changes on the branch in this checkout, run the project's checks, and show me the diff before committing.`;
-
-const draftPrompt = (pr: IssuePr) =>
-  `Review PR #${pr.number} in ${pr.repo} (\`gh pr diff ${pr.number}\`) for real problems — bugs, missed cases, unclear naming — not style nits. ` +
-  `Write each finding as a review comment and send them all to deck as one JSON array of {"path","line","side":"RIGHT","body"} (line is the new-side line number):\n` +
-  `curl -s -m 3 -X POST '${DRAFTS_URL}' -H "x-deck-term: $DECK_TERM_ID" -H 'Content-Type: application/json' --data-binary @/tmp/deck-pr-drafts.json\n` +
-  `They appear as drafts in the review screen for me to edit and send; do not post anything to GitHub yourself. If nothing is worth commenting, say so.`;
 
 const fixPrompt = (pr: IssuePr, detail: PrDetail | null | undefined) =>
   `Address the open review feedback on PR #${pr.number} in ${pr.repo}` +
@@ -47,150 +30,91 @@ const fixPrompt = (pr: IssuePr, detail: PrDetail | null | undefined) =>
   `: read the unresolved threads with \`gh api repos/${pr.repo}/pulls/${pr.number}/comments\` and \`gh pr view ${pr.number} --comments\`, check out the PR branch if this checkout is not on it, make the changes, run the project's checks, and commit in one line without agent authorship. Show me the diff before pushing.`;
 
 export interface PrAgentPanelProps {
-  agent: Agent;
   pr: IssuePr;
   detail: PrDetail | null | undefined;
   cwd: string | undefined;
   issueKey?: string;
-  /** Prompt handed in from elsewhere on the screen (the selection bar's Ask agent). */
-  pending: string | undefined;
-  onPendingSent: () => void;
-  onTermId: (termId: string | undefined) => void;
+  agent: Agent;
+  onAgent: (agent: Agent) => void;
+  chat: ReviewChat;
   onClose: () => void;
 }
 
-/**
- * An agent session pinned to this PR, living in a pty like every other deck
- * terminal so it survives reloads and shows up in the sessions list. The
- * terminal itself is the transcript and the input; quick actions type into it.
- */
-export function PrAgentPanel({
-  agent,
-  pr,
-  detail,
-  cwd,
-  issueKey,
-  pending,
-  onPendingSent,
-  onTermId,
-  onClose,
-}: PrAgentPanelProps) {
-  const storageKey = `deck.pr.agent.${pr.repo}#${pr.number}${agent === "codex" ? ":codex" : ""}`;
-  const [termId, setTermId] = useState<string>();
-  const [title, setTitle] = useState(agentLabels[agent]);
-  const [error, setError] = useState("");
-  const sessions = useAgentSessions();
-  const session = termId ? sessions.find((s) => s.term_id === termId) : undefined;
+export function PrAgentPanel({ pr, detail, cwd, issueKey, agent, onAgent, chat, onClose }: PrAgentPanelProps) {
+  const { turns, busy, ask, reset } = chat;
+  const [draft, setDraft] = useState("");
+  const scroller = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
 
-  // Reattach to the PR's terminal if it is still alive, else start one — once
-  // the PR detail is in, so the opening prompt knows whose PR this is.
-  useEffect(() => {
-    if (detail === undefined) return;
-    let cancelled = false;
-    let opening = openingTerms.get(storageKey);
-    if (!opening) {
-      opening = window.deck.term.list().then(async (terms) => {
-        const remembered = sessionStorage.getItem(storageKey);
-        const existing = terms.find((term) => term.id === remembered);
-        if (existing) return existing;
-        const meta = await window.deck.term.create({ cwd, agent, prompt: contextPrompt(pr, detail), issueKey });
-        sessionStorage.setItem(storageKey, meta.id);
-        return meta;
-      });
-      openingTerms.set(storageKey, opening);
-      void opening.finally(() => openingTerms.delete(storageKey)).catch(() => {});
-    }
-    void opening.then((meta) => { if (!cancelled) setTermId(meta.id); })
-      .catch((error) => { if (!cancelled) setError(String(error)); });
-    return () => { cancelled = true; };
-    // Detail content can refresh without replacing the active terminal.
-  }, [storageKey, detail === undefined]);
+  useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight }); }, [turns]);
+  useEffect(() => { input.current?.focus(); }, []);
 
-  useEffect(() => {
-    if (termId) sessionStorage.setItem(storageKey, termId);
-    onTermId(termId);
-  }, [termId, storageKey, onTermId]);
+  const send = (question: string) => { setDraft(""); void ask(question); };
+  const startCodingAgent = (prompt: string) => openTerminalTab({ cwd, agent, prompt, issueKey });
 
-  // A closed pty drops the panel back to a fresh session next time it opens.
-  useEffect(
-    () =>
-      window.deck.term.onExit((id) => {
-        if (id !== termId) return;
-        sessionStorage.removeItem(storageKey);
-        setTermId(undefined);
-      }),
-    [termId, storageKey],
+  const action = (label: string, icon: "pencil" | "sparkle" | "check", onClick: () => void, title: string, disabled = false) => (
+    <button key={label} onClick={onClick} disabled={disabled} title={title}
+      className="flex items-center gap-1 rounded-md border border-edge2 px-2 py-0.5 text-[11px] text-body hover:border-edge3 hover:text-ink disabled:opacity-40">
+      <Icon name={icon} size={10} /> {label}
+    </button>
   );
 
-  // The prompt arrives as one paste; Enter has to come as its own keystroke
-  // or Claude's input folds it into the pasted text instead of submitting.
-  const send = (prompt: string) => {
-    if (!termId) return;
-    window.deck.term.input(termId, `\x1b[200~${prompt}\x1b[201~`);
-    setTimeout(() => window.deck.term.input(termId, "\r"), 200);
-  };
-
-  useEffect(() => {
-    if (!pending || !termId) return;
-    send(pending);
-    onPendingSent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, termId]);
-
-  const status = session ? statusLabel[session.status] : undefined;
-
   return (
-    <div className="absolute bottom-0 right-0 top-0 z-30 flex w-[440px] flex-col border-l border-edge bg-panel shadow-xl">
-      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 font-sans text-[12px]">
+    <section aria-label="Review assistant" className="absolute bottom-0 right-0 top-0 z-30 flex w-[440px] flex-col border-l border-edge bg-panel shadow-xl font-sans">
+      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-[12px]">
         <Icon name="sparkle" className="text-accent" />
-        <span className="text-ink">Agent</span>
-        <span className="truncate text-dim">{title}</span>
-        {status && <span className={`ml-auto text-[11px] ${status.color}`}>{status.label}</span>}
-        <button
-          onClick={onClose}
-          className={`${status ? "" : "ml-auto"} text-dim hover:text-ink`}
-          title="Close panel"
-        >
+        <span className="text-ink">Review assistant</span>
+        <span className="truncate text-dim">#{pr.number}</span>
+        {turns.length > 0 && <button onClick={reset} className="ml-auto rounded-md border border-edge2 px-2 py-0.5 text-[11px] text-body hover:text-ink" title="Start the conversation over (drafts stay)">New chat</button>}
+        <button onClick={onClose} className={`${turns.length > 0 ? "" : "ml-auto"} text-dim hover:text-ink`} aria-label="Close review assistant" title="Close (a)">
           <Icon name="x" size={11} />
         </button>
       </div>
-      <div className="flex items-center gap-1.5 border-b border-edge px-3 py-1.5 font-sans text-[11px]">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-edge px-3 py-1.5">
         {isAuthor(detail) ? (
-          <button
-            onClick={() => send(improvePrompt(pr, detail))}
-            disabled={!termId}
-            className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-            title="The selected agent improves your diff on the branch"
-          >
-            <Icon name="sparkle" size={10} /> Improve
-          </button>
+          <>
+            {action("Improve on branch", "sparkle", () => startCodingAgent(improvePrompt(pr, detail)), "A coding agent improves your diff in a terminal tab", !cwd)}
+            {action("Address feedback", "check", () => startCodingAgent(fixPrompt(pr, detail)), "A coding agent addresses open review threads in a terminal tab", !cwd)}
+          </>
         ) : (
-          <button
-            onClick={() => send(draftPrompt(pr))}
-            disabled={!termId}
-            className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-            title="The selected agent reviews the diff and returns draft comments"
-          >
-            <Icon name="pencil" size={10} /> Draft review comments
-          </button>
+          <>
+            {action("Draft review comments", "pencil", () => send(DRAFT_PROMPT), "Reviews the diff and puts findings in the review screen as drafts", busy)}
+            {action("Explain the change", "sparkle", () => send(EXPLAIN_PROMPT), "A guided tour of the diff", busy)}
+          </>
         )}
-        <button
-          onClick={() => send(fixPrompt(pr, detail))}
-          disabled={!termId}
-          className="rounded-md border border-edge2 px-2 py-0.5 text-body hover:border-edge3 hover:text-ink disabled:opacity-40"
-          title="The selected agent addresses open review threads"
-        >
-          <Icon name="check" size={10} /> Address feedback
-        </button>
-        {!cwd && <span className="ml-auto text-dim">no local checkout found</span>}
+        {!cwd && <span className="ml-auto text-[11px] text-dim">no local checkout</span>}
       </div>
-      <div className="min-h-0 flex-1 p-1">
-        {termId ? (
-          <TerminalPane termId={termId} active onTitle={setTitle} />
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+        {turns.length === 0 ? (
+          <div className="flex flex-col gap-2 text-[11px] leading-relaxed text-dim">
+            <p>Ask anything about this pull request. The assistant reads the diff, the existing threads and the local checkout.</p>
+            <p>Review comments it writes appear as <span className="text-accent">drafts</span> in the diff for you to edit and send with your review; nothing goes to GitHub on its own.</p>
+            <p>Select lines in the diff and choose <span className="text-soft">Ask agent</span> to bring them here.</p>
+          </div>
         ) : (
-          <div className="p-3 font-sans text-[11px] text-dim">{error || `starting ${agentLabels[agent]}…`}</div>
+          <div className="flex flex-col gap-3"><ChatTurns turns={turns} /></div>
         )}
       </div>
-    </div>
+      <div className="border-t border-edge p-2">
+        <div className="rounded-xl border border-edge2 bg-card">
+          <textarea
+            ref={input}
+            aria-label="Ask the review assistant"
+            value={draft}
+            rows={2}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(draft); } }}
+            placeholder={busy ? "thinking…" : "Ask about this PR…"}
+            disabled={busy}
+            className="w-full resize-none bg-transparent px-3 pt-2.5 text-[12px] text-ink placeholder:text-dim focus:outline-none disabled:opacity-50"
+          />
+          <div className="flex items-center gap-2 px-2 pb-2">
+            <fieldset disabled={busy}><AgentSelect value={agent} onChange={onAgent} /></fieldset>
+            <button aria-label="Send" title="Send (Enter)" disabled={busy || !draft.trim()} onClick={() => send(draft)}
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-accent text-bg disabled:opacity-30">↑</button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

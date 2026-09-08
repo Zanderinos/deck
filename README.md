@@ -67,7 +67,7 @@ Every pull request waiting on your review, one at a time like a mail client. Eac
 
 ### Auto-fix
 
-When CI fails or a PR of yours gets merge conflicts, Deck starts a fix agent in the repo's local checkout. By default the agent stops with the diff and waits for your approval before pushing. **Settings → General** can let it push unattended, or turn either trigger off.
+Opt-in, off by default. Once enabled in **Settings → General**, Deck starts a fix agent in the repo's local checkout when CI fails or a PR of yours gets merge conflicts, once per push. The agent stops with the diff and waits for your approval before pushing unless you let it push unattended.
 
 ### Themes and plugins
 

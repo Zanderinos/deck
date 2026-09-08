@@ -94,6 +94,10 @@ app.whenReady().then(async () => {
   await click('Review workspace with Codex');
   if (!(await run(`document.body.innerText.includes('Codex')`))) throw Error('Plugin Codex launch failed');
   await click('Settings');
+  await click('General & integrations');
+  await wait(200);
+  if (!(await run(`document.body.innerText.includes('Rejected status')`))) throw Error('General settings did not render');
+  await screenshot('general-settings');
   await click('Appearance');
   await click('Use Carbon theme');
   await click('terminal');
@@ -119,6 +123,18 @@ app.whenReady().then(async () => {
   await screenshot('agent-answer');
   await click('New chat');
   if (!(await run(`document.body.innerText.includes('Get started with some examples')`))) throw Error('New chat did not reset the agent page');
+  await click('terminal');
+  await click('Open agent');
+  const dock = () => run(`document.querySelector('section[aria-label="Agent dock"]')?.innerText ?? ''`);
+  if (!(await dock()).includes('Get started with some examples')) throw Error('Agent dock did not open from the terminal page');
+  await click('PRs to review');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  if (!(await dock()).includes('Ready')) throw Error('Agent dock did not answer');
+  await screenshot('agent-dock');
+  await click('Close agent dock');
+  await click('agent');
+  if (!(await run(`[...document.querySelectorAll('.md')].some(element => element.innerText.includes('Ready'))`))) throw Error('Agent page lost the conversation started in the dock');
+  await click('New chat');
   await click('reviews');
   const header = () => run(`document.body.innerText`);
   if (!(await header()).includes('1 of 2') || !(await header()).includes('Migrate sessions table')) throw Error('Review queue did not start with the oldest non-draft request');
@@ -146,7 +162,7 @@ app.whenReady().then(async () => {
   await click('Exit presentation view');
   if ((await run('window.deck.fullscreenCalls().at(-1)')) !== false) throw Error('Leaving the mode did not restore the window');
   if (errors.length) throw Error(errors.join('\n'));
-  console.log('UI smoke passed: focus, splits, files, Zen, Presentation, font sizing, session navigation, Escape, sidebar, Codex launch, themes, custom preview/save, plugin worker panel, plugin themes, disable/enable agent command, Codex history preview and resume, recent suggestions, expiry, dismissal, search and close all, agent page rail, answer, tool trace and reset, review queue navigation and approve-then-next, Zen and Presentation on the reviews page.');
+  console.log('UI smoke passed: focus, splits, files, Zen, Presentation, font sizing, session navigation, Escape, sidebar, Codex launch, themes, custom preview/save, plugin worker panel, plugin themes, disable/enable agent command, Codex history preview and resume, recent suggestions, expiry, dismissal, search and close all, agent page rail, answer, tool trace and reset, agent dock sharing the conversation, review queue navigation and approve-then-next, Zen and Presentation on the reviews page.');
   window.destroy();
   app.quit();
 }).catch((error) => { console.error(error); app.exit(1); });

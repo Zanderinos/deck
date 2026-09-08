@@ -13,17 +13,17 @@ import { listSessions } from "./sessions.js";
 // HTTP, JSON responses) from deck's own server. This is what turns "ask deck"
 // into an orchestrator: it can start agents, talk to them and act on PRs.
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
-interface Tool {
+export interface Tool {
   name: string;
   description: string;
   inputSchema: Json;
   run: (args: Json) => Promise<unknown>;
 }
 
-const str = (description: string) => ({ type: "string", description });
-const schema = (properties: Json, required: string[] = []) => ({ type: "object", properties, required });
+export const str = (description: string) => ({ type: "string", description });
+export const schema = (properties: Json, required: string[] = []) => ({ type: "object", properties, required });
 
 function requirePr(args: Json): InboxPr {
   const repo = String(args.repo ?? "");
@@ -172,8 +172,9 @@ export interface JsonRpc {
 
 type RpcResponse = { status: number; body?: unknown };
 
-/** Handles one MCP request; notifications get 202 with no body. */
-export async function handleMcp(message: JsonRpc): Promise<RpcResponse> {
+/** Handles one MCP request; notifications get 202 with no body. The tool set
+ *  defaults to the orchestrator's; the PR review assistant serves its own. */
+export async function handleMcp(message: JsonRpc, available: Tool[] = tools): Promise<RpcResponse> {
   const reply = (result: unknown) => ({ status: 200, body: { jsonrpc: "2.0", id: message.id ?? null, result } });
   const fail = (code: number, text: string) => ({ status: 200, body: { jsonrpc: "2.0", id: message.id ?? null, error: { code, message: text } } });
   if (message.method.startsWith("notifications/")) return { status: 202 };
@@ -187,9 +188,9 @@ export async function handleMcp(message: JsonRpc): Promise<RpcResponse> {
     case "ping":
       return reply({});
     case "tools/list":
-      return reply({ tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+      return reply({ tools: available.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
     case "tools/call": {
-      const tool = tools.find((t) => t.name === message.params?.name);
+      const tool = available.find((t) => t.name === message.params?.name);
       if (!tool) return fail(-32602, `Unknown tool ${String(message.params?.name)}`);
       try {
         const result = await tool.run((message.params?.arguments as Json | undefined) ?? {});

@@ -6,8 +6,8 @@ import { shortPath, useGitSummary } from "../lib/useGitSummary.js";
 import { useTabs, type TermTab } from "../store.js";
 import { Icon } from "../board/icons.js";
 import { useSessionSuggestions } from "./useSessionSuggestions.js";
-import { usePrInbox } from "../lib/useInbox.js";
-import { isWaiting, prProblems } from "../agents/attention.js";
+import { useReviewQueue } from "../lib/reviews.js";
+import { useAttentionCount } from "../agents/attention.js";
 import type { View } from "../App.js";
 
 const statusLabels: Record<AgentSession["status"], string> = {
@@ -62,9 +62,8 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const { tabs, newTab, focusTab, closeTab } = useTabs();
   const sessions = useAgentSessions();
-  const inbox = usePrInbox();
-  const attention = sessions.filter((session) => session.status !== "ended" && isWaiting(session)).length + (inbox?.mine ?? []).filter((pr) => prProblems(pr).length > 0).length;
-  const reviews = (inbox?.reviewRequested ?? []).filter((pr) => !pr.isDraft).length;
+  const attention = useAttentionCount();
+  const reviews = useReviewQueue().queue.length;
   const { suggestions, dismissSessions } = useSessionSuggestions(sessions);
   const [showMore, setShowMore] = useState(false);
   const [width, setWidth] = useState(() => Math.min(380, Math.max(220, Number(localStorage.getItem("deck.sidebar.width")) || 252)));
@@ -171,10 +170,10 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
       catch (error) { setError(String(error)); }
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
-    <div className="flex items-center gap-1 border-t border-edge px-2 py-2">
+    <div className="@container flex items-center gap-1 border-t border-edge px-2 py-2">
       {(["terminal", "board", "agent", "reviews"] as const).map((target) => {
         const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
-        return <button key={target} onClick={() => onView(target)} title={target} className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} />{target}{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
+        return <button key={target} onClick={() => onView(target)} title={target} className={`flex flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} /><span className="hidden @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
       })}
     </div>
   </aside>;

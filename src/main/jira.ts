@@ -231,6 +231,25 @@ interface AgileIssuePage {
   total: number;
 }
 
+export interface BoardColumnStatuses {
+  name: string;
+  statuses: { id: string; name: string }[];
+}
+
+/** Live board columns with their status names, for the settings page. */
+export async function fetchBoardColumns(): Promise<BoardColumnStatuses[]> {
+  if (!jiraConfigured()) return [];
+  const [conf, statuses] = await Promise.all([
+    request<AgileConfiguration>(`/rest/agile/1.0/board/${config().boardId}/configuration`),
+    request<{ id: string; name: string }[]>("/rest/api/3/status"),
+  ]);
+  const names = new Map(statuses.map((s) => [s.id, s.name]));
+  return conf.columnConfig.columns.map((col) => ({
+    name: col.name,
+    statuses: col.statuses.map((s) => ({ id: s.id, name: names.get(s.id) ?? s.id })),
+  }));
+}
+
 const CACHE_KEY = "board_cache";
 const listeners = new Set<(b: BoardCache) => void>();
 let timer: NodeJS.Timeout | undefined;

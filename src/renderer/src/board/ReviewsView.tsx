@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { IssuePr, ReviewEvent } from "../../../main/github.js";
-import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { InboxPr } from "../../../main/prInbox.js";
-import { usePrInbox } from "../lib/useInbox.js";
+import { issueFor, useReviewQueue } from "../lib/reviews.js";
 import { Icon } from "./icons.js";
 import { PrScreen } from "./PrScreen.js";
 
@@ -10,38 +9,16 @@ import { PrScreen } from "./PrScreen.js";
 // with next/previous like a mail client. Approving or requesting changes
 // moves on by itself; the PR screen underneath is the same one the board opens.
 
-const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/;
-
 const isTyping = (e: KeyboardEvent) => ["TEXTAREA", "INPUT", "SELECT"].includes((e.target as HTMLElement)?.tagName ?? "");
-
-/** The Jira card a PR belongs to, by key in its title or branch. */
-export function issueFor(pr: InboxPr, board: BoardCache | undefined): BoardIssue | undefined {
-  const key = ISSUE_KEY.exec(`${pr.title} ${pr.headRefName}`)?.[0];
-  return key ? board?.issues.find((i) => i.key === key) : undefined;
-}
-
-/** Oldest request first, so nothing sits unreviewed while new ones jump the queue. */
-export function reviewQueue(requested: InboxPr[], done: Set<string>): InboxPr[] {
-  return requested.filter((pr) => !pr.isDraft && !done.has(`${pr.repo}#${pr.number}`)).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
-}
 
 const toIssuePr = (pr: InboxPr): IssuePr => ({ repo: pr.repo, number: pr.number, title: pr.title, state: "OPEN", isDraft: pr.isDraft, url: pr.url, author: pr.author, updatedAt: pr.updatedAt });
 
 export function ReviewsView({ visible }: { visible: boolean }) {
-  const inbox = usePrInbox();
-  const [board, setBoard] = useState<BoardCache>();
-  const [jiraBaseUrl, setJiraBaseUrl] = useState<string>();
   const [done, setDone] = useState(new Set<string>());
+  const { queue, board, jiraBaseUrl, loaded } = useReviewQueue(done);
   const [index, setIndex] = useState(0);
   const [reviewed, setReviewed] = useState<{ key: string; event: ReviewEvent }>();
 
-  useEffect(() => {
-    void window.deck.board.get().then(setBoard);
-    void window.deck.getSettings().then((s) => setJiraBaseUrl(s.jira.baseUrl));
-    return window.deck.board.onChanged(setBoard);
-  }, []);
-
-  const queue = useMemo(() => reviewQueue(inbox?.reviewRequested ?? [], done), [inbox, done]);
   const current = queue[Math.min(index, Math.max(queue.length - 1, 0))];
   const position = current ? queue.indexOf(current) : -1;
   const issue = current ? issueFor(current, board) : undefined;
@@ -91,7 +68,7 @@ export function ReviewsView({ visible }: { visible: boolean }) {
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[12px] text-dim">
           <Icon name="check" size={20} className="text-green" />
-          {inbox ? "Inbox zero: no pull requests are waiting on your review." : "Waiting for GitHub…"}
+          {loaded ? "Inbox zero: no pull requests are waiting on your review." : "Waiting for GitHub…"}
         </div>
       )}
     </div>

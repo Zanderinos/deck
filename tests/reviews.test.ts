@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+import type { BoardCache } from "../src/main/jira.js";
+import type { InboxPr } from "../src/main/prInbox.js";
+import { issueFor, reviewQueue } from "../src/renderer/src/lib/reviews.js";
+
+const pr = (number: number, title: string, extra: Partial<InboxPr> = {}): InboxPr => ({
+  repo: "acme/api", number, title, url: "", author: "teammate", isDraft: false, updatedAt: `2026-09-0${number}T10:00:00Z`,
+  headRefName: "f", baseRefName: "main", reviewDecision: null, mergeable: "MERGEABLE", checks: "SUCCESS", ...extra,
+});
+
+const board: BoardCache = {
+  boardName: "INI", at: 0,
+  columns: [{ name: "In Progress", statusIds: ["3"] }, { name: "Review", statusIds: ["4", "5"] }],
+  issues: [
+    { id: "1", key: "INI-1", summary: "", statusId: "4", statusName: "Review", assignee: null, assigneeId: null, updated: "" },
+    { id: "2", key: "INI-2", summary: "", statusId: "3", statusName: "In Progress", assignee: null, assigneeId: null, updated: "" },
+  ],
+};
+
+const requested = [pr(3, "INI-1 add thing"), pr(2, "INI-2 other thing"), pr(1, "no key", { headRefName: "chore/x" }), pr(4, "INI-1 draft", { isDraft: true })];
+
+describe("reviewQueue", () => {
+  it("keeps every non-draft request when no review columns are configured, oldest first", () => {
+    expect(reviewQueue(requested, board, []).map((p) => p.number)).toEqual([1, 2, 3]);
+  });
+
+  it("only keeps PRs whose card sits in a review column", () => {
+    expect(reviewQueue(requested, board, ["Review"]).map((p) => p.number)).toEqual([3]);
+  });
+
+  it("drops everything when columns are configured but the board has not synced", () => {
+    expect(reviewQueue(requested, undefined, ["Review"])).toEqual([]);
+  });
+
+  it("closes over reviewed PRs", () => {
+    expect(reviewQueue(requested, board, [], new Set(["acme/api#2"])).map((p) => p.number)).toEqual([1, 3]);
+  });
+});
+
+describe("issueFor", () => {
+  it("finds the card by key in the title or branch", () => {
+    expect(issueFor(pr(9, "fix it", { headRefName: "INI-2-fix" }), board)?.key).toBe("INI-2");
+    expect(issueFor(pr(9, "fix it"), board)).toBeUndefined();
+  });
+});
