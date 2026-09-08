@@ -82,6 +82,8 @@ npm install
 npm run dev
 ```
 
+**Requirements.** Node 22 or newer.
+
 Install and authenticate [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) separately. Pick the default agent in **Settings → General**; new-session menus and PR review screens let you choose either.
 
 **Live status hooks.** Use the sidebar's live-status controls to install hooks for each provider. For Codex, trust Deck's installed hooks in Codex's `/hooks` interface. Deck preserves existing hooks and does not bypass agent permissions. The hook server accepts local connections only.
