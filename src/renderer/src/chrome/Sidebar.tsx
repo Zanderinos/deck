@@ -173,7 +173,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     <div className="@container flex items-center gap-1 border-t border-edge px-2 py-2">
       {(["terminal", "board", "agent", "reviews"] as const).map((target) => {
         const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
-        return <button key={target} onClick={() => onView(target)} title={target} className={`flex flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} /><span className="hidden @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
+        return <button key={target} onClick={() => onView(target)} title={target} className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
       })}
     </div>
   </aside>;
