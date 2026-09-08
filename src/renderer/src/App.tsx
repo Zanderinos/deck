@@ -8,6 +8,7 @@ import { ChatProvider } from "./agents/ChatStore.js";
 import { BoardView } from "./board/BoardView.js";
 import { ReviewsView } from "./board/ReviewsView.js";
 import { GeneralSettings } from "./chrome/GeneralSettings.js";
+import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
 import { onOpenTerminalTab, requestNavBack } from "./lib/bus.js";
@@ -30,6 +31,7 @@ export default function App() {
 
 function Shell() {
   const { mode, setMode, presentationSize } = useDisplayMode();
+  const { fontSize: terminalFontSize } = useTerminalAppearance();
   const [view, setViewRaw] = useState<View>("terminal");
   // The configured start page applies once, unless the user already moved on.
   useEffect(() => {
@@ -154,7 +156,7 @@ function Shell() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <TerminalView visible={view === "terminal"} />
           {/* The terminal scales its own font; every other page zooms by the same ratio. */}
-          <div className={`${view === "terminal" ? "hidden" : "flex"} min-h-0 min-w-0 flex-1 flex-col`} style={{ zoom: mode === "presentation" ? presentationSize / 13 : 1 }}>
+          <div className={`${view === "terminal" ? "hidden" : "flex"} min-h-0 min-w-0 flex-1 flex-col`} style={{ zoom: mode === "presentation" ? presentationSize / terminalFontSize : 1 }}>
           {view === "search" && (
             <div className="min-h-0 flex-1">
               <SearchView

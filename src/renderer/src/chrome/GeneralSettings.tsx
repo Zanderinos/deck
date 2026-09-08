@@ -1,40 +1,10 @@
 import { useEffect, useState } from "react";
 import { askModels, type DeckSettings, type OnMergeMode, type OnMergeSettings } from "../../../shared/settings.js";
 import { AgentSelect } from "../agents/AgentSelect.js";
+import { Card, control, Field, Toggle } from "./settingsUi.js";
 import type { BoardColumnStatuses } from "../../../main/jira.js";
 
 type Patch = Partial<DeckSettings>;
-
-const control = "rounded-md border border-edge2 bg-card px-2 py-1.5 text-sm text-ink outline-none focus:border-accent";
-
-function Card({ title, description, children, className = "" }: { title: string; description: string; children: React.ReactNode; className?: string }) {
-  return (
-    <section className={`rounded-xl border border-edge2 bg-panel p-5 ${className}`}>
-      <h3 className="text-sm font-semibold text-ink">{title}</h3>
-      <p className="mt-1 text-xs leading-5 text-mut">{description}</p>
-      <div className="mt-4 flex flex-col gap-4">{children}</div>
-    </section>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs text-dim">{label}</span>
-      {hint && <span className="ml-1.5 text-[11px] text-mut">{hint}</span>}
-      <div className="mt-1.5">{children}</div>
-    </label>
-  );
-}
-
-function Toggle({ checked, disabled, onChange, children }: { checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) {
-  return (
-    <label className={`flex items-center gap-2 text-xs ${disabled ? "text-mut" : "text-dim"}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      {children}
-    </label>
-  );
-}
 
 export function GeneralSettings() {
   const [settings, setSettings] = useState<DeckSettings>();
