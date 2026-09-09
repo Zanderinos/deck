@@ -9,6 +9,7 @@ import { IssuePanel } from "./IssuePanel.js";
 
 const columnDots = ["text-body", "text-orange", "text-blue", "text-green", "text-accent"];
 const COLLAPSED_KEY = "deck.board.collapsedColumns";
+const MINE_ONLY_KEY = "deck.board.mineOnly";
 
 function loadCollapsed(): Set<string> {
   try {
@@ -39,7 +40,7 @@ export function BoardView() {
   const [syncing, setSyncing] = useState(false);
   const [selected, setSelected] = useState<BoardIssue>();
   const [diffPr, setDiffPr] = useState<IssuePr>();
-  const [mineOnly, setMineOnly] = useState(false);
+  const [mineOnly, setMineOnly] = useState(() => localStorage.getItem(MINE_ONLY_KEY) === "true");
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [dragKey, setDragKey] = useState<string>();
   const [dropTarget, setDropTarget] = useState<string>();
@@ -157,7 +158,7 @@ export function BoardView() {
           <div className="flex items-center gap-4">
             {canFilterMine && (
               <button
-                onClick={() => setMineOnly((v) => !v)}
+                onClick={() => setMineOnly((v) => { localStorage.setItem(MINE_ONLY_KEY, String(!v)); return !v; })}
                 className={`text-[11px] ${mineOnly ? "text-accent" : "text-dim hover:text-ink"}`}
                 title="Show only issues assigned to me"
               >

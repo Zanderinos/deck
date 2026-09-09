@@ -37,6 +37,10 @@ app.whenReady().then(async () => {
   await wait(800);
   await click('Build a better terminal (Codex)');
   await screenshot('normal');
+  await click('Change git branch');
+  await click('INI-1234-context-bar');
+  const checkout = await run(`window.deck.terminalInputs().at(-1)`);
+  if (checkout.data !== 'git checkout INI-1234-context-bar\r') throw Error('Branch chip did not check out the branch in the shell');
   await click('Split right');
   if (await visiblePanes() !== 2) throw Error('Split did not show two panes');
   await screenshot('split');

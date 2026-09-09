@@ -6,7 +6,7 @@ export type KeybindCommand =
   | "search" | "settings" | "sidebar" | "window.new"
   | "view.terminal" | "view.board" | "view.agent" | "view.reviews"
   | "zen" | "presentation"
-  | "tab.new" | "tab.newAgent" | "tab.close" | "tab.reopen"
+  | "tab.new" | "tab.newAgent" | "tab.close" | "tab.reopen" | "tab.next" | "tab.prev"
   | "split.right" | "split.down" | "find" | "composer" | "changes";
 
 export type Keybinds = Record<KeybindCommand, string>;
@@ -33,6 +33,8 @@ export const keybindInfos: KeybindInfo[] = [
   { id: "tab.newAgent", label: "New tab running the default agent", group: "Terminal", default: "Meta+Shift+N" },
   { id: "tab.close", label: "Close the active tab", group: "Terminal", default: "Meta+W" },
   { id: "tab.reopen", label: "Reopen the last closed tab", group: "Terminal", default: "Meta+Shift+T" },
+  { id: "tab.next", label: "Next tab", group: "Terminal", default: "Ctrl+Tab" },
+  { id: "tab.prev", label: "Previous tab", group: "Terminal", default: "Ctrl+Shift+Tab" },
   { id: "split.right", label: "Split right", group: "Terminal", default: "Meta+D" },
   { id: "split.down", label: "Split down", group: "Terminal", default: "Meta+Shift+D" },
   { id: "find", label: "Find in terminal output", group: "Terminal", default: "Meta+F" },

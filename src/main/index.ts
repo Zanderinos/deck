@@ -85,7 +85,8 @@ import {
   type MergeMethod,
   type ReviewEvent,
 } from "./github.js";
-import { gitSummary, workingChanges } from "./git.js";
+import { installedVersions, projectRuntime } from "./projectRuntime.js";
+import { gitBranches, gitSummary, workingChanges } from "./git.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import {
   afterPrMerged,
@@ -209,7 +210,12 @@ function createWindow(role: WindowRole, from?: BrowserWindow): BrowserWindow {
   });
   // The role entry follows focus, so the hotkey and tray target the window
   // last used, and a closed entry hands over to a surviving window of its role.
-  win.on("focus", () => wins.set(role, win));
+  // Unhiding the app does not always fire a DOM focus event, so the renderer is
+  // told to put the caret back in the terminal from here.
+  win.on("focus", () => {
+    wins.set(role, win);
+    win.webContents.send("window:focused");
+  });
   win.on("closed", () => {
     if (wins.get(role) !== win) return;
     const sibling = BrowserWindow.getAllWindows().find(
@@ -363,6 +369,9 @@ app.whenReady().then(async () => {
     (_e, root: string, file: string, contents: LocalFile) =>
       saveLocalFile(root, file, contents),
   );
+  ipcMain.handle("project:runtime", (_e, cwd: string) => projectRuntime(cwd));
+  ipcMain.handle("project:versions", (_e, cwd: string) => installedVersions(cwd));
+  ipcMain.handle("git:branches", (_e, cwd: string) => gitBranches(cwd));
   ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
   ipcMain.handle(

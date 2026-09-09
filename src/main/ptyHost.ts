@@ -8,11 +8,14 @@ import type { WindowRole } from "../shared/settings.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import pty, { type IPty } from "node-pty";
+import { readCwds } from "./ptyCwd.js";
 
 export interface TermMeta extends AgentLaunch {
   id: string;
   cwd: string;
   foregroundProcess?: string;
+  /** A program other than the shell holds the terminal, so it is not at a prompt. */
+  busy?: boolean;
   command?: string;
   issueKey?: string;
   windowRole?: WindowRole;
@@ -40,9 +43,10 @@ export type ClientMessage =
 export type HostMessage =
   | { type: "created"; req: number; meta: TermMeta }
   | { type: "list"; req: number; terms: TermMeta[] }
-  | { type: "attached"; req: number; id: string; buffer: string }
+  | { type: "attached"; req: number; id: string; buffer: string; cols: number; rows: number }
   | { type: "data"; id: string; data: string }
   | { type: "foreground"; meta: TermMeta }
+  | { type: "cwd"; id: string; cwd: string }
   | { type: "exit"; id: string; code: number };
 
 // Enough to rebuild a busy TUI's screen on reattach without holding whole
@@ -52,6 +56,8 @@ const BUFFER_LIMIT = 1_000_000;
 interface Term {
   proc: IPty;
   meta: TermMeta;
+  /** Process name of the shell itself, to tell a prompt from a running program. */
+  shell?: string;
   chunks: string[];
   buffered: number;
 }
@@ -91,8 +97,9 @@ function create(spawn: SpawnRequest): TermMeta {
     cwd: spawn.cwd,
     env: { ...spawn.env, DECK_TERM_ID: id },
   });
-  const meta: TermMeta = { id, cwd: spawn.cwd, foregroundProcess: proc.process, command: spawn.command, issueKey: spawn.issueKey, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt, windowRole: spawn.windowRole };
-  const term: Term = { proc, meta, chunks: [], buffered: 0 };
+  const shell = spawn.shell.split("/").pop();
+  const meta: TermMeta = { id, cwd: spawn.cwd, foregroundProcess: proc.process, busy: proc.process !== shell, command: spawn.command, issueKey: spawn.issueKey, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt, windowRole: spawn.windowRole };
+  const term: Term = { proc, meta, shell, chunks: [], buffered: 0 };
 
   proc.onData((data) => {
     term.chunks.push(data);
@@ -120,9 +127,24 @@ setInterval(() => {
     const foregroundProcess = term.proc.process;
     if (foregroundProcess === term.meta.foregroundProcess) continue;
     term.meta.foregroundProcess = foregroundProcess;
+    term.meta.busy = foregroundProcess !== term.shell;
     broadcast({ type: "foreground", meta: term.meta });
   }
 }, 500).unref();
+
+// Slower than the foreground poll: it shells out, and a cd only matters to
+// the chrome showing the folder, its branch and its diff.
+setInterval(() => {
+  const live = [...terms.values()];
+  void readCwds(live.map((term) => term.proc.pid)).then((cwds) => {
+    for (const term of live) {
+      const cwd = cwds.get(term.proc.pid);
+      if (!cwd || cwd === term.meta.cwd) continue;
+      term.meta.cwd = cwd;
+      broadcast({ type: "cwd", id: term.meta.id, cwd });
+    }
+  }).catch(() => {});
+}, 2000).unref();
 
 function handle(socket: net.Socket, msg: ClientMessage): void {
   switch (msg.type) {
@@ -134,7 +156,9 @@ function handle(socket: net.Socket, msg: ClientMessage): void {
       return;
     case "attach": {
       const term = terms.get(msg.id);
-      send(socket, { type: "attached", req: msg.req, id: msg.id, buffer: term?.chunks.join("") ?? "" });
+      // The replay was rendered at the pty's current size; a pane must lay it
+      // out at that size before fitting to its own, or wrapped lines garble.
+      send(socket, { type: "attached", req: msg.req, id: msg.id, buffer: term?.chunks.join("") ?? "", cols: term?.proc.cols ?? 0, rows: term?.proc.rows ?? 0 });
       return;
     }
     case "input":

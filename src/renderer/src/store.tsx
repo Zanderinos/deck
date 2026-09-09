@@ -20,6 +20,8 @@ export interface TermTab extends AgentLaunch {
   termId: string;
   title: string;
   cwd?: string;
+  /** A program other than the shell is running, so the tab is not at a prompt. */
+  busy?: boolean;
   customTitle?: string;
   /** agent session this tab was opened to resume. */
   sessionId?: string;
@@ -45,6 +47,7 @@ interface TabStore {
   focusTab: (termId: string) => void;
   setTitle: (termId: string, title: string) => void;
   renameTab: (termId: string, title: string) => void;
+  moveTab: (termId: string, index: number) => void;
 }
 
 const Ctx = createContext<TabStore | null>(null);
@@ -59,6 +62,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     termId: meta.id,
     title: meta.agent ?? meta.command?.split(" ")[0] ?? "shell",
     cwd: meta.cwd,
+    busy: meta.busy,
     customTitle: localStorage.getItem(`deck.tab.name.${meta.id}`) ?? undefined,
     agent: meta.agent ?? (/^codex(?:\s|$)/.test(meta.command ?? "") ? "codex" : /^claude(?:\s|$)/.test(meta.command ?? "") ? "claude" : undefined),
     sessionId: meta.sessionId ?? (meta.command?.startsWith("codex resume ") ? sessionKey("codex", /codex resume ['"]?([^\s'"]+)/.exec(meta.command)?.[1] ?? "") : undefined) ?? /--resume ['"]?([^\s'"]+)/.exec(meta.command ?? "")?.[1],
@@ -68,7 +72,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   // carries the session live in its terminal; that is what a reopen resumes.
   const withSession = (tab: TermTab, sessions: AgentSession[]): TermTab => {
     const session = sessions.find((session) => session.term_id === tab.termId && session.status !== "ended" && !session.session_id.startsWith("pending:"));
-    return session ? { ...tab, sessionId: session.session_id, agent: session.agent, cwd: session.cwd || tab.cwd } : tab;
+    return session ? { ...tab, sessionId: session.session_id, agent: session.agent, cwd: tab.cwd || session.cwd } : tab;
   };
 
   // Callbacks read the live tab list, and a session being resumed is held
@@ -87,7 +91,9 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const hotkeyOwnTabs = settings?.hotkeyOwnTabs;
   useEffect(() => {
     void Promise.all([window.deck.term.list(), window.deck.sessions.list()]).then(([terms, sessions]) => {
-      setTabs(terms.map((meta) => withSession(toTab(meta), sessions)));
+      const order: string[] = JSON.parse(localStorage.getItem("deck.tab.order") ?? "[]");
+      const rank = (id: string) => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
+      setTabs([...terms].sort((a, b) => rank(a.id) - rank(b.id)).map((meta) => withSession(toTab(meta), sessions)));
       setActiveId((active) => terms.some((term) => term.id === active) ? active : terms.at(-1)?.id);
       setReady(true);
     });
@@ -157,11 +163,30 @@ export function TabProvider({ children }: { children: ReactNode }) {
     setTabs((tabs) => tabs.map((tab) => tab.termId === termId ? { ...tab, customTitle: title.trim() || undefined } : tab));
   }, []);
 
+  const moveTab = useCallback((termId: string, index: number) => {
+    setTabs((tabs) => {
+      const tab = tabs.find((t) => t.termId === termId);
+      if (!tab) return tabs;
+      const next = tabs.filter((t) => t !== tab);
+      next.splice(index, 0, tab);
+      localStorage.setItem("deck.tab.order", JSON.stringify(next.map((t) => t.termId)));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => window.deck.term.onCwd((termId, cwd) => {
+    setTabs((tabs) => tabs.map((tab) => tab.termId === termId ? { ...tab, cwd } : tab));
+  }), []);
+
+  useEffect(() => window.deck.term.onBusy((termId, busy) => {
+    setTabs((tabs) => tabs.map((tab) => tab.termId === termId ? { ...tab, busy } : tab));
+  }), []);
+
   useEffect(() => window.deck.term.onExit((id) => closeTab(id, false)), [closeTab]);
 
   const store = useMemo<TabStore>(
-    () => ({ tabs, activeId, ready, newTab, closeTab, reopenTab, focusTab: setActiveId, setTitle, renameTab }),
-    [tabs, activeId, ready, newTab, closeTab, reopenTab, setTitle, renameTab],
+    () => ({ tabs, activeId, ready, newTab, closeTab, reopenTab, focusTab: setActiveId, setTitle, renameTab, moveTab }),
+    [tabs, activeId, ready, newTab, closeTab, reopenTab, setTitle, renameTab, moveTab],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -81,3 +81,10 @@ export function gitSummary(cwd: string): Promise<GitSummary | null> {
   summaries.set(cwd, { expires: Date.now() + 4000, result });
   return result;
 }
+
+/** Local branches, most recently committed to first. */
+export function gitBranches(cwd: string): Promise<string[]> {
+  return git(expandHome(cwd), ["branch", "--format=%(refname:short)", "--sort=-committerdate"])
+    .then((stdout) => stdout.split("\n").filter(Boolean))
+    .catch(() => []);
+}

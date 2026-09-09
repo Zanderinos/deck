@@ -4,9 +4,11 @@ import { useTerminalAppearance } from "../lib/useTerminalAppearance.js";
 import { useSettings } from "../lib/useSettings.js";
 import { chordOf, resolveKeybinds } from "../../../shared/keybinds.js";
 import { onTerminalAction } from "./actions.js";
+import { ContextBar } from "./ContextBar.js";
 import { trackTypedInput } from "../../../shared/tips.js";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -14,6 +16,10 @@ import "@xterm/xterm/css/xterm.css";
 
 export interface TerminalPaneProps {
   termId: string;
+  /** The shell's current folder, for the context bar. */
+  cwd?: string;
+  /** A program other than the shell is running; the context bar cannot type into it. */
+  busy?: boolean;
   active: boolean;
   focused?: boolean;
   onTitle: (title: string) => void;
@@ -24,7 +30,7 @@ export interface TerminalPaneProps {
 
 // One xterm instance per pty, mounted once and kept alive across tab
 // switches (hidden, not unmounted) so scrollback survives.
-export function TerminalPane({ termId, active, focused = active, onTitle, onCommand, onFileDrop }: TerminalPaneProps) {
+export function TerminalPane({ termId, cwd, busy, active, focused = active, onTitle, onCommand, onFileDrop }: TerminalPaneProps) {
   const { theme } = useExtensions();
   const { mode, presentationSize } = useDisplayMode();
   const appearance = useTerminalAppearance();
@@ -53,6 +59,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle, onComm
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    term.loadAddon(new WebLinksAddon((_event, url) => window.open(url)));
     term.open(host);
     term.attachCustomKeyEventHandler((event) => !((event.metaKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) || boundChords.current.has(chordOf(event) ?? "")));
 
@@ -85,11 +92,19 @@ export function TerminalPane({ termId, active, focused = active, onTitle, onComm
     // itself and would push a bogus size to the process.
     const claimSize = () => { if (host.clientWidth > 0) window.deck.term.resize(termId, term.cols, term.rows); };
     claimSize();
-    void window.deck.term.attach(termId).then(({ buffer, sequence }) => {
+    void window.deck.term.attach(termId).then(({ buffer, sequence, cols, rows }) => {
       if (disposed) return;
+      // The replay was laid out for the pty's last size, which another window
+      // (a docked panel, a resized one) may not share. Rendering it at that
+      // size and then fitting reflows it the way a real resize would, and the
+      // size change tells the running program to redraw.
+      const resized = cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows);
+      if (resized) term.resize(cols, rows);
       if (buffer) term.write(buffer);
       for (const chunk of live) if (chunk.sequence > sequence) term.write(chunk.data);
       live = []; restored = true;
+      // Writes parse asynchronously, so refit only once the replay is laid out.
+      if (resized) term.write("", () => { if (!disposed && host.clientWidth > 0) { fit.fit(); claimSize(); } });
     }).catch((error) => { if (!disposed) term.writeln(`\r\nCould not restore terminal: ${String(error)}`); });
 
     // Reclaim the pty on every reveal too: another pane may have resized it
@@ -198,11 +213,12 @@ export function TerminalPane({ termId, active, focused = active, onTitle, onComm
     }
   }), [active, focused, termId]);
 
-  return <div style={{ background: theme.terminal.background }} onDragOver={(event) => event.preventDefault()} onDrop={dropFiles} className={`relative h-full w-full px-4 py-3 ${active ? "" : "hidden"}`}>
+  return <div style={{ background: theme.terminal.background }} onDragOver={(event) => event.preventDefault()} onDrop={dropFiles} className={`relative flex h-full w-full flex-col px-4 py-3 ${active ? "" : "hidden"}`}>
     {finding && <div className="absolute right-1 top-0 z-20 flex items-center gap-2 rounded-md border border-edge3 bg-overlay px-2 py-1.5 font-sans text-[11px] shadow-lg">
       <input aria-label="Find terminal output" autoFocus placeholder="Find in terminal…" value={query} onChange={(event) => { setQuery(event.target.value); searchPosition.current = -1; setMatch(""); }} onKeyDown={(event) => { if (event.key === "Enter") find(event.shiftKey); if (event.key === "Escape") { setFinding(false); termRef.current?.focus(); } }} className="w-40 bg-transparent text-soft outline-none" />
       <span className="text-dim">{match}</span><button title="Previous match" onClick={() => find(true)}>↑</button><button title="Next match" onClick={() => find()}>↓</button><button title="Close find" onClick={() => setFinding(false)}>×</button>
     </div>}
-    <div ref={hostRef} className="h-full w-full" />
+    <ContextBar termId={termId} cwd={cwd} busy={busy} />
+    <div ref={hostRef} className="min-h-0 w-full flex-1" />
   </div>;
 }

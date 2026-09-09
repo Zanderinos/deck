@@ -28,6 +28,14 @@ function visibleTo(contents: WebContents, meta: TermMeta): boolean {
 
 export type { TermMeta } from "./ptyHost.js";
 
+/** Scrollback of a pty plus the size it was rendered at. */
+export interface TermReplay {
+  buffer: string;
+  sequence: number;
+  cols: number;
+  rows: number;
+}
+
 // Terminals run in a detached pty host (ptyHost.ts) so they outlive this
 // process: dev watch-restarts, ⌘R and closed windows all just reattach.
 
@@ -121,17 +129,17 @@ class PtyHostClient {
   }
 
   /** Attaches a renderer: it receives the replayed buffer, then live data. */
-  async attach(id: string, owner: WebContents): Promise<{ buffer: string; sequence: number }> {
+  async attach(id: string, owner: WebContents): Promise<TermReplay> {
     const owners = this.owners.get(id) ?? new Set<WebContents>();
     owners.add(owner);
     this.owners.set(id, owners);
     let sequence = 0;
     // Capture the replay boundary synchronously while reading the socket.
     // Renderers discard queued live chunks already included in this replay.
-    const { buffer } = await this.request<"attached">({ type: "attach", id }, () => {
+    const { buffer, cols, rows } = await this.request<"attached">({ type: "attach", id }, () => {
       sequence = this.sequences.get(id) ?? 0;
     });
-    return { buffer, sequence };
+    return { buffer, sequence, cols, rows };
   }
 
   private connect(): Promise<net.Socket> {
@@ -213,6 +221,11 @@ class PtyHostClient {
     }
     if (msg.type === "foreground") {
       updateForegroundSession(msg.meta);
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:busy", msg.meta.id, msg.meta.busy ?? false);
+      return;
+    }
+    if (msg.type === "cwd") {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:cwd", msg.id, msg.cwd);
       return;
     }
     if (msg.type === "exit") {

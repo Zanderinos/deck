@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { agentLabels, type Agent } from "../../../shared/agents.js";
 import type { AgentSession } from "../../../main/sessions.js";
+import { SessionIcon, statusLabels } from "./SessionIcon.js";
+import { SessionArchive } from "./SessionArchive.js";
 import { useAgentSessions } from "../lib/useSessions.js";
 import { shortPath, useGitSummary } from "../lib/useGitSummary.js";
 import { useTabs, type TermTab } from "../store.js";
@@ -11,24 +13,11 @@ import { useAttentionCount } from "../agents/attention.js";
 import { useTips } from "../tips/TipsProvider.js";
 import type { View } from "../App.js";
 
-const statusLabels: Record<AgentSession["status"], string> = {
-  working: "Working", needs_input: "Needs input", needs_review: "Needs review", idle: "Ready", ended: "Ended",
-};
-const statusColors: Record<AgentSession["status"], string> = {
-  working: "bg-accent animate-pulse", needs_input: "bg-orange", needs_review: "bg-orange", idle: "bg-green", ended: "bg-dim",
-};
-
-function SessionIcon({ agent, status }: { agent?: Agent; status?: AgentSession["status"] }) {
-  return <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-card2 text-soft">
-    {agent === "codex" ? <span className="text-lg leading-none">◎</span> : <Icon name={agent === "claude" ? "sparkle" : "terminal"} size={16} />}
-    {status && <span title={statusLabels[status]} className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel ${statusColors[status]}`} />}
-  </span>;
-}
-
 function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: AgentSession; index: number; onOpen: () => void }) {
-  const { activeId, closeTab, renameTab } = useTabs();
+  const { activeId, closeTab, renameTab, moveTab } = useTabs();
   const { report } = useTips();
   const [renaming, setRenaming] = useState(false);
+  const [dropTarget, setDropTarget] = useState(false);
   const [name, setName] = useState("");
   const cwd = session?.cwd || tab.cwd;
   const git = useGitSummary(cwd);
@@ -36,7 +25,11 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
   const title = tab.customTitle || session?.title || (tab.title === "shell" ? cwd?.split("/").pop() : tab.title) || "Terminal";
   const active = activeId === tab.termId;
   const waiting = session && ["needs_input", "needs_review"].includes(session.status);
-  return <div className="border-b border-edge/80 px-2 py-2">
+  return <div draggable={!renaming} onDragStart={(event) => { event.dataTransfer.setData("text/deck-tab", tab.termId); event.dataTransfer.effectAllowed = "move"; }}
+    onDragOver={(event) => { if (event.dataTransfer.types.includes("text/deck-tab")) { event.preventDefault(); setDropTarget(true); } }}
+    onDragLeave={() => setDropTarget(false)}
+    onDrop={(event) => { event.preventDefault(); setDropTarget(false); const id = event.dataTransfer.getData("text/deck-tab"); if (id && id !== tab.termId) moveTab(id, index); }}
+    className={`border-b px-2 py-2 ${dropTarget ? "border-t border-t-orange" : "border-edge/80"}`}>
     <div role="button" tabIndex={0} aria-label={`${title}${agent ? ` (${agentLabels[agent]})` : ""}`} aria-current={active ? "page" : undefined}
       onClick={() => { report({ action: "tab-click" }); onOpen(); }} onKeyDown={(event) => { if (event.target === event.currentTarget && event.key === "Enter") onOpen(); }}
       onDoubleClick={() => { setName(title); setRenaming(true); }}
@@ -65,6 +58,7 @@ const footerViews = ["terminal", "board", "agent", "reviews"] as const;
 
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const { tabs, newTab, focusTab, closeTab } = useTabs();
+  const [archive, setArchive] = useState(false);
   // Arc-style: a horizontal swipe on the sidebar steps to the next/previous view.
   // A swipe keeps firing momentum events long after the fingers lift, so once a step is
   // taken the sidebar goes deaf for a moment: one view per swipe, never a jump.
@@ -79,7 +73,11 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     const step = Math.sign(gesture.distance);
     gesture.distance = 0;
     gesture.steppedAt = event.timeStamp;
+    // The archive is a slot of its own, one step left of the first view: while it
+    // is open a swipe back closes it instead of stepping through the views behind.
+    if (archive) { if (step > 0) setArchive(false); return; }
     const index = Math.max(0, footerViews.indexOf(view as (typeof footerViews)[number]));
+    if (step < 0 && index === 0) { setArchive(true); return; }
     onView(footerViews[Math.min(footerViews.length - 1, Math.max(0, index + step))]);
   };
   const footerIndex = footerViews.indexOf(view as (typeof footerViews)[number]);
@@ -120,6 +118,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
   const searchResults = searching ? sessions.filter((session) => available(session) && matches(`${session.title} ${session.cwd} ${session.agent} ${session.issue_key ?? ""}`, session.status)) : [];
   const lastSession = recent[0];
   const resume = async (session: AgentSession) => {
+    setArchive(false);
     try {
       await newTab({ agent: session.agent, cwd: session.cwd, sessionId: session.session_id, issueKey: session.issue_key ?? undefined });
       onView("terminal");
@@ -154,6 +153,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
         {(["claude", "codex"] as const).map((agent) => <button key={agent} onClick={() => void launch(agent)} className="menu-item"><Icon name="sparkle" />New {agentLabels[agent]}</button>)}
         <div className="my-1 border-t border-edge2" />
         <button disabled={!tabs.length} onClick={closeAllTabs} className="menu-item disabled:opacity-40"><Icon name="x" />Close all tabs</button>
+        <button onClick={() => { setMenu(false); setArchive(true); }} className="menu-item"><Icon name="terminal" />Session archive</button>
         <button onClick={() => { setMenu(false); onView("settings"); }} className="menu-item"><Icon name="settings" />Settings</button>
       </div>}
     </div>
@@ -192,6 +192,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
       catch (error) { setError(String(error)); }
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
+    {archive && <SessionArchive sessions={sessions} onResume={(session) => void resume(session)} onClose={() => setArchive(false)} />}
     <div className="@container relative flex items-center gap-1 border-t border-edge px-2 py-2">
       {footerIndex >= 0 && <span aria-hidden className="absolute bottom-2 top-2 rounded bg-card2 transition-[left] duration-200 ease-out" style={{ width: `calc((100% - 16px - ${(footerViews.length - 1) * 4}px) / ${footerViews.length})`, left: `calc(8px + (100% - 16px + 4px) / ${footerViews.length} * ${footerIndex})` }} />}
       {footerViews.map((target) => {

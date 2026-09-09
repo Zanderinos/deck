@@ -17,7 +17,8 @@ import type {
   ReviewEvent,
 } from "../main/github.js";
 import type { GitSummary, WorkingChanges } from "../main/git.js";
-import type { TermMeta } from "../main/pty.js";
+import type { InstalledVersions, ProjectRuntime } from "../main/projectRuntime.js";
+import type { TermMeta, TermReplay } from "../main/pty.js";
 import type { BoardCache, BoardColumnStatuses } from "../main/jira.js";
 import type { AskEvent, AskResult } from "../main/agentTurn.js";
 import type { ReviewDraft, ReviewPr } from "../main/review.js";
@@ -117,9 +118,16 @@ const api = {
     read: (root: string, file: string): Promise<LocalFile> => ipcRenderer.invoke("files:read", root, file),
     save: (root: string, file: string, contents: LocalFile): Promise<LocalFile> => ipcRenderer.invoke("files:save", root, file, contents),
   },
+  project: {
+    /** Runtime the folder's project runs on, or null when it has no marker. */
+    runtime: (cwd: string): Promise<ProjectRuntime | null> => ipcRenderer.invoke("project:runtime", cwd),
+    /** Locally installed versions of that runtime, for the version menu. */
+    versions: (cwd: string): Promise<InstalledVersions | null> => ipcRenderer.invoke("project:versions", cwd),
+  },
   git: {
     summary: (cwd: string): Promise<GitSummary | null> => ipcRenderer.invoke("git:summary", cwd),
     changes: (cwd: string): Promise<WorkingChanges> => ipcRenderer.invoke("git:changes", cwd),
+    branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke("git:branches", cwd),
   },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
@@ -165,6 +173,12 @@ const api = {
   },
   window: {
     focus: (): Promise<void> => ipcRenderer.invoke("window:focus"),
+    /** The window became key, e.g. after the summon hotkey. */
+    onFocused: (cb: () => void): (() => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("window:focused", listener);
+      return () => ipcRenderer.removeListener("window:focused", listener);
+    },
     /** Opens another regular Deck window. */
     open: (): Promise<void> => ipcRenderer.invoke("window:new"),
     setFullScreen: (on: boolean): Promise<void> => ipcRenderer.invoke("window:fullscreen", on),
@@ -193,7 +207,7 @@ const api = {
       ipcRenderer.invoke("term:create", opts),
     list: (): Promise<TermMeta[]> => ipcRenderer.invoke("term:list"),
     /** Replays the terminal's recent output to this window, then streams live. */
-    attach: (id: string): Promise<{ buffer: string; sequence: number }> => ipcRenderer.invoke("term:attach", id),
+    attach: (id: string): Promise<TermReplay> => ipcRenderer.invoke("term:attach", id),
     input: (id: string, data: string): void => ipcRenderer.send("term:input", id, data),
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send("term:resize", id, cols, rows),
@@ -204,6 +218,18 @@ const api = {
       const listener = (_e: unknown, id: string, data: string, sequence: number) => cb(id, data, sequence);
       ipcRenderer.on("term:data", listener);
       return () => ipcRenderer.removeListener("term:data", listener);
+    },
+    /** Whether a program other than the shell holds the terminal. */
+    onBusy: (cb: (id: string, busy: boolean) => void): (() => void) => {
+      const listener = (_e: unknown, id: string, busy: boolean) => cb(id, busy);
+      ipcRenderer.on("term:busy", listener);
+      return () => ipcRenderer.removeListener("term:busy", listener);
+    },
+    /** The shell's working directory, whenever a cd moves it. */
+    onCwd: (cb: (id: string, cwd: string) => void): (() => void) => {
+      const listener = (_e: unknown, id: string, cwd: string) => cb(id, cwd);
+      ipcRenderer.on("term:cwd", listener);
+      return () => ipcRenderer.removeListener("term:cwd", listener);
     },
     onExit: (cb: (id: string, code: number) => void): (() => void) => {
       const listener = (_e: unknown, id: string, code: number) => cb(id, code);

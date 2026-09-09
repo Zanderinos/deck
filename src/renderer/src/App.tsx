@@ -150,6 +150,11 @@ function Shell() {
       } else if (command === "tab.reopen") {
         setView("terminal");
         void reopenTab();
+      } else if ((command === "tab.next" || command === "tab.prev") && tabs.length) {
+        const index = tabs.findIndex((tab) => tab.termId === activeId);
+        const tab = tabs[(index + (command === "tab.next" ? 1 : -1) + tabs.length) % tabs.length];
+        focusTab(tab.termId);
+        setView("terminal");
       } else if (command === "window.new") {
         void window.deck.window.open();
       } else {
