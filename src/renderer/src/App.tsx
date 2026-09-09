@@ -7,7 +7,7 @@ import { ChatProvider } from "./agents/ChatStore.js";
 import { BoardView } from "./board/BoardView.js";
 import { ReviewsView } from "./board/ReviewsView.js";
 import { SettingsView, type SettingsSection } from "./chrome/SettingsView.js";
-import { useSettings } from "./lib/useSettings.js";
+import { SettingsProvider, useSettings } from "./lib/useSettings.js";
 import { isRecordingKeys } from "./lib/useKeybinds.js";
 import { matchKeybind, resolveKeybinds } from "../../shared/keybinds.js";
 import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
@@ -24,11 +24,13 @@ export type View = "terminal" | "board" | "agent" | "reviews" | "search" | "sett
 
 export default function App() {
   return (
-    <DisplayModeProvider>
-      <TabProvider>
-        <ExtensionProvider><ChatProvider><TipsProvider><Shell /></TipsProvider></ChatProvider></ExtensionProvider>
-      </TabProvider>
-    </DisplayModeProvider>
+    <SettingsProvider>
+      <DisplayModeProvider>
+        <TabProvider>
+          <ExtensionProvider><ChatProvider><TipsProvider><Shell /></TipsProvider></ChatProvider></ExtensionProvider>
+        </TabProvider>
+      </DisplayModeProvider>
+    </SettingsProvider>
   );
 }
 

@@ -4,6 +4,7 @@ import { builtInThemes, parseTheme, type DeckTheme } from "../../../shared/theme
 import { parsePluginAction, parsePluginCommand, type ExtensionCatalog, type PluginAction, type PluginCommand, type PluginContext } from "../../../shared/extensions.js";
 import { useTabs } from "../store.js";
 import { openTerminalTab } from "../lib/bus.js";
+import { useSettings } from "../lib/useSettings.js";
 import { Icon } from "../board/icons.js";
 
 export interface ExtensionCommand extends PluginCommand { key: string; pluginId: string; pluginName: string }
@@ -25,7 +26,7 @@ const emptyCatalog: ExtensionCatalog = { themes: builtInThemes, plugins: [], err
 export function ExtensionProvider({ children }: { children: ReactNode }) {
   const { tabs, activeId } = useTabs();
   const [catalog, setCatalog] = useState(emptyCatalog);
-  const [selected, setSelected] = useState("dark");
+  const selected = useSettings()?.theme ?? "dark";
   const [preview, setPreview] = useState<DeckTheme>();
   const [commands, setCommands] = useState<ExtensionCommand[]>([]);
   const [runtimeThemes, setRuntimeThemes] = useState<DeckTheme[]>([]);
@@ -40,10 +41,8 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     void reload();
-    void window.deck.getSettings().then((settings) => setSelected(settings.theme));
     const offCatalog = window.deck.extensions.onChanged(() => void reload());
-    const offSettings = window.deck.onSettingsChanged((settings) => setSelected(settings.theme));
-    return () => { offCatalog(); offSettings(); };
+    return offCatalog;
   }, [reload]);
   const themes = useMemo(() => [...new Map([...catalog.themes, ...runtimeThemes].map((theme) => [theme.id, theme])).values()], [catalog.themes, runtimeThemes]);
   const theme = preview ?? themes.find((theme) => theme.id === selected) ?? builtInThemes[0];
@@ -55,7 +54,7 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   }, [theme]);
   const selectTheme = useCallback(async (id: string) => {
     await window.deck.updateSettings({ theme: id });
-    setSelected(id); setPreview(undefined);
+    setPreview(undefined);
   }, []);
   const active = tabs.find((tab) => tab.termId === activeId);
   const pluginContext: PluginContext = { cwd: active?.cwd, agent: active?.agent, sessionTitle: active?.customTitle || active?.title, theme: theme.id };
