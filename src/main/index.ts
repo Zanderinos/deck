@@ -63,8 +63,8 @@ import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 
 /** Which action brought a window up. Mapped to a window role by windowMode. */
-type EntryPoint = "hotkey" | "tray" | "manual";
-type WindowRole = "main" | "panel" | "tray";
+type EntryPoint = "hotkey" | "manual";
+type WindowRole = "main" | "panel";
 
 const wins = new Map<WindowRole, BrowserWindow>();
 /** Windows currently shown as a quake panel; they hide again on blur. */
@@ -83,10 +83,7 @@ let registeredHotkey: string | undefined;
 app.setName("Deck");
 
 function roleFor(entry: EntryPoint): WindowRole {
-  const mode = getSettings().windowMode;
-  if (mode === "shared") return "main";
-  if (mode === "panel") return entry === "hotkey" ? "panel" : "main";
-  return entry === "hotkey" ? "panel" : entry === "tray" ? "tray" : "main";
+  return entry === "hotkey" && getSettings().windowMode === "panel" ? "panel" : "main";
 }
 
 function broadcast(channel: string, ...args: unknown[]): void {
@@ -245,7 +242,7 @@ function createTray(): void {
   tray = new Tray(nativeImage.createEmpty());
   tray.setTitle("▤");
   tray.setToolTip("Deck");
-  tray.on("click", () => toggleWindow("tray"));
+  tray.on("click", () => toggleWindow("manual"));
 }
 
 app.whenReady().then(async () => {

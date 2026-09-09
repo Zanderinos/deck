@@ -78,12 +78,11 @@ export function GeneralSettings() {
         </Card>
 
         <Card title="Window & hotkey" description="How Deck appears when you summon it from the keyboard or the tray.">
-          <Field label="Windows" hint="Only decides which window each entry point brings up. Tabs and terminals are one shared set, visible in every window.">
+          <Field label="Windows" hint="Tabs and terminals are one shared set, visible in every window.">
             <select className={`w-full ${control}`} value={settings.windowMode}
               onChange={(e) => { const v = e.target.value as DeckSettings["windowMode"]; if (v !== settings.windowMode) void update({ windowMode: v }); }}>
-              <option value="shared">Single window: hotkey, tray and Dock all show the same window</option>
-              <option value="panel">Hotkey gets its own panel; tray and Dock share a regular window</option>
-              <option value="per-entry">Three windows: one each for hotkey, tray and Dock</option>
+              <option value="shared">One window for both the hotkey and the Dock</option>
+              <option value="panel">Hotkey gets its own panel, the Dock a regular window</option>
             </select>
           </Field>
           <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab (tray and hotkey only)</Toggle>
