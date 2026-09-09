@@ -187,10 +187,10 @@ class PtyHostClient {
     socket.on("error", () => {});
     socket.on("close", () => {
       // Host gone: every terminal went with it.
-      for (const [id, owners] of this.owners) {
+      for (const id of this.owners.keys()) {
         endTermSessions(id);
         for (const cb of exitListeners) cb(id);
-        for (const owner of owners) if (!owner.isDestroyed()) owner.send("term:exit", id, -1);
+        for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:exit", id, -1);
       }
       this.sequences.clear();
       this.owners.clear();
@@ -207,18 +207,20 @@ class PtyHostClient {
       resolve?.(msg);
       return;
     }
-    const owners = this.owners.get(msg.id);
     if (msg.type === "exit") {
       endTermSessions(msg.id);
       this.owners.delete(msg.id);
       for (const cb of exitListeners) cb(msg.id);
+      // Every window lists the tab, not only the ones that displayed it.
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:exit", msg.id, msg.code);
+      return;
     }
+    const owners = this.owners.get(msg.id);
     const sequence = (this.sequences.get(msg.id) ?? 0) + 1;
     this.sequences.set(msg.id, sequence);
     for (const owner of owners ?? []) {
       if (owner.isDestroyed()) { owners?.delete(owner); continue; }
-      if (msg.type === "data") owner.send("term:data", msg.id, msg.data, sequence);
-      else owner.send("term:exit", msg.id, msg.code);
+      owner.send("term:data", msg.id, msg.data, sequence);
     }
   }
 }
