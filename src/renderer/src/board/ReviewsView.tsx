@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { IssuePr, ReviewEvent } from "../../../main/github.js";
 import type { InboxPr } from "../../../main/prInbox.js";
+import { onOpenPullRequest, type OpenPrDetail } from "../lib/bus.js";
 import { issueFor, useReviewQueue } from "../lib/reviews.js";
 import { Icon } from "./icons.js";
 import { PrScreen } from "./PrScreen.js";
@@ -18,12 +19,24 @@ export function ReviewsView({ visible }: { visible: boolean }) {
   const { queue, board, jiraBaseUrl, loaded } = useReviewQueue(done);
   const [index, setIndex] = useState(0);
   const [reviewed, setReviewed] = useState<{ key: string; event: ReviewEvent }>();
+  // A PR reached from a stack link, which need not be in the queue at all.
+  const [linked, setLinked] = useState<OpenPrDetail>();
 
-  const current = queue[Math.min(index, Math.max(queue.length - 1, 0))];
+  useEffect(() => onOpenPullRequest(setLinked), []);
+
+  const queued = queue[Math.min(index, Math.max(queue.length - 1, 0))];
+  const current = linked
+    ? queue.find((pr) => pr.repo === linked.repo && pr.number === linked.number)
+      ?? { ...linked, reviewDecision: null, mergeable: "UNKNOWN", checks: "NONE", headRefName: "", baseRefName: "" }
+    : queued;
   const position = current ? queue.indexOf(current) : -1;
   const issue = current ? issueFor(current, board) : undefined;
 
-  const go = (delta: number) => setIndex(Math.min(Math.max(position + delta, 0), Math.max(queue.length - 1, 0)));
+  const go = (delta: number) => {
+    const from = position >= 0 ? position : index;
+    setLinked(undefined);
+    setIndex(Math.min(Math.max(from + delta, 0), Math.max(queue.length - 1, 0)));
+  };
 
   const onReviewed = (event: ReviewEvent) => {
     if (!current || event === "COMMENT") return;

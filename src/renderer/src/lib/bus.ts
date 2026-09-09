@@ -33,3 +33,25 @@ export function onOpenTerminalTab(cb: (detail: OpenTabDetail) => void): () => vo
   window.addEventListener(OPEN_TAB, listener);
   return () => window.removeEventListener(OPEN_TAB, listener);
 }
+
+const OPEN_PR = "deck:open-pr";
+
+export interface OpenPrDetail {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  isDraft: boolean;
+  updatedAt: string;
+}
+
+export function openPullRequest(detail: OpenPrDetail): void {
+  window.dispatchEvent(new CustomEvent(OPEN_PR, { detail }));
+}
+
+export function onOpenPullRequest(cb: (detail: OpenPrDetail) => void): () => void {
+  const listener = (e: Event) => cb((e as CustomEvent<OpenPrDetail>).detail);
+  window.addEventListener(OPEN_PR, listener);
+  return () => window.removeEventListener(OPEN_PR, listener);
+}

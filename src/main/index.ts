@@ -75,6 +75,7 @@ import {
   fileContent,
   prComments,
   prDetail,
+  prStack,
   prDiff,
   prTimeline,
   replyToThread,
@@ -447,6 +448,11 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) =>
     prDetail(repo, n),
+  );
+  ipcMain.handle(
+    "gh:prStack",
+    (_e, repo: string, head: string, base: string, n: number) =>
+      prStack(repo, head, base, n),
   );
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
   ipcMain.handle("gh:prComments", (_e, repo: string, n: number) =>
