@@ -63,11 +63,13 @@ export interface PrScreenProps {
   onClose: () => void;
   /** Rendered inside a page (the review queue) instead of as a full-screen overlay. */
   embedded?: boolean;
+  /** Kept mounted but out of sight, so the tab, file and loaded data survive a view switch. */
+  hidden?: boolean;
   /** A review went out; the queue uses it to move on. */
   onReviewed?: (event: ReviewEvent) => void;
 }
 
-export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, onReviewed }: PrScreenProps) {
+export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, hidden = false, onReviewed }: PrScreenProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const [diffText, setDiffText] = useState<string>();
   const [detail, setDetail] = useState<PrDetail | null>();
@@ -260,7 +262,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
+      if (hidden || isTyping(e)) return;
       if (e.key === "Escape") {
         if (composer) setComposer(null);
         else if (rejectOpen) setRejectOpen(false);
@@ -299,7 +301,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
   const openThreads = comments.filter((c) => c.path && !c.resolved && !c.outdated).length;
 
   return (
-    <div className={embedded ? "flex min-h-0 min-w-0 flex-1 flex-col bg-bg" : "fixed inset-0 z-40 flex flex-col bg-bg pt-[38px]"}>
+    <div className={hidden ? "hidden" : embedded ? "flex min-h-0 min-w-0 flex-1 flex-col bg-bg" : "fixed inset-0 z-40 flex flex-col bg-bg pt-[38px]"}>
       <div className="flex items-center gap-2 border-b border-edge px-5 py-2 font-sans text-[12px]">
         {issue && (
           <>

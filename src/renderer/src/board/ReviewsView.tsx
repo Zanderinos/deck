@@ -137,8 +137,8 @@ export function ReviewsView({ visible }: { visible: boolean }) {
       </div>
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {current && visible ? (
-            <PrScreen key={prKey(current)} embedded pr={toIssuePr(current)} issue={issue} jiraBaseUrl={jiraBaseUrl} onClose={() => {}} onReviewed={onReviewed} />
+          {current ? (
+            <PrScreen key={prKey(current)} embedded hidden={!visible} pr={toIssuePr(current)} issue={issue} jiraBaseUrl={jiraBaseUrl} onClose={() => {}} onReviewed={onReviewed} />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[12px] text-dim">
               <Icon name="check" size={20} className="text-green" />
