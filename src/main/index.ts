@@ -67,6 +67,8 @@ type EntryPoint = "hotkey" | "tray" | "manual";
 type WindowRole = "main" | "panel" | "tray";
 
 const wins = new Map<WindowRole, BrowserWindow>();
+/** Windows currently shown as a quake panel; they hide again on blur. */
+const quakeWins = new WeakSet<BrowserWindow>();
 let tray: Tray | undefined;
 let registeredHotkey: string | undefined;
 
@@ -137,6 +139,9 @@ function createWindow(role: WindowRole): BrowserWindow {
 
   wins.set(role, win);
   win.on("ready-to-show", () => win.show());
+  win.on("blur", () => {
+    if (quakeWins.has(win) && getSettings().summonHideOnBlur) hideWindow(win);
+  });
   win.on("closed", () => {
     if (wins.get(role) === win) wins.delete(role);
   });
@@ -159,6 +164,14 @@ function showWindow(role: WindowRole): void {
   w.show();
   w.focus();
   app.focus({ steal: true });
+  w.webContents.focus();
+}
+
+function hideWindow(w: BrowserWindow): void {
+  quakeWins.delete(w);
+  w.hide();
+  // Only leave the app when no other deck window stays visible.
+  if (BrowserWindow.getAllWindows().every((other) => !other.isVisible())) app.hide();
 }
 
 /** Warp-style quake panel: full width, docked to the top of the screen the
@@ -178,12 +191,11 @@ function toggleWindow(entry: EntryPoint): void {
   const role = roleFor(entry);
   const win = wins.get(role);
   if (win?.isVisible() && win.isFocused()) {
-    win.hide();
-    // Only leave the app when no other deck window stays visible.
-    if (BrowserWindow.getAllWindows().every((w) => !w.isVisible())) app.hide();
+    hideWindow(win);
   } else {
     const w = win ?? createWindow(role);
-    if (entry === "hotkey" && getSettings().summonDockToTop) dockToTop(w);
+    const quake = entry === "hotkey" && getSettings().summonDockToTop;
+    if (quake) { dockToTop(w); quakeWins.add(w); } else quakeWins.delete(w);
     showWindow(role);
   }
 }

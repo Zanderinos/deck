@@ -72,6 +72,13 @@ export function TerminalView({ visible }: { visible: boolean }) {
     if (action === "split-right") void split("row");
     if (action === "split-down") void split("column");
   }), [activeId, cwd]);
+  // Summoning the window back restores keyboard focus to the active terminal.
+  useEffect(() => {
+    if (!visible) return;
+    const onFocus = () => terminalAction("focus");
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [visible]);
   useEffect(() => {
     if (!visible) return;
     const onKey = (event: KeyboardEvent) => {

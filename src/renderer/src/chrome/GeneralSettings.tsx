@@ -77,6 +77,7 @@ export function GeneralSettings() {
           </Field>
           <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enable summon hotkey</Toggle>
           <Toggle checked={settings.summonDockToTop} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Hotkey docks the window to the top of the screen (quake style)</Toggle>
+          <Toggle checked={settings.summonHideOnBlur} disabled={!settings.summonDockToTop} onChange={(summonHideOnBlur) => void update({ summonHideOnBlur })}>Hide the quake panel when another app takes focus</Toggle>
           <Field label="Summon hotkey" hint="Electron accelerator">
             <input className={`w-full ${control}`} defaultValue={settings.summonHotkey}
               onBlur={onBlurText(settings.summonHotkey, (summonHotkey) => void update({ summonHotkey }), settings.summonHotkey)} />

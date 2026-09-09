@@ -21,7 +21,7 @@ const sessions = [
 ];
 ipcRenderer.on('test:sessions', (_event, next) => { sessions.splice(0, sessions.length, ...next); callbacks.sessions.forEach(callback => callback(sessions)); });
 const off = (kind,cb) => { callbacks[kind].push(cb); return () => callbacks[kind].splice(callbacks[kind].indexOf(cb),1); };
-const settings = {theme:'dark',defaultAgent:'codex',askModel:'sonnet',defaultView:'terminal',autoFix:{enabled:true,ci:true,conflicts:true,push:'review'},defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,jira:{baseUrl:'',email:'',apiToken:'',boardId:'',rejectedPattern:'reject',reviewColumns:[],onMerge:{enabled:false,column:'',mode:'local'},doneWindowDays:7},github:{owner:''}};
+const settings = {theme:'dark',defaultAgent:'codex',askModel:'sonnet',defaultView:'terminal',autoFix:{enabled:true,ci:true,conflicts:true,push:'review'},defaultCwd:'~',repoRoots:[],windowMode:'shared',summonHotkey:'Alt+Space',summonHotkeyEnabled:true,summonDockToTop:true,summonHideOnBlur:true,jira:{baseUrl:'',email:'',apiToken:'',boardId:'',rejectedPattern:'reject',reviewColumns:[],onMerge:{enabled:false,column:'',mode:'local'},doneWindowDays:7},github:{owner:''}};
 contextBridge.exposeInMainWorld('deck', {
  reviewedEvents:()=>reviewed, window:{setFullScreen:async(on)=>{fullscreen.push(on)},isFullScreen:async()=>false}, fullscreenCalls:()=>fullscreen,
  getSettings:async()=>settings, updateSettings:async(patch)=>{Object.assign(settings,patch);callbacks.settings.forEach(cb=>cb(settings));return settings},onSettingsChanged:cb=>off('settings',cb),

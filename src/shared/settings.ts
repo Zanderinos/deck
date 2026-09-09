@@ -86,6 +86,8 @@ export interface DeckSettings {
   summonDockToTop: boolean;
   /** Quake-style panel height as a fraction of the screen's work area. */
   summonHeightRatio: number;
+  /** Hide a hotkey-summoned quake panel as soon as another app takes focus. */
+  summonHideOnBlur: boolean;
   /** Directories deck treats as repo roots (search fallbacks, repo pickers). */
   repoRoots: string[];
   /** Where a new terminal tab starts. Supports ~. */
@@ -116,6 +118,7 @@ export const defaultSettings: DeckSettings = {
   summonHotkeyEnabled: true,
   summonDockToTop: true,
   summonHeightRatio: 0.6,
+  summonHideOnBlur: true,
   repoRoots: [],
   defaultCwd: "~",
   theme: "dark",
