@@ -193,11 +193,11 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
     {archive && <SessionArchive sessions={sessions} onResume={(session) => void resume(session)} onClose={() => setArchive(false)} />}
-    <div className="@container relative flex items-center gap-1 border-t border-edge px-2 py-2">
+    <div className="@container relative flex h-10 shrink-0 items-center gap-1 border-t border-edge px-2">
       {footerIndex >= 0 && <span aria-hidden className="absolute bottom-2 top-2 rounded bg-card2 transition-[left] duration-200 ease-out" style={{ width: `calc((100% - 16px - ${(footerViews.length - 1) * 4}px) / ${footerViews.length})`, left: `calc(8px + (100% - 16px + 4px) / ${footerViews.length} * ${footerIndex})` }} />}
       {footerViews.map((target) => {
         const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
-        return <button key={target} onClick={() => onView(target)} title={target} className={`relative flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] transition-colors duration-200 ${view === target ? "text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
+        return <button key={target} onClick={() => onView(target)} title={target} className={`relative flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 text-[11px] transition-colors duration-200 ${view === target ? "text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
       })}
     </div>
   </aside>;

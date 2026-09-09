@@ -108,17 +108,19 @@ export function TerminalView({ visible }: { visible: boolean }) {
   };
   return <div className={`relative min-h-0 flex-1 ${visible ? "flex" : "hidden"}`}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="workbench-chrome flex h-[64px] shrink-0 items-center gap-4 border-b border-edge px-5 font-sans">
+      <div className="workbench-chrome flex h-16 shrink-0 items-center gap-4 border-b border-edge px-4 font-sans">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[11px] text-mut"><span className="truncate">{shortPath(cwd)}</span>{git && <><Icon name="branch" size={11} /><span>{git.branch}</span><span className="text-dim">· {git.changedFiles} changed</span></>}</div>
           <div className="mt-1 truncate text-[13px] font-semibold text-soft">{activeTab?.customTitle || session?.title || activeTab?.agent || activeTab?.title || "Terminal"}</div>
         </div>
-        <button title="Split right (⌘D)" aria-label="Split right" onClick={() => { report({ action: "split-button" }); void split("row"); }} className="toolbar-button"><Icon name="splitRight" size={15} /></button>
-        <button title="Split down (⌘⇧D)" aria-label="Split down" onClick={() => { report({ action: "split-button" }); void split("column"); }} className="toolbar-button"><Icon name="splitDown" size={15} /></button>
-        <button title="Find in terminal (⌘F)" aria-label="Find in terminal" onClick={() => terminalAction("find")} className="toolbar-button"><Icon name="search" size={15} /></button>
-        <button title="Export terminal output" aria-label="Export terminal output" onClick={() => terminalAction("export")} className="toolbar-button"><Icon name="download" size={15} /></button>
+        <div className="flex items-center gap-1">
+          <button title="Split right (⌘D)" aria-label="Split right" onClick={() => { report({ action: "split-button" }); void split("row"); }} className="toolbar-button"><Icon name="splitRight" size={15} /></button>
+          <button title="Split down (⌘⇧D)" aria-label="Split down" onClick={() => { report({ action: "split-button" }); void split("column"); }} className="toolbar-button"><Icon name="splitDown" size={15} /></button>
+          <button title="Find in terminal (⌘F)" aria-label="Find in terminal" onClick={() => terminalAction("find")} className="toolbar-button"><Icon name="search" size={15} /></button>
+          <button title="Export terminal output" aria-label="Export terminal output" onClick={() => terminalAction("export")} className="toolbar-button"><Icon name="download" size={15} /></button>
+        </div>
       </div>
-      {error && <div className="px-5 py-2 text-xs text-red">{error}<button className="ml-2" onClick={() => setError("")}>×</button></div>}
+      {error && <div className="px-4 py-2 text-xs text-red">{error}<button className="ml-2" onClick={() => setError("")}>×</button></div>}
       <div ref={paneArea} className="relative min-h-0 flex-1">
         {tabs.map((tab) => {
           const rect = rects.find((rect) => rect.termId === tab.termId);
@@ -152,10 +154,10 @@ export function TerminalView({ visible }: { visible: boolean }) {
         <textarea aria-label="Command editor" autoFocus rows={3} value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && event.metaKey) { event.preventDefault(); submit(); } }} placeholder="Write a command or paste a multiline prompt…" className="w-full resize-y bg-transparent font-mono text-xs leading-5 text-soft outline-none placeholder:text-dim" />
         <div className="flex items-center gap-2 font-sans text-[10px] text-dim"><span>Send to active terminal</span><button className="ml-auto text-mut" onClick={() => setComposer(false)}>Close</button><button disabled={!command.trim()} onClick={submit} className="rounded border border-edge3 px-2 py-1 text-soft disabled:opacity-30">Send ⌘↵</button></div>
       </div>}
-      <footer className="workbench-chrome flex h-9 shrink-0 items-center gap-2 border-t border-edge px-4 font-sans text-[11px] text-mut">
+      <footer className="workbench-chrome flex h-10 shrink-0 items-center gap-2 border-t border-edge px-4 font-sans text-[11px] text-mut">
         <button title="New terminal (⌘T)" onClick={() => { report({ action: "new-tab-button" }); void newTab(); }} className="toolbar-button"><Icon name="plus" size={13} /></button>
         <button title={`New ${agentLabels[defaultAgent]} tab (⌘⇧N)`} onClick={() => void newTab({ agent: defaultAgent })} className="toolbar-button"><Icon name="sparkle" size={13} /></button>
-        {git && <button onClick={() => terminalAction("changes")} className="flex items-center gap-1.5 rounded border border-edge2 px-1.5 py-0.5"><Icon name="file" size={11} /><span>{git.changedFiles}</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
+        {git && <button onClick={() => terminalAction("changes")} className="flex items-center gap-1.5 rounded border border-edge2 px-2 py-0.5"><Icon name="file" size={11} /><span>{git.changedFiles}</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
         <button onClick={() => terminalAction("files")} className={`flex items-center gap-1.5 rounded px-2 py-1 ${panel === "files" ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="folder" size={12} />File explorer</button>
         <button onClick={() => setComposer(!composer)} className={`flex items-center gap-1.5 rounded px-2 py-1 ${composer ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="pencil" size={12} />Rich input <kbd className="text-dim">⌘J</kbd></button>
         <span className="ml-auto min-w-0 truncate text-dim">{shortPath(cwd)}</span>

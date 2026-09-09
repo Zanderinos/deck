@@ -11,7 +11,7 @@ export function Titlebar({ onSearch, onSidebar, onView, sidebarOpen }: { onSearc
   const { report } = useTips();
   const { tabs, activeId } = useTabs();
   const git = useGitSummary(tabs.find((tab) => tab.termId === activeId)?.cwd);
-  return <header className="drag-region flex h-[44px] shrink-0 items-center gap-1 border-b border-edge bg-bg pl-[100px] pr-3 font-sans">
+  return <header className="drag-region flex h-11 shrink-0 items-center gap-1 border-b border-edge bg-bg pl-[100px] pr-3 font-sans">
     <button onClick={() => { report({ action: "sidebar-button" }); onSidebar(); }} aria-label="Toggle sidebar" aria-pressed={sidebarOpen} title="Toggle sidebar (⌘B)" className={`toolbar-button ${sidebarOpen ? "bg-card2 text-soft" : ""}`}><Icon name="sidebar" size={17} /></button>
     <button onClick={() => { report({ action: "settings-button" }); onView("settings"); }} title="Settings" aria-label="Settings" className="toolbar-button"><Icon name="settings" size={17} /></button>
     <button onClick={() => onView("board")} title="Board" aria-label="Board" className="toolbar-button"><Icon name="grid" size={16} /></button>
