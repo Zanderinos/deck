@@ -1,14 +1,7 @@
 import { useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDiff, type FileData, type ViewType } from "react-diff-view";
-import type {
-  IssuePr,
-  MergeMethod,
-  PrComment,
-  PrDetail,
-  PrTimelineEvent,
-  ReviewEvent,
-} from "../../../main/github.js";
+import type { IssuePr, MergeMethod, PrComment, PrDetail, ReviewEvent } from "../../../main/github.js";
 import type { BoardIssue } from "../../../main/jira.js";
 import type { RepoDir } from "../../../main/providers.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
@@ -18,6 +11,7 @@ import { PrOverview } from "./PrOverview.js";
 import { Icon } from "./icons.js";
 import { PrAgentPanel } from "./PrAgentPanel.js";
 import { useReviewChat } from "./useReviewChat.js";
+import { usePrData } from "../lib/prData.js";
 import { checksSummary, shellQuote, Stat, toneColor } from "./prUi.js";
 
 // GitHub enables its merge button for exactly these merge-box states.
@@ -69,10 +63,7 @@ export interface PrScreenProps {
 
 export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, onReviewed }: PrScreenProps) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [diffText, setDiffText] = useState<string>();
-  const [detail, setDetail] = useState<PrDetail | null>();
-  const [comments, setComments] = useState<PrComment[]>([]);
-  const [timeline, setTimeline] = useState<PrTimelineEvent[]>([]);
+  const { diffText, detail, comments, timeline, refresh, setComments } = usePrData(pr.repo, pr.number);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [activePath, setActivePath] = useState<string>();
   const [viewType, setViewType] = useState<ViewType>(
@@ -95,20 +86,9 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
     void window.deck.search.listRepos().then(setRepos);
   }, []);
 
-  const refresh = () => {
-    void window.deck.gh.prDetail(pr.repo, pr.number).then((d) => {
-      setDetail(d);
-      if (d) setViewed(new Set(d.files.filter((f) => f.viewed).map((f) => f.path)));
-    });
-    void window.deck.gh.prComments(pr.repo, pr.number).then(setComments);
-    void window.deck.gh.prTimeline(pr.repo, pr.number).then(setTimeline);
-  };
-
   useEffect(() => {
-    void window.deck.gh.prDiff(pr.repo, pr.number).then(setDiffText);
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pr.repo, pr.number]);
+    if (detail) setViewed(new Set(detail.files.filter((f) => f.viewed).map((f) => f.path)));
+  }, [detail]);
 
   useEffect(() => localStorage.setItem(VIEW_TYPE_KEY, viewType), [viewType]);
   useEffect(() => localStorage.setItem(ASSISTANT_KEY, agentOpen ? "open" : "closed"), [agentOpen]);
