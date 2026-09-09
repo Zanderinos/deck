@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { IssuePr, ReviewEvent } from "../../../main/github.js";
 import type { InboxPr } from "../../../main/prInbox.js";
 import { prKey } from "../../../shared/prs.js";
+import { onOpenPullRequest, type OpenPrDetail } from "../lib/bus.js";
 import { issueFor, useReviewQueue } from "../lib/reviews.js";
 import { Icon } from "./icons.js";
 import { PrScreen } from "./PrScreen.js";
@@ -60,18 +61,25 @@ export function ReviewsView({ visible }: { visible: boolean }) {
   const [picked, setPicked] = useState<string>();
   const [rail, setRail] = useState(() => localStorage.getItem("deck.reviews.rail") !== "hidden");
   const [reviewed, setReviewed] = useState<{ key: string; event: ReviewEvent }>();
+  // A PR reached from a stack link, which need not be in the queue at all.
+  const [linked, setLinked] = useState<OpenPrDetail>();
 
   const toggleRail = () => setRail((open) => { localStorage.setItem("deck.reviews.rail", open ? "hidden" : "visible"); return !open; });
+  useEffect(() => onOpenPullRequest(setLinked), []);
 
   const browsable = [...lists.waiting, ...lists.reviewed, ...lists.mine];
   const fromQueue = queue[Math.min(index, Math.max(queue.length - 1, 0))];
-  const current = (picked && browsable.find((pr) => prKey(pr) === picked)) || fromQueue;
+  const current = linked
+    ? browsable.find((pr) => pr.repo === linked.repo && pr.number === linked.number)
+      ?? { ...linked, reviewDecision: null, mergeable: "UNKNOWN", checks: "NONE", headRefName: "", baseRefName: "" }
+    : (picked && browsable.find((pr) => prKey(pr) === picked)) || fromQueue;
   const position = current ? queue.indexOf(current) : -1;
 
   // Picking a queued PR moves the queue position to it; anything else is
   // shown without touching the queue.
   const pick = (pr: InboxPr) => {
     const at = queue.indexOf(pr);
+    setLinked(undefined);
     if (at >= 0) { setIndex(at); setPicked(undefined); } else setPicked(prKey(pr));
   };
   const issue = current ? issueFor(current, board) : undefined;
@@ -79,6 +87,7 @@ export function ReviewsView({ visible }: { visible: boolean }) {
   const go = (delta: number) => {
     const from = position >= 0 ? position : index;
     setPicked(undefined);
+    setLinked(undefined);
     setIndex(Math.min(Math.max(from + delta, 0), Math.max(queue.length - 1, 0)));
   };
 

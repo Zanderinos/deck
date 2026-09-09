@@ -7,6 +7,7 @@ const paths = {
   plus: "M8 3v10M3 8h10",
   terminal: "M3 4l4 4-4 4M9 12h4",
   grid: "M2 2h4v4H2zM10 2h4v4h-4zM2 10h4v4H2zM10 10h4v4h-4z",
+  layers: "M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3",
   folder: "M2 4h5l1.5 2H14v7H2z",
   file: "M4 2h5l3 3v9H4zM9 2v4h3",
   splitRight: "M2 2h12v12H2zM8 2v12",

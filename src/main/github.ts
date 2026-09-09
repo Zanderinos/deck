@@ -817,3 +817,78 @@ export async function prDiff(repo: string, number: number): Promise<string> {
     return `diff unavailable: ${err instanceof Error ? err.message.split("\n")[0] : "error"}`;
   }
 }
+
+export interface StackedPr {
+  number: number;
+  title: string;
+  author: string;
+  url: string;
+  isDraft: boolean;
+  updatedAt: string;
+  headRefName: string;
+  baseRefName: string;
+}
+
+/** A PR's place in a branch stack: the PRs it is stacked on, nearest first,
+ *  and the ones stacked on it. Only plain-git stacking is visible this way,
+ *  and a PR with several children is followed down its first one. */
+export interface PrStack {
+  below: StackedPr[];
+  above: StackedPr[];
+}
+
+/** Longest chain resolved in either direction. */
+const MAX_STACK = 10;
+
+interface RestPr {
+  number: number;
+  title: string;
+  html_url: string;
+  draft: boolean;
+  updated_at: string;
+  user: { login: string } | null;
+  head: { ref: string };
+  base: { ref: string };
+}
+
+const toStacked = (pr: RestPr): StackedPr => ({
+  number: pr.number,
+  title: pr.title,
+  author: pr.user?.login ?? "",
+  url: pr.html_url,
+  isDraft: pr.draft,
+  updatedAt: pr.updated_at,
+  headRefName: pr.head.ref,
+  baseRefName: pr.base.ref,
+});
+
+async function openPrs(repo: string, filter: string): Promise<StackedPr[]> {
+  try {
+    const { stdout } = await exec("gh", ["api", `repos/${repo}/pulls?state=open&per_page=20&${filter}`], { timeout: 20_000 });
+    return (JSON.parse(stdout) as RestPr[]).map(toStacked);
+  } catch {
+    return [];
+  }
+}
+
+export async function prStack(repo: string, headRefName: string, baseRefName: string, number: number): Promise<PrStack> {
+  const owner = repo.split("/")[0];
+  const seen = new Set([number]);
+  const walk = async (from: string, next: (pr: StackedPr) => string, filter: (ref: string) => string) => {
+    const chain: StackedPr[] = [];
+    let ref = from;
+    while (ref && chain.length < MAX_STACK) {
+      const [found] = await openPrs(repo, filter(ref));
+      if (!found || seen.has(found.number)) break;
+      seen.add(found.number);
+      chain.push(found);
+      ref = next(found);
+    }
+    return chain;
+  };
+  const [below, above] = await Promise.all([
+    walk(baseRefName, (pr) => pr.baseRefName, (ref) => `head=${owner}:${ref}`),
+    walk(headRefName, (pr) => pr.headRefName, (ref) => `base=${ref}`),
+  ]);
+  return { below, above };
+}

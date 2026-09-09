@@ -13,6 +13,7 @@ import type {
   PrActionResult,
   PrComment,
   PrDetail,
+  PrStack,
   PrTimelineEvent,
   ReviewEvent,
 } from "../main/github.js";
@@ -70,6 +71,8 @@ const api = {
     },
     prDetail: (repo: string, n: number): Promise<PrDetail | null> =>
       ipcRenderer.invoke("gh:prDetail", repo, n),
+    prStack: (repo: string, head: string, base: string, n: number): Promise<PrStack> =>
+      ipcRenderer.invoke("gh:prStack", repo, head, base, n),
     prDiff: (repo: string, n: number): Promise<string> => ipcRenderer.invoke("gh:prDiff", repo, n),
     prComments: (repo: string, n: number): Promise<PrComment[]> =>
       ipcRenderer.invoke("gh:prComments", repo, n),

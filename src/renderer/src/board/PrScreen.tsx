@@ -13,6 +13,7 @@ import type { BoardIssue } from "../../../main/jira.js";
 import type { RepoDir } from "../../../main/providers.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
 import { PrDiffTab, type AskAgentRequest } from "./PrDiffTab.js";
+import { PrStackStrip } from "./PrStackStrip.js";
 import { PrOverview } from "./PrOverview.js";
 import { Icon } from "./icons.js";
 import { PrAgentPanel } from "./PrAgentPanel.js";
@@ -394,6 +395,7 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, on
         >
           <Icon name="sparkle" size={11} /> Assistant
         </button>
+        <PrStackStrip repo={pr.repo} number={pr.number} title={pr.title} headRefName={detail?.headRefName} baseRefName={detail?.baseRefName} />
         {actionError && <span className="ml-3 truncate text-[11px] text-red">{actionError}</span>}
 
         <span className="ml-auto flex items-center gap-2">
