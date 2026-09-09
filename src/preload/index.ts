@@ -3,7 +3,7 @@ import type { DeckPlugin, ExtensionCatalog } from "../shared/extensions.js";
 import type { FileEntry, LocalFile } from "../main/files.js";
 import type { Agent } from "../shared/agents.js";
 import type { TermCreateOptions } from "../main/pty.js";
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
 import type {
@@ -191,6 +191,8 @@ const api = {
     resize: (id: string, cols: number, rows: number): void =>
       ipcRenderer.send("term:resize", id, cols, rows),
     kill: (id: string): void => ipcRenderer.send("term:kill", id),
+    /** Absolute path of a file dragged in from Finder; only the preload may read it. */
+    pathForFile: (file: File): string => webUtils.getPathForFile(file),
     onData: (cb: (id: string, data: string, sequence: number) => void): (() => void) => {
       const listener = (_e: unknown, id: string, data: string, sequence: number) => cb(id, data, sequence);
       ipcRenderer.on("term:data", listener);

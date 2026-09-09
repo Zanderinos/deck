@@ -143,6 +143,18 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     setMatch(`${searchPosition.current + 1} / ${matches.length}`);
   };
 
+  // Finder drops arrive as File objects with no path in the renderer; the
+  // preload resolves them. Paths go in as one bracketed paste, shell-quoted,
+  // so agents like Claude Code pick a dropped image up as an attachment.
+  const dropFiles = (event: React.DragEvent) => {
+    event.preventDefault();
+    const paths = Array.from(event.dataTransfer.files, (file) => window.deck.term.pathForFile(file)).filter(Boolean);
+    if (!paths.length) return;
+    const quoted = paths.map((path) => /[^\w./-]/.test(path) ? `'${path.replace(/'/g, "'\\''")}'` : path).join(" ");
+    window.deck.term.input(termId, `\x1b[200~${quoted} \x1b[201~`);
+    termRef.current?.focus();
+  };
+
   useEffect(() => onTerminalAction((action) => {
     if (!active || !focused) return;
     const term = termRef.current;
@@ -158,7 +170,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     }
   }), [active, focused, termId]);
 
-  return <div style={{ background: theme.terminal.background }} className={`relative h-full w-full px-4 py-3 ${active ? "" : "hidden"}`}>
+  return <div style={{ background: theme.terminal.background }} onDragOver={(event) => event.preventDefault()} onDrop={dropFiles} className={`relative h-full w-full px-4 py-3 ${active ? "" : "hidden"}`}>
     {finding && <div className="absolute right-1 top-0 z-20 flex items-center gap-2 rounded-md border border-edge3 bg-overlay px-2 py-1.5 font-sans text-[11px] shadow-lg">
       <input aria-label="Find terminal output" autoFocus placeholder="Find in terminal…" value={query} onChange={(event) => { setQuery(event.target.value); searchPosition.current = -1; setMatch(""); }} onKeyDown={(event) => { if (event.key === "Enter") find(event.shiftKey); if (event.key === "Escape") { setFinding(false); termRef.current?.focus(); } }} className="w-40 bg-transparent text-soft outline-none" />
       <span className="text-dim">{match}</span><button title="Previous match" onClick={() => find(true)}>↑</button><button title="Next match" onClick={() => find()}>↓</button><button title="Close find" onClick={() => setFinding(false)}>×</button>
