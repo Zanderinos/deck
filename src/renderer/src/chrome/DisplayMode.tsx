@@ -4,7 +4,10 @@ import { Icon } from "../board/icons.js";
 import { useTabs } from "../store.js";
 import type { View } from "../App.js";
 
-const viewTitles: Record<View, string> = { terminal: "Terminal", board: "Board", agent: "Agent", reviews: "Reviews", search: "Search", settings: "Settings" };
+export const viewTitles: Record<View, string> = { terminal: "Terminal", board: "Board", agent: "Agent", reviews: "Reviews", search: "Search", settings: "Settings" };
+
+/** Terminal font size while presenting, in px. */
+export const presentationSizes = { min: 16, max: 32, step: 2 };
 
 export type DisplayMode = "normal" | "zen" | "presentation";
 interface DisplaySettings {
@@ -44,9 +47,9 @@ export function FocusModeBar({ view }: { view: View }) {
     <span className="text-soft">{mode === "zen" ? "Zen" : "Presentation"}</span>
     <span className="min-w-0 flex-1 truncate text-dim">{terminal ? active?.customTitle || session?.title || active?.title || "Terminal" : viewTitles[view]}</span>
     {mode === "presentation" && <>
-      <button aria-label="Smaller presentation text" title="Smaller text" disabled={presentationSize <= 16} onClick={() => setPresentationSize(presentationSize - 2)} className="rounded px-1.5 py-1 hover:bg-card disabled:opacity-30">A−</button>
+      <button aria-label="Smaller presentation text" title="Smaller text" disabled={presentationSize <= presentationSizes.min} onClick={() => setPresentationSize(presentationSize - presentationSizes.step)} className="rounded px-1.5 py-1 hover:bg-card disabled:opacity-30">A−</button>
       <span className="text-dim">{presentationSize}px</span>
-      <button aria-label="Larger presentation text" title="Larger text" disabled={presentationSize >= 32} onClick={() => setPresentationSize(presentationSize + 2)} className="rounded px-1.5 py-1 hover:bg-card disabled:opacity-30">A+</button>
+      <button aria-label="Larger presentation text" title="Larger text" disabled={presentationSize >= presentationSizes.max} onClick={() => setPresentationSize(presentationSize + presentationSizes.step)} className="rounded px-1.5 py-1 hover:bg-card disabled:opacity-30">A+</button>
       {terminal && <>
         <span className="mx-1 h-3 border-l border-edge3" />
         <button aria-label="Previous presentation session" disabled={tabs.length < 2} onClick={() => move(-1)} className="px-2 py-1 hover:text-soft disabled:opacity-30">←</button>

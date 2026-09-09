@@ -1,38 +1,26 @@
-import { useExtensions } from "../extensions/ExtensionProvider.js";
-import { useDisplayMode } from "../chrome/DisplayMode.js";
 import type { View } from "../App.js";
-import { terminalAction } from "../terminal/actions.js";
+import type { SettingsSection } from "../chrome/SettingsView.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchHit } from "../../../main/indexer.js";
 import type { GithubHit, RepoDir } from "../../../main/providers.js";
 import { useTabs } from "../store.js";
+import { usePaletteActions, type PaletteGroup, type PaletteItem } from "./paletteActions.js";
 
-// The ⌘K overlay from the deck design: grouped results, conversations first,
-// then repos and pull requests. ⏎ opens, ⌘⏎ opens in a new session.
-
-interface Item {
-  icon: string;
-  iconColor: string;
-  title: string;
-  meta: string;
-  open: (inNewPane: boolean) => void;
-}
-
-interface Group {
-  label: string;
-  items: Item[];
-}
+// The ⌘K overlay from the deck design: grouped results, open sessions and
+// actions first, then conversations, repos and pull requests. ⏎ opens,
+// ⌘⏎ opens in a new session.
 
 export interface SearchOverlayProps {
   onClose: () => void;
   onView: (view: View) => void;
+  onSettings: (section: SettingsSection) => void;
+  onSidebar: () => void;
   onPreview: (sessionId: string, query: string) => void;
 }
 
-export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps) {
-  const { commands, runCommand, themes, selectTheme } = useExtensions();
-  const { setMode } = useDisplayMode();
+export function SearchOverlay({ onClose, onPreview, onView, onSettings, onSidebar }: SearchOverlayProps) {
   const { newTab, tabs, focusTab } = useTabs();
+  const paletteGroups = usePaletteActions({ onView, onSettings, onSidebar });
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const [convHits, setConvHits] = useState<SearchHit[]>([]);
@@ -65,40 +53,24 @@ export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps
     };
   }, [query]);
 
-  const groups = useMemo<Group[]>(() => {
+  const groups = useMemo<PaletteGroup[]>(() => {
     const q = query.trim().toLowerCase();
+    const matches = (item: PaletteItem) => `${item.title} ${item.meta} ${item.keywords ?? ""}`.toLowerCase().includes(q);
     const conv = new Map<string, SearchHit>();
     for (const h of convHits) if (!conv.has(h.session_id)) conv.set(h.session_id, h);
-    const out: Group[] = [];
+    const out: PaletteGroup[] = [];
     const liveTabs = tabs.filter((tab) => `${tab.customTitle ?? ""} ${tab.title} ${tab.cwd ?? ""} ${tab.agent ?? ""}`.toLowerCase().includes(q));
-    if (liveTabs.length) out.push({ label: "OPEN SESSIONS", items: liveTabs.slice(0, 6).map((tab) => ({
-      icon: tab.agent ? "✳" : "❯", iconColor: "text-mut", title: tab.customTitle || tab.title, meta: tab.cwd?.replace(/^\/Users\/[^/]+/, "~") ?? "",
-      open: () => { focusTab(tab.termId); onView("terminal"); },
-    })) });
-    const actions: Item[] = [
-      { icon: "⛶", iconColor: "text-mut", title: "Zen view", meta: "⌘⇧Enter", open: () => setMode("zen") },
-      { icon: "▣", iconColor: "text-mut", title: "Presentation view", meta: "⌘⇧P", open: () => setMode("presentation") },
-      { icon: "×", iconColor: "text-mut", title: "Exit zen or presentation view", meta: "Escape", open: () => setMode("normal") },
-      { icon: "❯", iconColor: "text-mut", title: "New terminal", meta: "⌘T", open: () => { void newTab(); onView("terminal"); } },
-      { icon: "✳", iconColor: "text-mut", title: "New Codex session", meta: "Codex", open: () => { void newTab({ agent: "codex" }); onView("terminal"); } },
-      { icon: "✳", iconColor: "text-mut", title: "New Claude session", meta: "Claude", open: () => { void newTab({ agent: "claude" }); onView("terminal"); } },
-      { icon: "◫", iconColor: "text-mut", title: "Split pane right", meta: "⌘D", open: () => { onView("terminal"); terminalAction("split-right"); } },
-      { icon: "◫", iconColor: "text-mut", title: "Split pane down", meta: "⌘⇧D", open: () => { onView("terminal"); terminalAction("split-down"); } },
-      { icon: "⌕", iconColor: "text-mut", title: "Search chat history", meta: "Claude + Codex", open: () => onView("search") },
-      { icon: "⌂", iconColor: "text-mut", title: "File explorer", meta: "Project files", open: () => { onView("terminal"); terminalAction("files"); } },
-      { icon: "±", iconColor: "text-mut", title: "Working-tree changes", meta: "⌘E", open: () => { onView("terminal"); terminalAction("changes"); } },
-      { icon: "◫", iconColor: "text-mut", title: "Open board", meta: "Jira + GitHub", open: () => onView("board") },
-      { icon: "✳", iconColor: "text-mut", title: "Agent", meta: "Orchestrate your agents", open: () => onView("agent") },
-      { icon: "✓", iconColor: "text-mut", title: "Reviews", meta: "Review queue", open: () => onView("reviews") },
-      { icon: "⚙", iconColor: "text-mut", title: "Settings", meta: "⌘,", open: () => onView("settings") },
-    ];
-    const matchingActions = actions.filter((action) => `${action.title} ${action.meta}`.toLowerCase().includes(q));
-    if (matchingActions.length) out.push({ label: "ACTIONS", items: matchingActions });
-    const pluginCommands = commands.filter((command) => `${command.title} ${command.description ?? ""} ${command.pluginName}`.toLowerCase().includes(q));
-    if (pluginCommands.length) out.push({ label: "PLUGINS", items: pluginCommands.map((command) => ({ icon: "◈", iconColor: "text-accent", title: command.title, meta: command.pluginName, open: () => void runCommand(command) })) });
-    if (q) {
-      const matchingThemes = themes.filter((theme) => `theme ${theme.name}`.toLowerCase().includes(q));
-      if (matchingThemes.length) out.push({ label: "THEMES", items: matchingThemes.map((theme) => ({ icon: "◐", iconColor: "text-mut", title: theme.name, meta: "Apply theme", open: () => void selectTheme(theme.id) })) });
+    if (liveTabs.length) out.push({ label: "OPEN SESSIONS", items: liveTabs.slice(0, 6).map((tab) => {
+      const position = tabs.indexOf(tab);
+      return {
+        icon: tab.agent ? "✳" : "❯", iconColor: "text-mut", title: tab.customTitle || tab.title,
+        meta: [tab.cwd?.replace(/^\/Users\/[^/]+/, "~"), position < 9 && `⌘${position + 1}`].filter(Boolean).join(" · "),
+        open: () => { focusTab(tab.termId); onView("terminal"); },
+      };
+    }) });
+    for (const group of paletteGroups) {
+      const items = group.items.filter((item) => (q || !item.whenTyping) && matches(item));
+      if (items.length) out.push({ label: group.label, items });
     }
     if (conv.size) {
       out.push({
@@ -141,7 +113,7 @@ export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps
       });
     }
     return out;
-  }, [convHits, repos, ghHits, query, newTab, onPreview, tabs, focusTab, onView, setMode, commands, runCommand, themes, selectTheme]);
+  }, [convHits, repos, ghHits, query, newTab, onPreview, tabs, focusTab, onView, paletteGroups]);
 
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
@@ -186,7 +158,7 @@ export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search Deck"
-            placeholder="Search sessions, history, commands, repos…"
+            placeholder="Search sessions, history, commands, settings, repos…"
             className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-dim"
           />
           <span className="rounded border border-edge2 px-1.5 py-px text-[10px] text-dim">esc</span>
@@ -229,7 +201,7 @@ export function SearchOverlay({ onClose, onPreview, onView }: SearchOverlayProps
           <span>↑↓ navigate</span>
           <span>⏎ open</span>
           <span>⌘⏎ open in new session</span>
-          <span className="ml-auto">sessions · commands · conversations</span>
+          <span className="ml-auto">sessions · commands · settings · conversations</span>
         </div>
       </div>
     </div>

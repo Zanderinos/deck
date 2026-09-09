@@ -1,5 +1,4 @@
 import { ExtensionProvider } from "./extensions/ExtensionProvider.js";
-import { AppearanceSettings, PluginsSettings } from "./extensions/AppearanceSettings.js";
 import { DisplayModeProvider, FocusModeBar, useDisplayMode } from "./chrome/DisplayMode.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentDock } from "./agents/AgentDock.js";
@@ -7,8 +6,7 @@ import { AgentPage } from "./agents/AgentPage.js";
 import { ChatProvider } from "./agents/ChatStore.js";
 import { BoardView } from "./board/BoardView.js";
 import { ReviewsView } from "./board/ReviewsView.js";
-import { GeneralSettings } from "./chrome/GeneralSettings.js";
-import { KeybindsSettings } from "./chrome/KeybindsSettings.js";
+import { SettingsView, type SettingsSection } from "./chrome/SettingsView.js";
 import { useSettings } from "./lib/useSettings.js";
 import { isRecordingKeys } from "./lib/useKeybinds.js";
 import { matchKeybind, resolveKeybinds } from "../../shared/keybinds.js";
@@ -45,7 +43,9 @@ function Shell() {
     });
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("deck.sidebar") !== "hidden");
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; }), []);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
   const { tabs, focusTab, newTab, closeTab, activeId } = useTabs();
   const settings = useSettings();
@@ -133,9 +133,8 @@ function Shell() {
       if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         const tab = tabs[Number(e.key) - 1];
         if (tab) { focusTab(tab.termId); setView("terminal"); }
-      } else if (command === "sidebar") {
-        setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; });
-      } else if (command === "settings") setView("settings");
+      } else if (command === "sidebar") toggleSidebar();
+      else if (command === "settings") setView("settings");
       else if (command === "view.terminal") setView("terminal");
       else if (command === "view.board") setView("board");
       else if (command === "view.agent") setView("agent");
@@ -152,12 +151,12 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings, keybinds]);
+  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings, keybinds, toggleSidebar]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
       <FocusModeBar view={view} />
-      <div className="workbench-chrome"><Titlebar onSearch={() => setSearchOpen(true)} sidebarOpen={sidebarOpen} onView={setView} onSidebar={() => setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; })} /></div>
+      <div className="workbench-chrome"><Titlebar onSearch={() => setSearchOpen(true)} sidebarOpen={sidebarOpen} onView={setView} onSidebar={toggleSidebar} /></div>
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && <div className="workbench-chrome flex min-h-0"><Sidebar view={view} onView={setView} /></div>}
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -175,31 +174,14 @@ function Shell() {
           <AgentPage visible={view === "agent"} />
           <ReviewsView visible={view === "reviews"} />
           {view === "board" && <BoardView />}
-          {view === "settings" && <SettingsView />}
+          {view === "settings" && <SettingsView section={settingsSection} onSection={setSettingsSection} />}
           </div>
         </main>
       </div>
       {view !== "agent" && <div className="workbench-chrome"><AgentDock onView={setView} /></div>}
       {searchOpen && (
-        <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} onView={setView} />
+        <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} onView={setView} onSidebar={toggleSidebar} onSettings={(section) => { setSettingsSection(section); setView("settings"); }} />
       )}
-    </div>
-  );
-}
-
-function SettingsView() {
-  const [section, setSection] = useState<"appearance" | "plugins" | "keybinds" | "general">("appearance");
-  const labels = { appearance: "Appearance", plugins: "Plugins", keybinds: "Keybinds", general: "General & integrations" } as const;
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
-        <span className="font-bold text-ink">Settings</span>
-        <div className="ml-4 flex gap-1 font-sans text-xs">{(["appearance", "plugins", "keybinds", "general"] as const).map((tab) => <button key={tab} onClick={() => setSection(tab)} className={`rounded-md px-3 py-1.5 ${section === tab ? "bg-card2 text-soft" : "text-mut hover:text-soft"}`}>{labels[tab]}</button>)}</div>
-      </div>
-      {section === "appearance" && <AppearanceSettings />}
-      {section === "plugins" && <PluginsSettings />}
-      {section === "keybinds" && <KeybindsSettings />}
-      {section === "general" && <GeneralSettings />}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export interface KeybindInfo {
 }
 
 export const keybindInfos: KeybindInfo[] = [
-  { id: "search", label: "Search sessions, history, commands, themes and repositories", group: "Workbench", default: "Meta+K" },
+  { id: "search", label: "Search sessions, history, commands, settings, themes and repositories", group: "Workbench", default: "Meta+K" },
   { id: "settings", label: "Open settings", group: "Workbench", default: "Meta+," },
   { id: "sidebar", label: "Toggle sidebar", group: "Workbench", default: "Meta+B" },
   { id: "view.terminal", label: "Terminal page", group: "Workbench", default: "Meta+Alt+Digit1" },

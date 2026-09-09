@@ -107,7 +107,7 @@ Install and authenticate [`claude`](https://docs.anthropic.com/en/docs/claude-co
 | Shortcut | Action |
 | --- | --- |
 | <kbd>⌥ Space</kbd> | Summon or hide Deck |
-| <kbd>⌘K</kbd> | Search sessions, history, commands, themes and repositories |
+| <kbd>⌘K</kbd> | Search sessions, history, commands, settings, themes and repositories |
 | <kbd>⌘T</kbd> / <kbd>⌘W</kbd> | New / close terminal |
 | <kbd>⌘⇧T</kbd> | New tab running the default agent |
 | <kbd>⌘1</kbd>–<kbd>⌘9</kbd> | Switch terminal |

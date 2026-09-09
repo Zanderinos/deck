@@ -3,7 +3,7 @@ import type { DeckPlugin, ExtensionCatalog } from "../shared/extensions.js";
 import type { FileEntry, LocalFile } from "../main/files.js";
 import type { Agent } from "../shared/agents.js";
 import type { TermCreateOptions } from "../main/pty.js";
-import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
 import type { GithubHit, RepoDir, RepoHit } from "../main/providers.js";
 import type {
@@ -166,6 +166,10 @@ const api = {
   window: {
     setFullScreen: (on: boolean): Promise<void> => ipcRenderer.invoke("window:fullscreen", on),
     isFullScreen: (): Promise<boolean> => ipcRenderer.invoke("window:isFullscreen"),
+    /** Page zoom as a Chromium level: 0 is 100% and each level scales by 1.2.
+     *  Chromium keeps it per origin, so every Deck window follows. */
+    zoomLevel: (): number => webFrame.getZoomLevel(),
+    setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
   },
   inbox: {
     get: (): Promise<PrInbox | undefined> => ipcRenderer.invoke("inbox:get"),
