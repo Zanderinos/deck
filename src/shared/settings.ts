@@ -1,4 +1,5 @@
 import type { Agent } from "./agents.js";
+import type { TerminalAppearanceSettings } from "./terminal.js";
 
 // Settings shape shared between main and renderer. Everything user-tunable
 // lives here — deck ships no hardcoded personal or company config.
@@ -91,6 +92,7 @@ export interface DeckSettings {
   defaultCwd: string;
   /** Built-in id, custom:<id>, or <plugin-id>:<theme-id>. */
   theme: string;
+  terminalAppearance: TerminalAppearanceSettings;
 }
 
 export const defaultSettings: DeckSettings = {
@@ -117,4 +119,13 @@ export const defaultSettings: DeckSettings = {
   repoRoots: [],
   defaultCwd: "~",
   theme: "dark",
+  terminalAppearance: {
+    fontFamily: "",
+    fontSize: 13,
+    fontWeight: "normal",
+    fontWeightBold: "bold",
+    lineHeight: 1,
+    cursorBlink: true,
+    cursorStyle: "block",
+  },
 };

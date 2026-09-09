@@ -1,5 +1,6 @@
 import { useExtensions } from "../extensions/ExtensionProvider.js";
 import { useDisplayMode } from "../chrome/DisplayMode.js";
+import { useTerminalAppearance } from "../lib/useTerminalAppearance.js";
 import { onTerminalAction } from "./actions.js";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
@@ -20,6 +21,7 @@ export interface TerminalPaneProps {
 export function TerminalPane({ termId, active, focused = active, onTitle }: TerminalPaneProps) {
   const { theme } = useExtensions();
   const { mode, presentationSize } = useDisplayMode();
+  const appearance = useTerminalAppearance();
   const [finding, setFinding] = useState(false);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState("");
@@ -32,9 +34,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     const host = hostRef.current!;
     const term = new Terminal({
       theme: theme.terminal,
-      fontFamily: "ui-monospace, Menlo, monospace",
-      fontSize: 13,
-      cursorBlink: true,
+      ...appearance,
       macOptionIsMeta: true,
       scrollback: 10_000,
     });
@@ -104,13 +104,24 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    term.options.fontSize = mode === "presentation" ? presentationSize : 13;
-    term.options.lineHeight = mode === "presentation" ? 1.25 : 1;
+    term.options.fontSize = mode === "presentation" ? presentationSize : appearance.fontSize;
+    term.options.lineHeight = mode === "presentation" ? 1.25 : appearance.lineHeight;
     const frame = requestAnimationFrame(() => { if (active) fitRef.current?.fit(); });
     return () => cancelAnimationFrame(frame);
-  }, [mode, presentationSize, active]);
+  }, [mode, presentationSize, active, appearance.fontSize, appearance.lineHeight]);
 
   useEffect(() => { if (termRef.current) termRef.current.options.theme = theme.terminal; }, [theme]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.fontFamily = appearance.fontFamily;
+    term.options.fontWeight = appearance.fontWeight;
+    term.options.fontWeightBold = appearance.fontWeightBold;
+    term.options.cursorBlink = appearance.cursorBlink;
+    term.options.cursorStyle = appearance.cursorStyle;
+    if (active) fitRef.current?.fit();
+  }, [appearance.fontFamily, appearance.fontWeight, appearance.fontWeightBold, appearance.cursorBlink, appearance.cursorStyle, active]);
 
   const find = (backwards = false) => {
     const term = termRef.current;
@@ -147,7 +158,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     }
   }), [active, focused, termId]);
 
-  return <div className={`relative h-full w-full ${active ? "" : "hidden"}`}>
+  return <div style={{ background: theme.terminal.background }} className={`relative h-full w-full px-4 py-3 ${active ? "" : "hidden"}`}>
     {finding && <div className="absolute right-1 top-0 z-20 flex items-center gap-2 rounded-md border border-edge3 bg-overlay px-2 py-1.5 font-sans text-[11px] shadow-lg">
       <input aria-label="Find terminal output" autoFocus placeholder="Find in terminal…" value={query} onChange={(event) => { setQuery(event.target.value); searchPosition.current = -1; setMatch(""); }} onKeyDown={(event) => { if (event.key === "Enter") find(event.shiftKey); if (event.key === "Escape") { setFinding(false); termRef.current?.focus(); } }} className="w-40 bg-transparent text-soft outline-none" />
       <span className="text-dim">{match}</span><button title="Previous match" onClick={() => find(true)}>↑</button><button title="Next match" onClick={() => find()}>↓</button><button title="Close find" onClick={() => setFinding(false)}>×</button>

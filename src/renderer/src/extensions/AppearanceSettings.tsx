@@ -1,7 +1,59 @@
 import { useEffect, useState } from "react";
+import { defaultSettings, type DeckSettings } from "../../../shared/settings.js";
+import { MAX_FONT_SIZE, MAX_LINE_HEIGHT, MIN_FONT_SIZE, MIN_LINE_HEIGHT, type CursorStyle } from "../../../shared/terminal.js";
 import { parseTheme } from "../../../shared/themes.js";
 import { Icon } from "../board/icons.js";
+import { control, Field } from "../chrome/settingsUi.js";
+import { useSettings } from "../lib/useSettings.js";
 import { useExtensions } from "./ExtensionProvider.js";
+
+
+function TerminalFont() {
+  const settings = useSettings();
+  const [open, setOpen] = useState(false);
+  const appearance = settings?.terminalAppearance ?? defaultSettings.terminalAppearance;
+  const update = (patch: Partial<DeckSettings["terminalAppearance"]>) =>
+    void window.deck.updateSettings({ terminalAppearance: { ...appearance, ...patch } });
+  const summary = `${appearance.fontFamily || "Platform monospace"} · ${appearance.fontSize}px`;
+  return <>
+    <div className="mt-3 flex items-center gap-3 rounded-xl border border-edge2 bg-panel p-4">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-card2 text-accent"><Icon name="terminal" size={17} /></span>
+      <div className="flex-1"><div className="text-xs font-medium text-soft">Terminal font</div><p className="mt-1 text-[11px] text-mut">{summary}</p></div>
+      <button aria-expanded={open} onClick={() => setOpen((was) => !was)} className="rounded-md border border-edge3 px-3 py-1.5 text-xs text-soft hover:bg-card2">{open ? "Done" : "Change"}</button>
+    </div>
+    {open && <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-edge2 bg-panel p-4 lg:grid-cols-4">
+      <div className="col-span-2 lg:col-span-2"><Field label="Family">
+        <input placeholder="FiraCode Nerd Font" className={control} defaultValue={appearance.fontFamily}
+          onBlur={(event) => { const fontFamily = event.target.value.trim(); if (fontFamily !== appearance.fontFamily) update({ fontFamily }); }} />
+      </Field></div>
+      <Field label="Size">
+        <input type="number" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} className={control} defaultValue={appearance.fontSize}
+          onBlur={(event) => { const fontSize = Number(event.target.value); if (fontSize && fontSize !== appearance.fontSize) update({ fontSize }); }} />
+      </Field>
+      <Field label="Line height">
+        <input type="number" step={0.05} min={MIN_LINE_HEIGHT} max={MAX_LINE_HEIGHT} className={control} defaultValue={appearance.lineHeight}
+          onBlur={(event) => { const lineHeight = Number(event.target.value); if (lineHeight && lineHeight !== appearance.lineHeight) update({ lineHeight }); }} />
+      </Field>
+      <Field label="Weight">
+        <input placeholder="normal or 100-900" className={control} defaultValue={appearance.fontWeight}
+          onBlur={(event) => { const fontWeight = event.target.value.trim(); if (fontWeight !== appearance.fontWeight) update({ fontWeight }); }} />
+      </Field>
+      <Field label="Bold weight">
+        <input placeholder="bold or 100-900" className={control} defaultValue={appearance.fontWeightBold}
+          onBlur={(event) => { const fontWeightBold = event.target.value.trim(); if (fontWeightBold !== appearance.fontWeightBold) update({ fontWeightBold }); }} />
+      </Field>
+      <Field label="Cursor">
+        <select aria-label="Cursor style" className={control} value={appearance.cursorStyle}
+          onChange={(event) => update({ cursorStyle: event.target.value as CursorStyle })}>
+          <option value="block">Block</option><option value="underline">Underline</option><option value="bar">Bar</option>
+        </select>
+      </Field>
+      <label className="flex items-center gap-2 self-end text-[11px] text-mut">
+        <input type="checkbox" checked={appearance.cursorBlink} onChange={(event) => update({ cursorBlink: event.target.checked })} />Blink
+      </label>
+    </div>}
+  </>;
+}
 
 export function AppearanceSettings() {
   const { themes, theme, selectedThemeId: selectedId, selectTheme, previewTheme, reload, catalog } = useExtensions();
@@ -45,6 +97,7 @@ export function AppearanceSettings() {
       <div className="mt-6 flex items-center gap-3 rounded-xl border border-edge2 bg-panel p-4"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-card2 text-accent"><Icon name="pencil" size={17} /></span><div className="flex-1"><div className="text-xs font-medium text-soft">Your own palette</div><p className="mt-1 text-[11px] text-mut">Start with this theme, edit its colors, and share the JSON file.</p></div><button onClick={customize} className="rounded-md border border-edge3 px-3 py-1.5 text-xs text-soft hover:bg-card2">Customize</button></div>
       {error && <div role="alert" className="mt-4 rounded-lg border border-red/30 bg-red/5 p-3 text-xs text-red">{error}</div>}
       {editing && <div className="mt-4 rounded-xl border border-edge2 bg-panel p-4"><div className="mb-3 flex items-center gap-2"><span className="text-xs font-medium text-soft">Custom theme</span><span className="ml-auto text-[10px] text-mut">Hex colors · live preview</span></div><textarea aria-label="Custom theme JSON" spellCheck={false} rows={14} value={draft} onChange={(event) => setDraft(event.target.value)} className="w-full resize-y rounded-md border border-edge2 bg-bg p-3 font-mono text-[11px] leading-5 text-soft outline-none focus:border-edge3" /><div className="mt-3 flex justify-end gap-2 text-xs"><button onClick={() => { previewTheme(undefined); setEditing(false); }} className="px-3 py-1.5 text-mut">Cancel</button><button onClick={preview} className="rounded-md border border-edge2 px-3 py-1.5 text-body">Preview</button><button disabled={busy} onClick={() => void save()} className="rounded-md bg-accent px-3 py-1.5 text-bg disabled:opacity-50">{busy ? "Saving…" : "Save theme"}</button></div></div>}
+      <TerminalFont />
       <button onClick={() => void window.deck.extensions.openFolder("themes")} className="mt-5 flex items-center gap-1.5 text-[11px] text-mut hover:text-soft"><Icon name="folder" size={12} />Open themes folder</button>
       {catalog.errors.map((error) => <div key={error} className="mt-2 text-xs text-red">{error}</div>)}
     </div>
