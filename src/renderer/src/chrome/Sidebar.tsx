@@ -59,8 +59,26 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
   </div>;
 }
 
+const footerViews = ["terminal", "board", "agent", "reviews"] as const;
+
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const { tabs, newTab, focusTab, closeTab } = useTabs();
+  // Arc-style: a horizontal swipe on the sidebar steps to the next/previous view.
+  // One step per gesture; the accumulator resets once the trackpad goes quiet.
+  const swipe = useRef({ distance: 0, consumed: false, timer: 0 });
+  const onWheel = (event: React.WheelEvent) => {
+    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+    const state = swipe.current;
+    window.clearTimeout(state.timer);
+    state.timer = window.setTimeout(() => { state.distance = 0; state.consumed = false; }, 200);
+    if (state.consumed) return;
+    state.distance += event.deltaX;
+    if (Math.abs(state.distance) < 60) return;
+    state.consumed = true;
+    const index = footerViews.indexOf(view as (typeof footerViews)[number]);
+    const next = footerViews[Math.min(footerViews.length - 1, Math.max(0, (index < 0 ? 0 : index) + Math.sign(state.distance)))];
+    if (next !== view) onView(next);
+  };
   const sessions = useAgentSessions();
   const attention = useAttentionCount();
   const reviews = useReviewQueue().queue.length;
@@ -114,7 +132,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     try { await newTab({ agent }); onView("terminal"); }
     catch (error) { setError(String(error)); }
   };
-  return <aside style={{ width }} className="relative flex shrink-0 flex-col border-r border-edge bg-panel font-sans">
+  return <aside style={{ width }} onWheel={onWheel} className="relative flex shrink-0 flex-col border-r border-edge bg-panel font-sans">
     <div role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabIndex={0}
       onDoubleClick={() => { setWidth(252); localStorage.setItem("deck.sidebar.width", "252"); }}
       onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); setWidth((width) => Math.min(380, Math.max(220, width + (event.key === "ArrowRight" ? 10 : -10)))); } }}
@@ -171,7 +189,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
     <div className="@container flex items-center gap-1 border-t border-edge px-2 py-2">
-      {(["terminal", "board", "agent", "reviews"] as const).map((target) => {
+      {footerViews.map((target) => {
         const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
         return <button key={target} onClick={() => onView(target)} title={target} className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
       })}
