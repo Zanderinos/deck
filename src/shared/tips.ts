@@ -32,7 +32,7 @@ interface TipRule {
 /** Order matters: the first matching rule wins, so specific commands precede general ones. */
 export const tipRules: readonly TipRule[] = [
   { id: "resume-session", command: /^(?:claude\b.*--resume|codex\s+resume)\b/, message: "Sessions resume from the sidebar, or through ⌘K, which also finds them by what you asked." },
-  { id: "agent-tab", command: /^(?:claude|codex)(?:\s|$)/, message: ({ defaultAgent }) => `Press ⌘⇧T to open a new ${agentLabels[defaultAgent]} tab straight away. The default agent lives in Settings.` },
+  { id: "agent-tab", command: /^(?:claude|codex)(?:\s|$)/, message: ({ defaultAgent }) => `Press ⌘⇧N to open a new ${agentLabels[defaultAgent]} tab straight away. The default agent lives in Settings.` },
   { id: "changes-panel", command: /^git\s+(?:status|diff)\b/, message: "⌘E opens the Changes panel, which follows the working tree live." },
   { id: "file-explorer", command: /^(?:ls|tree)(?:\s|$)/, message: "The File explorer in the footer browses this folder." },
   { id: "pr-pages", command: /^gh\s+pr\s+(?:view|checks|status)\b/, message: "The Board (⌘⌥2) and Reviews (⌘⌥4) pages follow your pull requests and their checks." },

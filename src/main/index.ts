@@ -1,5 +1,20 @@
-import { startExtensions, stopExtensions, onExtensionsChanged, extensionCatalog, saveTheme, importTheme, installPlugin, enablePlugin, openExtensionFolder } from "./extensions.js";
-import { listFiles, readLocalFile, saveLocalFile, type LocalFile } from "./files.js";
+import {
+  startExtensions,
+  stopExtensions,
+  onExtensionsChanged,
+  extensionCatalog,
+  saveTheme,
+  importTheme,
+  installPlugin,
+  enablePlugin,
+  openExtensionFolder,
+} from "./extensions.js";
+import {
+  listFiles,
+  readLocalFile,
+  saveLocalFile,
+  type LocalFile,
+} from "./files.js";
 import type { Agent } from "../shared/agents.js";
 import {
   app,
@@ -14,11 +29,19 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import appIcon from "../../resources/icon.png?asset";
+import trayIcon from "../../resources/trayTemplate.png?asset";
+import trayIcon2x from "../../resources/trayTemplate@2x.png?asset";
 import type { DeckSettings } from "../shared/settings.js";
 import { askDeck, resetAsk } from "./ask.js";
 import type { AskEvent } from "./agentTurn.js";
 import { startAutoFix } from "./autofix.js";
-import { getPrInbox, onPrInboxChanged, refreshPrInbox, startPrInbox, stopPrInbox } from "./prInbox.js";
+import {
+  getPrInbox,
+  onPrInboxChanged,
+  refreshPrInbox,
+  startPrInbox,
+  stopPrInbox,
+} from "./prInbox.js";
 import { hooksInstalled, installHooks } from "./hooksInstall.js";
 import {
   getIndexProgress,
@@ -28,9 +51,23 @@ import {
   startIndexer,
 } from "./indexer.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
-import { setWindowRole, startPtyHost, stopPtyHost } from "./pty.js";
+import {
+  setWindowRole,
+  startPtyHost,
+  stopPtyHost,
+  windowRoleOf,
+} from "./pty.js";
 import { startServer, stopServer } from "./server.js";
-import { addDrafts, askReview, clearDrafts, getDrafts, onDraftsChanged, removeDraft, resetReview, type ReviewPr } from "./review.js";
+import {
+  addDrafts,
+  askReview,
+  clearDrafts,
+  getDrafts,
+  onDraftsChanged,
+  removeDraft,
+  resetReview,
+  type ReviewPr,
+} from "./review.js";
 import {
   mergePr,
   addPrComment,
@@ -77,17 +114,22 @@ const normalBounds = new WeakMap<BrowserWindow, Electron.Rectangle>();
 let quakeHeightRatio: number | undefined;
 let tray: Tray | undefined;
 let registeredHotkey: string | undefined;
+/** How far a new window sits from the one it was opened from, like the Mac title-bar cascade. */
+const CASCADE_OFFSET = 24;
 
 // Dev mode runs the stock Electron binary, which otherwise names the menu
 // bar and dock "Electron".
 app.setName("Deck");
 
 function roleFor(entry: EntryPoint): WindowRole {
-  return entry === "hotkey" && getSettings().windowMode === "panel" ? "panel" : "main";
+  return entry === "hotkey" && getSettings().windowMode === "panel"
+    ? "panel"
+    : "main";
 }
 
 function broadcast(channel: string, ...args: unknown[]): void {
-  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, ...args);
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(channel, ...args);
 }
 
 // Surface main-process crashes instead of dying silently.
@@ -123,10 +165,29 @@ if (app.isPackaged) {
   fs.writeFileSync(pidFile, String(process.pid));
 }
 
-function createWindow(role: WindowRole): BrowserWindow {
+function createWindow(role: WindowRole, from?: BrowserWindow): BrowserWindow {
+  // A window opened from another one cascades down and right of it like any
+  // Mac app, and starts over at the top-left of its screen when out of room.
+  let bounds: Partial<Electron.Rectangle> = {};
+  if (from) {
+    const origin =
+      (quakeWins.has(from) && normalBounds.get(from)) || from.getBounds();
+    const { workArea } = screen.getDisplayMatching(origin);
+    const fits =
+      origin.x + CASCADE_OFFSET + origin.width <= workArea.x + workArea.width &&
+      origin.y + CASCADE_OFFSET + origin.height <= workArea.y + workArea.height;
+    bounds = fits
+      ? {
+          ...origin,
+          x: origin.x + CASCADE_OFFSET,
+          y: origin.y + CASCADE_OFFSET,
+        }
+      : { ...origin, x: workArea.x, y: workArea.y };
+  }
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    ...bounds,
     minWidth: 720,
     minHeight: 480,
     show: false,
@@ -146,8 +207,16 @@ function createWindow(role: WindowRole): BrowserWindow {
   win.on("blur", () => {
     if (quakeWins.has(win) && getSettings().summonHideOnBlur) hideWindow(win);
   });
+  // The role entry follows focus, so the hotkey and tray target the window
+  // last used, and a closed entry hands over to a surviving window of its role.
+  win.on("focus", () => wins.set(role, win));
   win.on("closed", () => {
-    if (wins.get(role) === win) wins.delete(role);
+    if (wins.get(role) !== win) return;
+    const sibling = BrowserWindow.getAllWindows().find(
+      (other) => windowRoleOf(other.webContents) === role,
+    );
+    if (sibling) wins.set(role, sibling);
+    else wins.delete(role);
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -185,19 +254,23 @@ function showWindow(role: WindowRole, quake = false): void {
 function hideWindow(w: BrowserWindow): void {
   if (quakeWins.has(w)) {
     const bounds = w.getBounds();
-    quakeHeightRatio = bounds.height / screen.getDisplayMatching(bounds).workArea.height;
+    quakeHeightRatio =
+      bounds.height / screen.getDisplayMatching(bounds).workArea.height;
   }
   quakeWins.delete(w);
   w.hide();
   // Only leave the app when no other deck window stays visible.
-  if (BrowserWindow.getAllWindows().every((other) => !other.isVisible())) app.hide();
+  if (BrowserWindow.getAllWindows().every((other) => !other.isVisible()))
+    app.hide();
 }
 
 /** Warp-style quake panel: full width, docked to the top of the screen the
  *  cursor is on. The window itself persists, so it reopens where you left. */
 function dockToTop(w: BrowserWindow): void {
   if (!quakeWins.has(w)) normalBounds.set(w, w.getBounds());
-  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { workArea } = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  );
   const ratio = quakeHeightRatio ?? getSettings().summonHeightRatio;
   w.setBounds({
     x: workArea.x,
@@ -239,9 +312,15 @@ function applyDockVisibility(): void {
 }
 
 function createTray(): void {
-  // macOS allows a text-only tray item; an empty image keeps it icon-less.
-  tray = new Tray(nativeImage.createEmpty());
-  tray.setTitle("▤");
+  // Template images are tinted by macOS to match the menu bar theme. The @2x
+  // file is attached explicitly so Retina bars get the sharp version.
+  const icon = nativeImage.createFromPath(trayIcon);
+  icon.addRepresentation({
+    scaleFactor: 2,
+    dataURL: nativeImage.createFromPath(trayIcon2x).toDataURL(),
+  });
+  icon.setTemplateImage(true);
+  tray = new Tray(icon);
   tray.setToolTip("Deck");
   tray.on("click", () => toggleWindow("manual"));
 }
@@ -254,11 +333,15 @@ app.whenReady().then(async () => {
   startExtensions();
   onExtensionsChanged(() => broadcast("extensions:changed"));
   ipcMain.handle("extensions:get", () => extensionCatalog());
-  ipcMain.handle("extensions:folder", (_e, kind: "themes" | "plugins") => openExtensionFolder(kind));
+  ipcMain.handle("extensions:folder", (_e, kind: "themes" | "plugins") =>
+    openExtensionFolder(kind),
+  );
   ipcMain.handle("themes:save", (_e, theme: unknown) => saveTheme(theme));
   ipcMain.handle("themes:import", () => importTheme());
   ipcMain.handle("plugins:install", () => installPlugin());
-  ipcMain.handle("plugins:enable", (_e, root: string, enabled: boolean) => enablePlugin(root, enabled));
+  ipcMain.handle("plugins:enable", (_e, root: string, enabled: boolean) =>
+    enablePlugin(root, enabled),
+  );
   onIndexProgress((p) => broadcast("index:progress", p));
   ipcMain.handle("index:progress", () => getIndexProgress());
   ipcMain.handle("search:query", (_e, q: string) => searchConversations(q));
@@ -269,57 +352,129 @@ app.whenReady().then(async () => {
   onSessionsChanged(() => broadcast("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
-  ipcMain.handle("files:list", (_e, root: string, directory?: string) => listFiles(root, directory));
-  ipcMain.handle("files:read", (_e, root: string, file: string) => readLocalFile(root, file));
-  ipcMain.handle("files:save", (_e, root: string, file: string, contents: LocalFile) => saveLocalFile(root, file, contents));
+  ipcMain.handle("files:list", (_e, root: string, directory?: string) =>
+    listFiles(root, directory),
+  );
+  ipcMain.handle("files:read", (_e, root: string, file: string) =>
+    readLocalFile(root, file),
+  );
+  ipcMain.handle(
+    "files:save",
+    (_e, root: string, file: string, contents: LocalFile) =>
+      saveLocalFile(root, file, contents),
+  );
   ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
-  ipcMain.handle("ask:send", (e, question: string, agent?: Agent, model?: string) =>
-    askDeck(question, (event: AskEvent) => {
-      if (!e.sender.isDestroyed()) e.sender.send("ask:event", event);
-    }, agent, model),
+  ipcMain.handle(
+    "ask:send",
+    (e, question: string, agent?: Agent, model?: string) =>
+      askDeck(
+        question,
+        (event: AskEvent) => {
+          if (!e.sender.isDestroyed()) e.sender.send("ask:event", event);
+        },
+        agent,
+        model,
+      ),
   );
   ipcMain.handle("ask:reset", () => resetAsk());
-  ipcMain.handle("review:send", (e, pr: ReviewPr, question: string, agent?: Agent) =>
-    askReview(pr, question, (event: AskEvent) => {
-      if (!e.sender.isDestroyed()) e.sender.send("review:event", `${pr.repo}#${pr.number}`, event);
-    }, agent),
+  ipcMain.handle(
+    "review:send",
+    (e, pr: ReviewPr, question: string, agent?: Agent) =>
+      askReview(
+        pr,
+        question,
+        (event: AskEvent) => {
+          if (!e.sender.isDestroyed())
+            e.sender.send("review:event", `${pr.repo}#${pr.number}`, event);
+        },
+        agent,
+      ),
   );
-  ipcMain.handle("review:reset", (_e, repo: string, number: number) => resetReview(repo, number));
-  ipcMain.handle("review:drafts", (_e, repo: string, number: number) => getDrafts(repo, number));
-  ipcMain.handle("review:addDraft", (_e, repo: string, number: number, draft: DraftComment) => addDrafts(repo, number, [draft]));
-  ipcMain.handle("review:removeDraft", (_e, repo: string, number: number, id: number) => removeDraft(repo, number, id));
-  ipcMain.handle("review:clearDrafts", (_e, repo: string, number: number) => clearDrafts(repo, number));
-  onDraftsChanged((repo, number, drafts) => broadcast("review:drafts", repo, number, drafts));
+  ipcMain.handle("review:reset", (_e, repo: string, number: number) =>
+    resetReview(repo, number),
+  );
+  ipcMain.handle("review:drafts", (_e, repo: string, number: number) =>
+    getDrafts(repo, number),
+  );
+  ipcMain.handle(
+    "review:addDraft",
+    (_e, repo: string, number: number, draft: DraftComment) =>
+      addDrafts(repo, number, [draft]),
+  );
+  ipcMain.handle(
+    "review:removeDraft",
+    (_e, repo: string, number: number, id: number) =>
+      removeDraft(repo, number, id),
+  );
+  ipcMain.handle("review:clearDrafts", (_e, repo: string, number: number) =>
+    clearDrafts(repo, number),
+  );
+  onDraftsChanged((repo, number, drafts) =>
+    broadcast("review:drafts", repo, number, drafts),
+  );
   startAutoFix();
   startPrInbox();
   onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
   ipcMain.handle("inbox:get", () => getPrInbox());
-  ipcMain.handle("window:fullscreen", (e, on: boolean) => BrowserWindow.fromWebContents(e.sender)?.setFullScreen(on));
-  ipcMain.handle("window:isFullscreen", (e) => BrowserWindow.fromWebContents(e.sender)?.isFullScreen() ?? false);
-  ipcMain.handle("inbox:refresh", () => refreshPrInbox().catch(() => getPrInbox()));
+  ipcMain.handle("window:fullscreen", (e, on: boolean) =>
+    BrowserWindow.fromWebContents(e.sender)?.setFullScreen(on),
+  );
+  ipcMain.handle(
+    "window:isFullscreen",
+    (e) => BrowserWindow.fromWebContents(e.sender)?.isFullScreen() ?? false,
+  );
+  ipcMain.handle("window:new", (e) => {
+    createWindow("main", BrowserWindow.fromWebContents(e.sender) ?? undefined);
+  });
+  ipcMain.handle("inbox:refresh", () =>
+    refreshPrInbox().catch(() => getPrInbox()),
+  );
   startPrWarmer();
   onPrsChanged((key, prs) => broadcast("prs:changed", key, prs));
   startBoardSync();
   onBoardChanged((b) => broadcast("board:changed", b));
   ipcMain.handle("board:get", () => getBoardCache());
   ipcMain.handle("board:columns", () => fetchBoardColumns());
-  ipcMain.handle("board:move", (_e, key: string, column: string) => moveIssue(key, column));
-  ipcMain.handle("gh:prsForIssue", (_e, key: string) =>
-    prsForIssue(key, getBoardCache()?.issues.find((i) => i.key === key)),
+  ipcMain.handle("board:move", (_e, key: string, column: string) =>
+    moveIssue(key, column),
   );
-  ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) => prDetail(repo, n));
+  ipcMain.handle("gh:prsForIssue", (_e, key: string) =>
+    prsForIssue(
+      key,
+      getBoardCache()?.issues.find((i) => i.key === key),
+    ),
+  );
+  ipcMain.handle("gh:prDetail", (_e, repo: string, n: number) =>
+    prDetail(repo, n),
+  );
   ipcMain.handle("gh:prDiff", (_e, repo: string, n: number) => prDiff(repo, n));
-  ipcMain.handle("gh:prComments", (_e, repo: string, n: number) => prComments(repo, n));
-  ipcMain.handle("gh:prTimeline", (_e, repo: string, n: number) => prTimeline(repo, n));
+  ipcMain.handle("gh:prComments", (_e, repo: string, n: number) =>
+    prComments(repo, n),
+  );
+  ipcMain.handle("gh:prTimeline", (_e, repo: string, n: number) =>
+    prTimeline(repo, n),
+  );
   ipcMain.handle(
     "gh:review",
-    (_e, repo: string, n: number, event: ReviewEvent, body: string, comments: DraftComment[]) =>
-      submitPrReview(repo, n, event, body, comments),
+    (
+      _e,
+      repo: string,
+      n: number,
+      event: ReviewEvent,
+      body: string,
+      comments: DraftComment[],
+    ) => submitPrReview(repo, n, event, body, comments),
   );
   ipcMain.handle(
     "gh:merge",
-    async (_e, repo: string, n: number, method: MergeMethod, issueKey?: string) => {
+    async (
+      _e,
+      repo: string,
+      n: number,
+      method: MergeMethod,
+      issueKey?: string,
+    ) => {
       const result = await mergePr(repo, n, method);
       if (!result.ok || !issueKey) return result;
       try {
@@ -327,39 +482,56 @@ app.whenReady().then(async () => {
         return result;
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: `Merged, but moving ${issueKey} failed: ${reason}` };
+        return {
+          ok: false,
+          error: `Merged, but moving ${issueKey} failed: ${reason}`,
+        };
       }
     },
   );
-  ipcMain.handle("gh:setFileViewed", (_e, prId: string, path: string, viewed: boolean) =>
-    setPrFileViewed(prId, path, viewed),
+  ipcMain.handle(
+    "gh:setFileViewed",
+    (_e, prId: string, path: string, viewed: boolean) =>
+      setPrFileViewed(prId, path, viewed),
   );
-  ipcMain.handle("gh:autoMerge", (_e, repo: string, n: number, method: MergeMethod) =>
-    enableAutoMerge(repo, n, method),
+  ipcMain.handle(
+    "gh:autoMerge",
+    (_e, repo: string, n: number, method: MergeMethod) =>
+      enableAutoMerge(repo, n, method),
   );
   ipcMain.handle("gh:replyToThread", (_e, threadId: string, body: string) =>
     replyToThread(threadId, body),
   );
-  ipcMain.handle("gh:setThreadResolved", (_e, threadId: string, resolved: boolean) =>
-    setThreadResolved(threadId, resolved),
+  ipcMain.handle(
+    "gh:setThreadResolved",
+    (_e, threadId: string, resolved: boolean) =>
+      setThreadResolved(threadId, resolved),
   );
   ipcMain.handle("gh:addComment", (_e, repo: string, n: number, body: string) =>
     addPrComment(repo, n, body),
   );
-  ipcMain.handle("gh:fileContent", (_e, repo: string, ref: string, path: string) =>
-    fileContent(repo, ref, path),
+  ipcMain.handle(
+    "gh:fileContent",
+    (_e, repo: string, ref: string, path: string) =>
+      fileContent(repo, ref, path),
   );
   ipcMain.handle("board:sync", () => syncBoard().catch(() => getBoardCache()));
   // An existing install predates events added since; appending is a no-op
   // when nothing is missing, and consent was given by the original install.
-  for (const agent of ["claude", "codex"] as const) if (hooksInstalled(agent)) installHooks(agent);
-  ipcMain.handle("hooks:installed", (_e, agent: Agent = "claude") => hooksInstalled(agent));
-  ipcMain.handle("hooks:install", (_e, agent: Agent = "claude") => installHooks(agent));
+  for (const agent of ["claude", "codex"] as const)
+    if (hooksInstalled(agent)) installHooks(agent);
+  ipcMain.handle("hooks:installed", (_e, agent: Agent = "claude") =>
+    hooksInstalled(agent),
+  );
+  ipcMain.handle("hooks:install", (_e, agent: Agent = "claude") =>
+    installHooks(agent),
+  );
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);
     broadcast("settings:changed", next);
-    if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch) applyHotkey();
+    if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch)
+      applyHotkey();
     if ("summonHeightRatio" in patch) quakeHeightRatio = undefined;
     if ("hideFromDock" in patch) applyDockVisibility();
     return next;

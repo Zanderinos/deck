@@ -16,10 +16,13 @@ const windowRoles = new WeakMap<WebContents, WindowRole>();
 export function setWindowRole(contents: WebContents, role: WindowRole): void {
   windowRoles.set(contents, role);
 }
+export function windowRoleOf(contents: WebContents): WindowRole {
+  return windowRoles.get(contents) ?? "main";
+}
 function visibleTo(contents: WebContents, meta: TermMeta): boolean {
   const { windowMode, hotkeyOwnTabs } = getSettings();
   if (windowMode !== "panel" || !hotkeyOwnTabs) return true;
-  return (meta.windowRole ?? "main") === (windowRoles.get(contents) ?? "main");
+  return (meta.windowRole ?? "main") === windowRoleOf(contents);
 }
 
 export type { TermMeta } from "./ptyHost.js";

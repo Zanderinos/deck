@@ -3,10 +3,10 @@
  *  come from the physical key so ⌥3 (which types "£" on a Mac) still matches. */
 
 export type KeybindCommand =
-  | "search" | "settings" | "sidebar"
+  | "search" | "settings" | "sidebar" | "window.new"
   | "view.terminal" | "view.board" | "view.agent" | "view.reviews"
   | "zen" | "presentation"
-  | "tab.new" | "tab.newAgent" | "tab.close"
+  | "tab.new" | "tab.newAgent" | "tab.close" | "tab.reopen"
   | "split.right" | "split.down" | "find" | "composer" | "changes";
 
 export type Keybinds = Record<KeybindCommand, string>;
@@ -22,6 +22,7 @@ export const keybindInfos: KeybindInfo[] = [
   { id: "search", label: "Search sessions, history, commands, settings, themes and repositories", group: "Workbench", default: "Meta+K" },
   { id: "settings", label: "Open settings", group: "Workbench", default: "Meta+," },
   { id: "sidebar", label: "Toggle sidebar", group: "Workbench", default: "Meta+B" },
+  { id: "window.new", label: "New window", group: "Workbench", default: "Meta+N" },
   { id: "view.terminal", label: "Terminal page", group: "Workbench", default: "Meta+Alt+Digit1" },
   { id: "view.board", label: "Board page", group: "Workbench", default: "Meta+Alt+Digit2" },
   { id: "view.agent", label: "Agent page", group: "Workbench", default: "Meta+Alt+Digit3" },
@@ -29,8 +30,9 @@ export const keybindInfos: KeybindInfo[] = [
   { id: "zen", label: "Toggle Zen view", group: "Workbench", default: "Meta+Shift+Enter" },
   { id: "presentation", label: "Toggle Presentation view", group: "Workbench", default: "Meta+Shift+P" },
   { id: "tab.new", label: "New terminal tab", group: "Terminal", default: "Meta+T" },
-  { id: "tab.newAgent", label: "New tab running the default agent", group: "Terminal", default: "Meta+Shift+T" },
+  { id: "tab.newAgent", label: "New tab running the default agent", group: "Terminal", default: "Meta+Shift+N" },
   { id: "tab.close", label: "Close the active tab", group: "Terminal", default: "Meta+W" },
+  { id: "tab.reopen", label: "Reopen the last closed tab", group: "Terminal", default: "Meta+Shift+T" },
   { id: "split.right", label: "Split right", group: "Terminal", default: "Meta+D" },
   { id: "split.down", label: "Split down", group: "Terminal", default: "Meta+Shift+D" },
   { id: "find", label: "Find in terminal output", group: "Terminal", default: "Meta+F" },

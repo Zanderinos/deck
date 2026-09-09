@@ -153,7 +153,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
       </div>}
       <footer className="workbench-chrome flex h-9 shrink-0 items-center gap-2 border-t border-edge px-4 font-sans text-[11px] text-mut">
         <button title="New terminal (⌘T)" onClick={() => { report({ action: "new-tab-button" }); void newTab(); }} className="toolbar-button"><Icon name="plus" size={13} /></button>
-        <button title={`New ${agentLabels[defaultAgent]} tab (⌘⇧T)`} onClick={() => void newTab({ agent: defaultAgent })} className="toolbar-button"><Icon name="sparkle" size={13} /></button>
+        <button title={`New ${agentLabels[defaultAgent]} tab (⌘⇧N)`} onClick={() => void newTab({ agent: defaultAgent })} className="toolbar-button"><Icon name="sparkle" size={13} /></button>
         {git && <button onClick={() => terminalAction("changes")} className="flex items-center gap-1.5 rounded border border-edge2 px-1.5 py-0.5"><Icon name="file" size={11} /><span>{git.changedFiles}</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
         <button onClick={() => terminalAction("files")} className={`flex items-center gap-1.5 rounded px-2 py-1 ${panel === "files" ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="folder" size={12} />File explorer</button>
         <button onClick={() => setComposer(!composer)} className={`flex items-center gap-1.5 rounded px-2 py-1 ${composer ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="pencil" size={12} />Rich input <kbd className="text-dim">⌘J</kbd></button>

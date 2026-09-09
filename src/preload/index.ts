@@ -164,6 +164,8 @@ const api = {
     },
   },
   window: {
+    /** Opens another regular Deck window. */
+    open: (): Promise<void> => ipcRenderer.invoke("window:new"),
     setFullScreen: (on: boolean): Promise<void> => ipcRenderer.invoke("window:fullscreen", on),
     isFullScreen: (): Promise<boolean> => ipcRenderer.invoke("window:isFullscreen"),
     /** Page zoom as a Chromium level: 0 is 100% and each level scales by 1.2.

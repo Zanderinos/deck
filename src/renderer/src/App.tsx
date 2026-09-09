@@ -46,8 +46,11 @@ function Shell() {
   const toggleSidebar = useCallback(() => setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; }), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
+  // Pages stay mounted across switches, so replay the enter animation by hand.
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { pageRef.current?.getAnimations().forEach((animation) => { animation.cancel(); animation.play(); }); }, [view]);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
-  const { tabs, focusTab, newTab, closeTab, activeId } = useTabs();
+  const { tabs, focusTab, newTab, closeTab, reopenTab, activeId } = useTabs();
   const settings = useSettings();
   const keybinds = resolveKeybinds(settings?.keybinds);
 
@@ -144,6 +147,11 @@ function Shell() {
         void newTab(command === "tab.newAgent" ? { agent: settings?.defaultAgent } : undefined);
       } else if (command === "tab.close" && view === "terminal" && activeId) {
         closeTab(activeId);
+      } else if (command === "tab.reopen") {
+        setView("terminal");
+        void reopenTab();
+      } else if (command === "window.new") {
+        void window.deck.window.open();
       } else {
         return;
       }
@@ -151,7 +159,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings, keybinds, toggleSidebar]);
+  }, [searchOpen, view, activeId, newTab, closeTab, reopenTab, tabs, focusTab, settings, keybinds, toggleSidebar]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
@@ -162,7 +170,7 @@ function Shell() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <TerminalView visible={view === "terminal"} />
           {/* The terminal scales its own font; every other page zooms by the same ratio. */}
-          <div className={`${view === "terminal" ? "hidden" : "flex"} min-h-0 min-w-0 flex-1 flex-col`} style={{ zoom: mode === "presentation" ? presentationSize / terminalFontSize : 1 }}>
+          <div ref={pageRef} className={`${view === "terminal" ? "hidden" : "flex"} view-enter min-h-0 min-w-0 flex-1 flex-col`} style={{ zoom: mode === "presentation" ? presentationSize / terminalFontSize : 1 }}>
           {view === "search" && (
             <div className="min-h-0 flex-1">
               <SearchView

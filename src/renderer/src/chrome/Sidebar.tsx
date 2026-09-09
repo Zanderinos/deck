@@ -73,6 +73,9 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     const state = swipe.current;
     window.clearTimeout(state.timer);
     state.timer = window.setTimeout(() => { state.distance = 0; state.consumed = false; }, 200);
+    // Reversing direction starts a fresh gesture, so the previous swipe's momentum tail
+    // does not have to die down before the opposite step registers.
+    if (Math.sign(event.deltaX) !== Math.sign(state.distance)) { state.distance = 0; state.consumed = false; }
     if (state.consumed) return;
     state.distance += event.deltaX;
     if (Math.abs(state.distance) < 60) return;
@@ -81,6 +84,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     const next = footerViews[Math.min(footerViews.length - 1, Math.max(0, (index < 0 ? 0 : index) + Math.sign(state.distance)))];
     if (next !== view) onView(next);
   };
+  const footerIndex = footerViews.indexOf(view as (typeof footerViews)[number]);
   const sessions = useAgentSessions();
   const attention = useAttentionCount();
   const reviews = useReviewQueue().queue.length;
@@ -190,10 +194,11 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
       catch (error) { setError(String(error)); }
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
-    <div className="@container flex items-center gap-1 border-t border-edge px-2 py-2">
+    <div className="@container relative flex items-center gap-1 border-t border-edge px-2 py-2">
+      {footerIndex >= 0 && <span aria-hidden className="absolute bottom-2 top-2 rounded bg-card2 transition-[left] duration-200 ease-out" style={{ width: `calc((100% - 16px - ${(footerViews.length - 1) * 4}px) / ${footerViews.length})`, left: `calc(8px + (100% - 16px + 4px) / ${footerViews.length} * ${footerIndex})` }} />}
       {footerViews.map((target) => {
         const badge = target === "agent" ? attention : target === "reviews" ? reviews : 0;
-        return <button key={target} onClick={() => onView(target)} title={target} className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] ${view === target ? "bg-card2 text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
+        return <button key={target} onClick={() => onView(target)} title={target} className={`relative flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-1.5 py-1.5 text-[11px] transition-colors duration-200 ${view === target ? "text-soft" : "text-dim hover:text-body"}`}><Icon name={target === "terminal" ? "terminal" : target === "board" ? "grid" : target === "reviews" ? "check" : "sparkle"} size={12} className="shrink-0" /><span className="hidden truncate @[300px]:inline">{target}</span>{badge > 0 && <span aria-label={`${badge} ${target === "agent" ? "need attention" : "to review"}`} className="shrink-0 rounded-full bg-orange/20 px-1.5 text-[10px] text-orange">{badge}</span>}</button>;
       })}
     </div>
   </aside>;

@@ -1,5 +1,6 @@
 import { sessionAgent, sessionKey, type AgentLaunch } from "../../shared/agents.js";
 import type { TermMeta } from "../../main/pty.js";
+import type { AgentSession } from "../../main/sessions.js";
 import { useSettings } from "./lib/useSettings.js";
 import {
   createContext,
@@ -39,6 +40,8 @@ interface TabStore {
   ready: boolean;
   newTab: (opts?: OpenOptions) => Promise<void>;
   closeTab: (termId: string, kill?: boolean) => void;
+  /** Reopens the most recently closed tab: the same session for an agent tab, a shell in the same folder otherwise. */
+  reopenTab: () => Promise<void>;
   focusTab: (termId: string) => void;
   setTitle: (termId: string, title: string) => void;
   renameTab: (termId: string, title: string) => void;
@@ -61,6 +64,13 @@ export function TabProvider({ children }: { children: ReactNode }) {
     sessionId: meta.sessionId ?? (meta.command?.startsWith("codex resume ") ? sessionKey("codex", /codex resume ['"]?([^\s'"]+)/.exec(meta.command)?.[1] ?? "") : undefined) ?? /--resume ['"]?([^\s'"]+)/.exec(meta.command ?? "")?.[1],
   });
 
+  // The agent running in a tab is only known through its hooks, so a tab
+  // carries the session live in its terminal; that is what a reopen resumes.
+  const withSession = (tab: TermTab, sessions: AgentSession[]): TermTab => {
+    const session = sessions.find((session) => session.term_id === tab.termId && session.status !== "ended" && !session.session_id.startsWith("pending:"));
+    return session ? { ...tab, sessionId: session.session_id, agent: session.agent, cwd: session.cwd || tab.cwd } : tab;
+  };
+
   // Callbacks read the live tab list, and a session being resumed is held
   // here until its tab exists so a double click can't open it twice.
   const tabsRef = useRef(tabs);
@@ -68,6 +78,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const activeCwd = useRef<string>();
   activeCwd.current = settings?.newTerminalCwd.tab === "current" ? tabs.find((tab) => tab.termId === activeId)?.cwd : undefined;
   const resuming = useRef(new Set<string>());
+  const closed = useRef<TermTab[]>([]);
 
   // Terminals live in the pty host, so a reload (or a restarted main
   // process) finds the previous tabs still running. The list is re-read when
@@ -75,24 +86,24 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const windowMode = settings?.windowMode;
   const hotkeyOwnTabs = settings?.hotkeyOwnTabs;
   useEffect(() => {
-    void window.deck.term.list().then((terms) => {
-      setTabs(terms.map(toTab));
+    void Promise.all([window.deck.term.list(), window.deck.sessions.list()]).then(([terms, sessions]) => {
+      setTabs(terms.map((meta) => withSession(toTab(meta), sessions)));
       setActiveId((active) => terms.some((term) => term.id === active) ? active : terms.at(-1)?.id);
       setReady(true);
     });
   }, [windowMode, hotkeyOwnTabs]);
 
   useEffect(() => window.deck.sessions.onChanged((sessions) => {
-    setTabs((tabs) => tabs.map((tab) => {
-      const session = sessions.find((session) => session.term_id === tab.termId && session.status !== "ended" && !session.session_id.startsWith("pending:"));
-      return session ? { ...tab, sessionId: session.session_id, agent: session.agent, cwd: session.cwd || tab.cwd } : tab;
-    }));
+    setTabs((tabs) => tabs.map((tab) => withSession(tab, sessions)));
   }), []);
 
   const newTab = useCallback(async (opts: OpenOptions = {}) => {
     const agent = opts.agent ?? (opts.sessionId ? sessionAgent(opts.sessionId) : undefined);
     const sessionId = opts.sessionId ? sessionKey(agent!, opts.sessionId) : undefined;
-    const create = { ...opts, cwd: opts.cwd ?? activeCwd.current, agent, sessionId };
+    // Work for an issue belongs in its repo or the default folder, never in
+    // whatever folder the active terminal happens to be in.
+    const cwd = opts.cwd ?? (opts.issueKey ? undefined : activeCwd.current);
+    const create = { ...opts, cwd, agent, sessionId };
     if (sessionId && resuming.current.has(sessionId)) return;
     if (sessionId) resuming.current.add(sessionId);
     try {
@@ -118,6 +129,9 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   const closeTab = useCallback((termId: string, kill = true) => {
     if (kill) window.deck.term.kill(termId);
+    // A killed terminal also reports its exit, so the same tab may arrive here twice.
+    const tab = tabsRef.current.find((tab) => tab.termId === termId);
+    if (tab && closed.current.at(-1)?.termId !== termId) closed.current = [...closed.current.slice(-9), tab];
     localStorage.removeItem(`deck.tab.name.${termId}`);
     setTabs((tabs) => {
       const i = tabs.findIndex((t) => t.termId === termId);
@@ -128,6 +142,11 @@ export function TabProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const reopenTab = useCallback(async () => {
+    const tab = closed.current.pop();
+    if (tab) await newTab({ agent: tab.agent, cwd: tab.cwd, sessionId: tab.sessionId });
+  }, [newTab]);
 
   const setTitle = useCallback((termId: string, title: string) => {
     setTabs((tabs) => tabs.map((t) => (t.termId === termId ? { ...t, title } : t)));
@@ -141,8 +160,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
   useEffect(() => window.deck.term.onExit((id) => closeTab(id, false)), [closeTab]);
 
   const store = useMemo<TabStore>(
-    () => ({ tabs, activeId, ready, newTab, closeTab, focusTab: setActiveId, setTitle, renameTab }),
-    [tabs, activeId, ready, newTab, closeTab, setTitle, renameTab],
+    () => ({ tabs, activeId, ready, newTab, closeTab, reopenTab, focusTab: setActiveId, setTitle, renameTab }),
+    [tabs, activeId, ready, newTab, closeTab, reopenTab, setTitle, renameTab],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
