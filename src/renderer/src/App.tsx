@@ -8,6 +8,7 @@ import { ChatProvider } from "./agents/ChatStore.js";
 import { BoardView } from "./board/BoardView.js";
 import { ReviewsView } from "./board/ReviewsView.js";
 import { GeneralSettings } from "./chrome/GeneralSettings.js";
+import { useSettings } from "./lib/useSettings.js";
 import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
@@ -43,6 +44,7 @@ function Shell() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
   const { tabs, focusTab, newTab, closeTab, activeId } = useTabs();
+  const settings = useSettings();
 
   // View history for the mouse back/forward buttons.
   const history = useRef({ stack: ["terminal"] as View[], index: 0 });
@@ -133,10 +135,11 @@ function Shell() {
       else if (meta && e.altKey && e.code === "Digit2") setView("board");
       else if (meta && e.altKey && e.code === "Digit3") setView("agent");
       else if (meta && e.altKey && e.code === "Digit4") setView("reviews");
-      else if (meta && e.key === "t") {
+      // Shift starts the tab in the default agent instead of a bare shell.
+      else if (meta && e.key.toLowerCase() === "t") {
         e.preventDefault();
         setView("terminal");
-        void newTab();
+        void newTab(e.shiftKey ? { agent: settings?.defaultAgent } : undefined);
       } else if (meta && e.key === "w" && view === "terminal" && activeId) {
         e.preventDefault();
         closeTab(activeId);
@@ -147,7 +150,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab]);
+  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
