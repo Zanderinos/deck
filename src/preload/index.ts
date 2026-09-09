@@ -20,7 +20,7 @@ import type {
 import type { GitSummary, WorkingChanges } from "../main/git.js";
 import type { InstalledVersions, ProjectRuntime } from "../main/projectRuntime.js";
 import type { TermMeta, TermReplay } from "../main/pty.js";
-import type { BoardCache, BoardColumnStatuses } from "../main/jira.js";
+import type { BoardCache, BoardColumnStatuses } from "../main/board/types.js";
 import type { AskEvent, AskResult } from "../main/agentTurn.js";
 import type { ReviewDraft, ReviewPr } from "../main/review.js";
 import type { PrInbox } from "../main/prInbox.js";

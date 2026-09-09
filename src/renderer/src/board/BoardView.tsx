@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IssuePr } from "../../../main/github.js";
-import type { BoardCache, BoardIssue } from "../../../main/jira.js";
+import type { BoardCache, BoardIssue } from "../../../main/board/types.js";
+import { boardProviderLabels } from "../../../shared/board.js";
 import type { DeckSettings } from "../../../shared/settings.js";
-import { JiraConnectionFields, TOKEN_PAGE } from "../chrome/JiraConnectionFields.js";
+import { BoardConnectionFields, boardConnected, boardConnectionHelp } from "../chrome/BoardConnectionFields.js";
 import { onNavBack } from "../lib/bus.js";
 import { useTabs } from "../store.js";
 import { PrScreen } from "./PrScreen.js";
@@ -84,13 +85,13 @@ export function BoardView() {
 
   const rejectedRe = useMemo(() => {
     try {
-      return new RegExp(settings?.jira.rejectedPattern || "reject", "i");
+      return new RegExp(settings?.board.rejectedPattern || "reject", "i");
     } catch {
       return /reject/i;
     }
   }, [settings]);
 
-  const configured = Boolean(settings && settings.jira.baseUrl && settings.jira.email && settings.jira.apiToken && settings.jira.boardId);
+  const configured = Boolean(settings && boardConnected(settings));
 
   // Older caches have no account id, so "mine" can only be honoured once a
   // sync has recorded who we are.
@@ -154,19 +155,20 @@ export function BoardView() {
             </p>
             {settings && <div className="mt-6 rounded-xl border border-edge2 bg-panel p-5">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-card2 text-accent"><Icon name="jira" size={17} /></span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-card2 text-accent"><Icon name="issue" size={17} /></span>
                 <div className="flex-1">
-                  <div className="text-xs font-medium text-soft">Jira</div>
-                  <p className="mt-0.5 text-[11px] text-mut">Sync a board, drag cards to fire its transitions.</p>
+                  <div className="text-xs font-medium text-soft">{boardProviderLabels[settings.board.provider]}</div>
+                  <p className="mt-0.5 text-[11px] text-mut">Sync a board, drag cards to move them in the tracker.</p>
                 </div>
               </div>
               <div className="mt-5 grid grid-cols-2 gap-4">
-                <JiraConnectionFields jira={settings.jira} onChange={(patch) => void saveSettings({ jira: { ...settings.jira, ...patch } })} />
+                <BoardConnectionFields settings={settings} onChange={(patch) => void saveSettings(patch)} />
               </div>
               <p className="mt-4 text-[11px] text-mut">
-                The token comes from{" "}
-                <button onClick={() => window.open(TOKEN_PAGE)} className="text-accent hover:underline">your Atlassian account</button>
-                . The board id is the number in your board&apos;s URL.
+                {boardConnectionHelp(settings.board.provider).help}
+                {boardConnectionHelp(settings.board.provider).tokenPage && <>
+                  {" "}<button onClick={() => window.open(boardConnectionHelp(settings.board.provider).tokenPage)} className="text-accent hover:underline">Open the token page ↗</button>
+                </>}
               </p>
             </div>}
           </div>
@@ -288,7 +290,7 @@ export function BoardView() {
                           {card.localMove && (
                             <span
                               className="ml-1.5 text-mut"
-                              title="Moved on this board only; Jira still shows the previous column"
+                              title="Moved on this board only; the tracker still shows the previous column"
                             >
                               · local
                             </span>
@@ -325,7 +327,6 @@ export function BoardView() {
       {selected && settings && (
         <IssuePanel
           issue={selected}
-          jiraBaseUrl={settings.jira.baseUrl}
           rejected={rejectedRe.test(selected.statusName)}
           onClose={() => setSelected(undefined)}
           onOpenDiff={setDiffPr}
@@ -336,7 +337,6 @@ export function BoardView() {
         <PrScreen
           pr={diffPr}
           issue={selected}
-          jiraBaseUrl={settings?.jira.baseUrl}
           onClose={() => setDiffPr(undefined)}
         />
       )}

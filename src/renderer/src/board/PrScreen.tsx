@@ -2,7 +2,7 @@ import { useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDiff, type FileData, type ViewType } from "react-diff-view";
 import type { IssuePr, MergeMethod, PrComment, PrDetail, ReviewEvent } from "../../../main/github.js";
-import type { BoardIssue } from "../../../main/jira.js";
+import type { BoardIssue } from "../../../main/board/types.js";
 import type { RepoDir } from "../../../main/providers.js";
 import type { ComposerTarget, Draft, ThreadActions } from "./PrComments.js";
 import { PrDiffTab, type AskAgentRequest } from "./PrDiffTab.js";
@@ -53,7 +53,6 @@ type Tab = "overview" | "diff";
 export interface PrScreenProps {
   pr: IssuePr;
   issue?: BoardIssue;
-  jiraBaseUrl?: string;
   onClose: () => void;
   /** Rendered inside a page (the review queue) instead of as a full-screen overlay. */
   embedded?: boolean;
@@ -63,7 +62,7 @@ export interface PrScreenProps {
   onReviewed?: (event: ReviewEvent) => void;
 }
 
-export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, hidden = false, onReviewed }: PrScreenProps) {
+export function PrScreen({ pr, issue, onClose, embedded = false, hidden = false, onReviewed }: PrScreenProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const { diffText, detail, comments, timeline, refresh, setComments } = usePrData(pr.repo, pr.number);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
@@ -340,12 +339,12 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, hi
               >
                 <Icon name="external" className="text-dim" /> Open on GitHub
               </button>
-              {issue && jiraBaseUrl && (
+              {issue && (
                 <button
-                  onClick={() => window.open(`${jiraBaseUrl}/browse/${issue.key}`)}
+                  onClick={() => window.open(issue.url)}
                   className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left hover:bg-card2"
                 >
-                  <Icon name="jira" className="text-dim" /> Open {issue.key} in Jira
+                  <Icon name="issue" className="text-dim" /> Open {issue.key}
                 </button>
               )}
             </div>
@@ -520,7 +519,6 @@ export function PrScreen({ pr, issue, jiraBaseUrl, onClose, embedded = false, hi
             pr={pr}
             detail={detail}
             issue={issue}
-            jiraBaseUrl={jiraBaseUrl}
             generalComments={generalComments}
             timeline={timeline}
             commentsByPath={commentsByPath}

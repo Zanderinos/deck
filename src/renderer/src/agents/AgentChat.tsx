@@ -8,7 +8,7 @@ import { ChatTurns } from "./ChatTurns.js";
 import { project } from "./attention.js";
 
 // The conversation with deck's agent. Answers come from a headless agent turn
-// that is handed the live sessions, PR inbox and Jira board, plus deck's MCP
+// that is handed the live sessions, PR inbox and issue board, plus deck's MCP
 // tools, so it can start agents, steer them and act on PRs from here.
 
 const EXAMPLES: { title: string; hint: string; prompt: string }[] = [

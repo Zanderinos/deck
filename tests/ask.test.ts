@@ -1,4 +1,4 @@
-import type { BoardCache } from "../src/main/jira.js";
+import type { BoardCache } from "../src/main/board/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ vi.mock("../src/main/db.js", () => ({
   kvGet: (key: string) => (kv.has(key) ? JSON.parse(kv.get(key)!) : undefined),
   kvSet: (key: string, value: unknown) => kv.set(key, JSON.stringify(value)),
 }));
-vi.mock("../src/main/jira.js", () => ({ getBoardCache: () => state.board, jiraConfigured: () => state.configured }));
+vi.mock("../src/main/board/board.js", () => ({ getBoardCache: () => state.board, boardConfigured: () => state.configured }));
 vi.mock("../src/main/settings.js", async () => {
   const { defaultSettings } = await import("../src/shared/settings.js");
   return { getSettings: () => ({ ...defaultSettings, jira: { ...defaultSettings.jira, baseUrl: "https://jira.example.test", apiToken: "DO-NOT-SEND-THIS-TOKEN", email: "private@example.test" } }) };
@@ -21,7 +21,7 @@ vi.mock("../src/main/settings.js", async () => {
 vi.mock("../src/main/sessions.js", () => ({ listSessions: () => [], markInternalSession: vi.fn() }));
 vi.mock("../src/main/indexer.js", () => ({ lastMessages: () => [] }));
 vi.mock("../src/main/autofix.js", () => ({ runningFixes: () => [{ repo: "acme/api", number: 7, problem: "ci_failed", termId: "t1", startedAt: 0 }] }));
-vi.mock("../src/main/orchestrator.js", () => ({ boardProjects: () => ["APP"], toolNames: () => ["list_sessions", "start_agent"] }));
+vi.mock("../src/main/orchestrator.js", () => ({ boardLabel: () => "Jira", boardProjects: () => ["APP"], toolNames: () => ["list_sessions", "start_agent"] }));
 vi.mock("../src/main/server.js", () => ({ MCP_URL: "http://127.0.0.1:47800/api/mcp" }));
 vi.mock("../src/main/prInbox.js", async () => {
   const { attentionReasons } = await import("../src/main/prInbox.js");
@@ -65,16 +65,16 @@ beforeEach(() => {
   state.toolCall = false;
   state.inbox = { viewer: "me", at: Date.parse("2026-09-07T14:00:00Z"), mine: [pr(7, { checks: "FAILURE" }), pr(8)], reviewRequested: [pr(9, { author: "teammate" })] };
   state.board = {
-    boardName: "Engineering", at: Date.parse("2026-09-07T14:00:00Z"), myAccountId: "me",
+    provider: "jira", boardName: "Engineering", at: Date.parse("2026-09-07T14:00:00Z"), myAccountId: "me",
     columns: [{ name: "In review", statusIds: ["qa", "review"] }],
     issues: [
-      { id: "1", key: "APP-42", summary: "Fix login expiry", statusId: "qa", statusName: "Ready for QA", assignee: "Me", assigneeId: "me", updated: "2026-09-07", localMove: true },
-      { id: "2", key: "APP-43", summary: "Improve keyboard navigation", statusId: "review", statusName: "Code review", assignee: "Teammate", assigneeId: "other", updated: "2026-09-07" },
+      { id: "1", key: "APP-42", summary: "Fix login expiry", statusId: "qa", statusName: "Ready for QA", assignee: "Me", assigneeId: "me", updated: "2026-09-07", url: "https://jira.example.test/browse/APP-42", localMove: true },
+      { id: "2", key: "APP-43", summary: "Improve keyboard navigation", statusId: "review", statusName: "Code review", assignee: "Teammate", assigneeId: "other", updated: "2026-09-07", url: "https://jira.example.test/browse/APP-43" },
     ],
   };
 });
 
-describe("Ask Deck Jira context", () => {
+describe("Ask Deck board context", () => {
   it.each(["claude", "codex"] as const)("gives %s board data when no agents are running, refreshing it for each turn", async (agent) => {
     expect(await askDeck("Which of my tasks are in review?", () => {}, agent)).toMatchObject({ ok: true, text: "Fixture answer" });
     const prompt = state.launches[0].args.join("\n");
@@ -121,7 +121,8 @@ describe("Ask Deck Jira context", () => {
   it("includes the PR inbox with attention reasons and running fixes", async () => {
     await askDeck("Any PR of mine needing attention?", () => {}, "claude");
     const prompt = state.launches[0].args[1];
-    expect(prompt).toContain("Jira projects on the board: APP");
+    expect(prompt).toContain("Board tracker: Jira");
+    expect(prompt).toContain("Projects on the board: APP");
     const inbox = JSON.parse(inboxSnapshot());
     expect(inbox.mine[0]).toMatchObject({ number: 7, needsAttention: ["ci_failed"], fixInProgress: ["ci_failed"] });
     expect(inbox.mine[1]).toMatchObject({ number: 8, needsAttention: [], fixInProgress: [] });
@@ -135,7 +136,7 @@ describe("Ask Deck Jira context", () => {
     expect(boardSnapshot()).toContain("no board snapshot yet");
     state.configured = false;
     expect(boardSnapshot()).toContain("not configured");
-    state.board = { boardName: "Empty board", columns: [], issues: [], at: Date.now() };
+    state.board = { provider: "jira", boardName: "Empty board", columns: [], issues: [], at: Date.now() };
     expect(JSON.parse(boardSnapshot())).toMatchObject({ board: "Empty board", ownershipKnown: false, issues: [] });
   });
   it("keeps teammate ownership distinct and handles caches without a current-user identity", () => {

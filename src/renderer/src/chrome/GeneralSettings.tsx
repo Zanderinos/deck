@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { askModels, type DeckSettings, type OnMergeMode, type OnMergeSettings, type StartCwd } from "../../../shared/settings.js";
 import { AgentSelect } from "../agents/AgentSelect.js";
-import { JiraConnectionFields } from "./JiraConnectionFields.js";
+import { BoardConnectionFields } from "./BoardConnectionFields.js";
 import { Card, control, Field, Toggle } from "./settingsUi.js";
-import type { BoardColumnStatuses } from "../../../main/jira.js";
+import type { BoardColumnStatuses } from "../../../main/board/types.js";
+import { boardProviderLabels } from "../../../shared/board.js";
 
 type Patch = Partial<DeckSettings>;
 
@@ -11,7 +12,7 @@ export function GeneralSettings() {
   const [settings, setSettings] = useState<DeckSettings>();
   const [columns, setColumns] = useState<BoardColumnStatuses[]>([]);
   const [columnsError, setColumnsError] = useState("");
-  const connection = settings && [settings.jira.baseUrl, settings.jira.email, settings.jira.apiToken, settings.jira.boardId].join("|");
+  const connection = settings && JSON.stringify([settings.board.provider, settings.jira, settings.linear, settings.githubProjects]);
   useEffect(() => { void window.deck.getSettings().then(setSettings); }, []);
   useEffect(() => {
     if (connection === undefined) return;
@@ -24,10 +25,11 @@ export function GeneralSettings() {
   const statusNames = [...new Set(columns.flatMap((c) => c.statuses.map((s) => s.name)))];
 
   const update = async (patch: Patch) => setSettings(await window.deck.updateSettings(patch));
-  const updateJira = (patch: Partial<DeckSettings["jira"]>) => update({ jira: { ...settings.jira, ...patch } });
+  const updateBoard = (patch: Partial<DeckSettings["board"]>) => update({ board: { ...settings.board, ...patch } });
   const updateAutoFix = (patch: Partial<DeckSettings["autoFix"]>) => update({ autoFix: { ...settings.autoFix, ...patch } });
-  const { onMerge } = settings.jira;
-  const updateOnMerge = (patch: Partial<OnMergeSettings>) => updateJira({ onMerge: { ...onMerge, ...patch } });
+  const { onMerge } = settings.board;
+  const tracker = boardProviderLabels[settings.board.provider];
+  const updateOnMerge = (patch: Partial<OnMergeSettings>) => updateBoard({ onMerge: { ...onMerge, ...patch } });
   const onBlurText = (current: string, apply: (value: string) => void, fallback = "") => (e: React.FocusEvent<HTMLInputElement>) => {
     const v = e.target.value.trim() || fallback;
     if (v !== current) apply(v);
@@ -135,26 +137,26 @@ export function GeneralSettings() {
           </Field>
         </Card>
 
-        <Card title="Jira" description="Credentials for the board Deck syncs, and how its columns drive the reviews queue and merges." className="lg:col-span-2">
+        <Card title="Board" description="Which tracker Deck mirrors, its credentials, and how the board's columns drive the reviews queue and merges." className="lg:col-span-2">
           <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
             <div className="grid grid-cols-2 gap-4">
-              <JiraConnectionFields jira={settings.jira} onChange={updateJira} />
+              <BoardConnectionFields settings={settings} onChange={(patch) => void update(patch)} />
               <Field label="Done column window" hint="days">
-                <input type="number" min={1} className={`w-full ${control}`} defaultValue={settings.jira.doneWindowDays}
-                  onBlur={(e) => { const v = Math.max(1, Number(e.target.value) || 7); if (v !== settings.jira.doneWindowDays) void updateJira({ doneWindowDays: v }); }} />
+                <input type="number" min={1} className={`w-full ${control}`} defaultValue={settings.board.doneWindowDays}
+                  onBlur={(e) => { const v = Math.max(1, Number(e.target.value) || 7); if (v !== settings.board.doneWindowDays) void updateBoard({ doneWindowDays: v }); }} />
               </Field>
             </div>
             <div className="flex flex-col gap-4">
               {columnsError && <div className="text-xs text-red">{columnsError}</div>}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Rejected status" hint="cards in this status are flagged">
-                  <select className={`w-full ${control}`} value={settings.jira.rejectedPattern} onChange={(e) => void updateJira({ rejectedPattern: e.target.value })}>
-                    {!statusNames.includes(settings.jira.rejectedPattern) && <option value={settings.jira.rejectedPattern}>{settings.jira.rejectedPattern}</option>}
+                  <select className={`w-full ${control}`} value={settings.board.rejectedPattern} onChange={(e) => void updateBoard({ rejectedPattern: e.target.value })}>
+                    {!statusNames.includes(settings.board.rejectedPattern) && <option value={settings.board.rejectedPattern}>{settings.board.rejectedPattern}</option>}
                     {statusNames.map((name) => <option key={name} value={name}>{name}</option>)}
                   </select>
                 </Field>
                 <Field label="Review column" hint="PRs whose card sits here wait on you">
-                  <select className={`w-full ${control}`} value={settings.jira.reviewColumns[0] ?? ""} onChange={(e) => void updateJira({ reviewColumns: e.target.value ? [e.target.value] : [] })}>
+                  <select className={`w-full ${control}`} value={settings.board.reviewColumns[0] ?? ""} onChange={(e) => void updateBoard({ reviewColumns: e.target.value ? [e.target.value] : [] })}>
                     <option value="">All review requests</option>
                     {columnNames.map((name) => <option key={name} value={name}>{name}</option>)}
                   </select>
@@ -171,8 +173,8 @@ export function GeneralSettings() {
                   </Field>
                   <Field label="Where">
                     <select className={`w-full ${control}`} value={onMerge.mode} onChange={(e) => void updateOnMerge({ mode: e.target.value as OnMergeMode })}>
-                      <option value="local">On deck's board only (until Jira catches up)</option>
-                      <option value="jira">Transition in Jira too</option>
+                      <option value="local">On deck's board only (until {tracker} catches up)</option>
+                      <option value="remote">Move it in {tracker} too</option>
                     </select>
                   </Field>
                 </div>

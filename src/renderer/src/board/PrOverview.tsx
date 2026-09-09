@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { IssuePr, PrComment, PrDetail, PrTimelineEvent } from "../../../main/github.js";
-import type { BoardIssue } from "../../../main/jira.js";
+import type { BoardIssue } from "../../../main/board/types.js";
 import { useMemo } from "react";
 import { Icon, type IconName } from "./icons.js";
 import { Markdown } from "./Markdown.js";
@@ -105,7 +105,6 @@ export interface PrOverviewProps {
   pr: IssuePr;
   detail: PrDetail | null | undefined;
   issue?: BoardIssue;
-  jiraBaseUrl?: string;
   generalComments: PrComment[];
   timeline: PrTimelineEvent[];
   commentsByPath: Map<string, PrComment[]>;
@@ -120,7 +119,6 @@ export function PrOverview({
   pr,
   detail,
   issue,
-  jiraBaseUrl,
   generalComments,
   timeline,
   commentsByPath,
@@ -168,10 +166,10 @@ export function PrOverview({
             <div className="pr-overview-body">
               {issue && (
                 <button
-                  onClick={() => jiraBaseUrl && window.open(`${jiraBaseUrl}/browse/${issue.key}`)}
+                  onClick={() => window.open(issue.url)}
                   className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-edge2 bg-card px-2 py-0.5 font-sans text-[12px] hover:border-edge3"
                 >
-                  <Icon name="jira" className="text-accent" />
+                  <Icon name="issue" className="text-accent" />
                   <span className="text-mut">{issue.key}</span>
                   <span className="text-soft">{issue.summary}</span>
                 </button>
@@ -230,7 +228,7 @@ export function PrOverview({
           <Section title="Resolves">
             {issue && (
               <button
-                onClick={() => jiraBaseUrl && window.open(`${jiraBaseUrl}/browse/${issue.key}`)}
+                onClick={() => window.open(issue.url)}
                 className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-card"
               >
                 <span className="shrink-0 font-mono text-[11px] text-accent">{issue.key}</span>

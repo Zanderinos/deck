@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BoardCache, BoardIssue } from "../../../main/jira.js";
+import type { BoardCache, BoardIssue } from "../../../main/board/types.js";
 import type { InboxPr } from "../../../main/prInbox.js";
 import { prKey } from "../../../shared/prs.js";
-import type { JiraSettings } from "../../../shared/settings.js";
+import type { BoardSettings } from "../../../shared/settings.js";
 import { usePrInbox } from "./useInbox.js";
 
 // The review queue behind both the sidebar badge and the reviews page, so the
@@ -10,10 +10,19 @@ import { usePrInbox } from "./useInbox.js";
 
 const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/;
 
-/** The Jira card a PR belongs to, by key in its title or branch. */
+/** The board card a PR belongs to. Jira and Linear keys (APP-12) are found
+ *  in the title or branch; a GitHub key (repo#12) needs the same repo and
+ *  the number as "#12" or as the "12-" prefix GitHub gives issue branches. */
 export function issueFor(pr: InboxPr, board: BoardCache | undefined): BoardIssue | undefined {
-  const key = ISSUE_KEY.exec(`${pr.title} ${pr.headRefName}`)?.[0];
-  return key ? board?.issues.find((i) => i.key === key) : undefined;
+  if (!board) return undefined;
+  const text = `${pr.title} ${pr.headRefName}`;
+  const key = ISSUE_KEY.exec(text)?.[0];
+  if (key) return board.issues.find((i) => i.key === key);
+  const repoName = pr.repo.split("/")[1];
+  return board.issues.find((i) => {
+    const github = /^(.+)#(\d+)$/.exec(i.key);
+    return github && github[1] === repoName && new RegExp(`#${github[2]}\\b|(^|[\\s/])${github[2]}-`).test(text);
+  });
 }
 
 /** Non-draft review requests, oldest first so nothing sits unreviewed while
@@ -31,17 +40,17 @@ export function reviewQueue(requested: InboxPr[], board: BoardCache | undefined,
     .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
 }
 
-/** Live review queue plus the board and Jira settings it was built from. */
+/** Live review queue plus the board it was built from. */
 export function useReviewQueue(done = new Set<string>()) {
   const inbox = usePrInbox();
   const [board, setBoard] = useState<BoardCache>();
-  const [jira, setJira] = useState<JiraSettings>();
+  const [boardSettings, setBoardSettings] = useState<BoardSettings>();
 
   useEffect(() => {
     void window.deck.board.get().then(setBoard);
-    void window.deck.getSettings().then((s) => setJira(s.jira));
+    void window.deck.getSettings().then((s) => setBoardSettings(s.board));
     const offBoard = window.deck.board.onChanged(setBoard);
-    const offSettings = window.deck.onSettingsChanged((s) => setJira(s.jira));
+    const offSettings = window.deck.onSettingsChanged((s) => setBoardSettings(s.board));
     return () => { offBoard(); offSettings(); };
   }, []);
 
@@ -53,7 +62,7 @@ export function useReviewQueue(done = new Set<string>()) {
       ...reviewed.filter((pr) => !pr.newSinceReview),
     ];
   }, [inbox]);
-  const queue = useMemo(() => reviewQueue(waiting, board, jira?.reviewColumns ?? [], done), [waiting, board, jira, done]);
+  const queue = useMemo(() => reviewQueue(waiting, board, boardSettings?.reviewColumns ?? [], done), [waiting, board, boardSettings, done]);
   const reviewed = useMemo(() => new Map((inbox?.reviewed ?? []).map((pr) => [prKey(pr), Boolean(pr.newSinceReview)])), [inbox]);
   // Every open PR the reviews page can show, queued or not.
   const lists = useMemo(() => ({
@@ -63,5 +72,5 @@ export function useReviewQueue(done = new Set<string>()) {
   }), [inbox]);
   // Queued PRs awaiting a first review, or with new work since the user's.
   const actionable = useMemo(() => queue.filter((pr) => reviewed.get(prKey(pr)) !== false).length, [queue, reviewed]);
-  return { queue, board, jiraBaseUrl: jira?.baseUrl, loaded: inbox !== undefined, reviewed, actionable, lists };
+  return { queue, board, loaded: inbox !== undefined, reviewed, actionable, lists };
 }

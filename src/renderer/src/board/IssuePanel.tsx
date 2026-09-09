@@ -2,7 +2,7 @@ import { AgentSelect, useAgentChoice } from "../agents/AgentSelect.js";
 import { useEffect, useMemo, useState } from "react";
 import type { IssuePr } from "../../../main/github.js";
 import type { RepoDir } from "../../../main/providers.js";
-import type { BoardIssue } from "../../../main/jira.js";
+import type { BoardIssue } from "../../../main/board/types.js";
 import type { AgentSession } from "../../../main/sessions.js";
 import { useTabs } from "../store.js";
 
@@ -22,13 +22,12 @@ const agentGlyph: Record<AgentSession["status"], { dot: string; color: string; l
 
 export interface IssuePanelProps {
   issue: BoardIssue;
-  jiraBaseUrl: string;
   rejected: boolean;
   onClose: () => void;
   onOpenDiff: (pr: IssuePr) => void;
 }
 
-export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }: IssuePanelProps) {
+export function IssuePanel({ issue, rejected, onClose, onOpenDiff }: IssuePanelProps) {
   const { newTab, tabs, focusTab } = useTabs();
   const [agent, setAgent] = useAgentChoice();
   const [prs, setPrs] = useState<IssuePr[]>();
@@ -97,10 +96,10 @@ export function IssuePanel({ issue, jiraBaseUrl, rejected, onClose, onOpenDiff }
             {issue.assignee ?? "unassigned"}
           </span>
           <button
-            onClick={() => window.open(`${jiraBaseUrl.replace(/\/$/, "")}/browse/${issue.key}`)}
+            onClick={() => window.open(issue.url)}
             className="rounded bg-card2 px-2 py-0.5 text-accent hover:underline"
           >
-            open in jira ↗
+            open issue ↗
           </button>
         </div>
 

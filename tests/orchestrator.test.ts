@@ -4,7 +4,8 @@ const state = vi.hoisted(() => ({ created: [] as unknown[], sent: [] as unknown[
 vi.mock("../src/main/autofix.js", () => ({ checkoutFor: (repo: string) => (repo.endsWith("api") ? "/repos/api" : undefined), fixPrompt: () => "fix", runningFixes: () => [], startFix: vi.fn() }));
 vi.mock("../src/main/github.js", () => ({ prDetail: async () => null }));
 vi.mock("../src/main/indexer.js", () => ({ lastMessages: (id: string, limit: number) => [{ role: "assistant", text: `${id} ${limit}`, ts: 0 }] }));
-vi.mock("../src/main/jira.js", () => ({ createIssue: vi.fn(), getBoardCache: () => ({ issues: [{ key: "APP-1" }, { key: "APP-2" }, { key: "OPS-9" }] }), searchIssues: async (jql: string) => [{ key: "APP-5", summary: jql }] }));
+vi.mock("../src/main/board/board.js", () => ({ createIssue: vi.fn(), getBoardCache: () => ({ issues: [{ key: "APP-1" }, { key: "APP-2" }, { key: "OPS-9" }, { key: "api#12" }] }), searchIssues: async (query: string) => [{ key: "APP-5", summary: query }] }));
+vi.mock("../src/main/board/provider.js", () => ({ boardProvider: () => ({ label: "Jira" }) }));
 vi.mock("../src/main/prInbox.js", async () => ({ ...(await import("../src/main/prInbox.js")), getPrInbox: () => undefined, refreshPrInbox: vi.fn() }));
 vi.mock("../src/main/providers.js", () => ({ listRepos: () => [{ name: "api", path: "/repos/api" }] }));
 vi.mock("../src/main/pty.js", () => ({
@@ -55,10 +56,10 @@ describe("deck MCP server", () => {
     expect(missing.isError).toBe(true);
     expect(missing.content[0].text).toContain("list_repos");
   });
-  it("reports unknown tools and searches Jira", async () => {
+  it("reports unknown tools and searches the tracker", async () => {
     expect((await call("nope")).body).toMatchObject({ error: { code: -32602 } });
-    expect(text(await call("jira_search", { jql: "project = APP" })).content[0].text).toContain("project = APP");
+    expect(text(await call("search_issues", { query: "project = APP" })).content[0].text).toContain("project = APP");
     expect(text(await call("pr_inbox")).content[0].text).toContain("No PR data yet");
-    expect(boardProjects()).toEqual(["APP", "OPS"]);
+    expect(boardProjects()).toEqual(["APP", "OPS", "api"]);
   });
 });

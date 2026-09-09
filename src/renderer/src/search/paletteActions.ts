@@ -47,7 +47,7 @@ const sectionKeywords: Record<SettingsSection, string> = {
   appearance: "theme font terminal cursor",
   plugins: "extensions",
   keybinds: "shortcuts keyboard",
-  general: "jira github hotkey agent model start page dock",
+  general: "board jira linear github hotkey agent model start page dock",
 };
 
 function item(icon: string, title: string, meta: string, open: () => void, extra: Partial<PaletteItem> = {}): PaletteItem {

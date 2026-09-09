@@ -97,7 +97,7 @@ import {
   onBoardChanged,
   startBoardSync,
   syncBoard,
-} from "./jira.js";
+} from "./board/board.js";
 import { listSessions, onSessionsChanged, removeSession } from "./sessions.js";
 import { getSettings, updateSettings } from "./settings.js";
 

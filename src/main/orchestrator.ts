@@ -2,7 +2,8 @@ import type { Agent } from "../shared/agents.js";
 import { checkoutFor, fixPrompt, runningFixes, startFix, type FixProblem } from "./autofix.js";
 import { prDetail } from "./github.js";
 import { lastMessages } from "./indexer.js";
-import { createIssue, getBoardCache, searchIssues } from "./jira.js";
+import { createIssue, getBoardCache, searchIssues } from "./board/board.js";
+import { boardProvider } from "./board/provider.js";
 import { attentionReasons, getPrInbox, refreshPrInbox, type InboxPr } from "./prInbox.js";
 import { listRepos } from "./providers.js";
 import { createTerm, sendToTerm } from "./pty.js";
@@ -84,7 +85,7 @@ const tools: Tool[] = [
       repo: str("Repository name (directory under the repo roots, or owner/name) when cwd is unknown"),
       prompt: str("The opening instruction for the agent"),
       agent: { type: "string", enum: ["claude", "codex"], description: "Defaults to the user's default agent" },
-      issue_key: str("Jira issue key to link the session to"),
+      issue_key: str("Board issue key to link the session to"),
     }, ["prompt"]),
     run: async (args) => {
       const cwd = args.cwd ? String(args.cwd) : args.repo ? checkoutFor(String(args.repo)) : undefined;
@@ -137,31 +138,35 @@ const tools: Tool[] = [
     },
   },
   {
-    name: "jira_search",
-    description: "Search Jira with JQL, beyond the board mirror: backlog, epics, other projects. Returns key, summary, status, type, assignee, priority, parent and description.",
-    inputSchema: schema({ jql: str('e.g. project = APP AND statusCategory = "To Do" AND sprint is EMPTY ORDER BY priority'), max: { type: "integer", description: "1-50, default 25" } }, ["jql"]),
-    run: async (args) => searchIssues(String(args.jql), Number(args.max) || 25),
+    name: "search_issues",
+    description: "Search the issue tracker beyond the board mirror: backlog, epics, other projects. The query is in the tracker's own language: JQL for Jira, free text for Linear, GitHub issue search syntax for GitHub Projects. Returns key, summary, status, type, assignee, priority, parent, description and url.",
+    inputSchema: schema({ query: str('e.g. Jira: project = APP AND statusCategory = "To Do" ORDER BY priority; GitHub: is:open label:bug'), max: { type: "integer", description: "1-50, default 25" } }, ["query"]),
+    run: async (args) => searchIssues(String(args.query), Number(args.max) || 25),
   },
   {
-    name: "jira_create_issue",
-    description: "Create a Jira issue. Only after the user has agreed to the exact summary; never create speculatively.",
+    name: "create_issue",
+    description: "Create an issue in the tracker. Only after the user has agreed to the exact summary; never create speculatively.",
     inputSchema: schema({
-      project: str("Project key"),
-      type: str("Issue type name, e.g. Task, Story, Epic"),
+      project: str("Jira project key, Linear team key or GitHub owner/repo"),
+      type: str("Issue type name for Jira, e.g. Task, Story, Epic; ignored by other trackers"),
       summary: str("One-line summary"),
       description: str("Plain text; blank lines separate paragraphs"),
       parent: str("Epic or parent issue key"),
-    }, ["project", "type", "summary"]),
+    }, ["project", "summary"]),
     run: async (args) => createIssue({
-      project: String(args.project), type: String(args.type), summary: String(args.summary),
+      project: String(args.project), type: args.type ? String(args.type) : undefined, summary: String(args.summary),
       description: args.description ? String(args.description) : undefined, parent: args.parent ? String(args.parent) : undefined,
     }),
   },
 ];
 
-/** The project keys on the board, so the assistant writes JQL for the right project. */
+/** The tracker deck's board mirrors, for prompts that name it. */
+export const boardLabel = (): string => boardProvider().label;
+
+/** The project keys on the board (APP for APP-12, repo for repo#12), so the
+ *  assistant searches the right project. */
 export function boardProjects(): string[] {
-  return [...new Set((getBoardCache()?.issues ?? []).map((i) => i.key.split("-")[0]))];
+  return [...new Set((getBoardCache()?.issues ?? []).map((i) => /^(.+?)[-#]\d+$/.exec(i.key)?.[1] ?? i.key))];
 }
 
 export interface JsonRpc {

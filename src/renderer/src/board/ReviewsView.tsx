@@ -56,7 +56,7 @@ function PrList({ title, prs, current, badge, onPick }: {
 
 export function ReviewsView({ visible }: { visible: boolean }) {
   const [done, setDone] = useState(new Set<string>());
-  const { queue, board, jiraBaseUrl, loaded, reviewed: reviewedPrs, lists } = useReviewQueue(done);
+  const { queue, board, loaded, reviewed: reviewedPrs, lists } = useReviewQueue(done);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<string>();
   const [rail, setRail] = useState(() => localStorage.getItem("deck.reviews.rail") !== "hidden");
@@ -124,8 +124,8 @@ export function ReviewsView({ visible }: { visible: boolean }) {
             : <span title="You reviewed this; nothing new since" className="rounded border border-edge3 px-1.5 py-0.5 text-[10px] text-dim">reviewed</span>
         )}
         {issue && (
-          <button onClick={() => jiraBaseUrl && window.open(`${jiraBaseUrl}/browse/${issue.key}`)} className="flex min-w-0 items-center gap-1.5 truncate text-[11px] text-body hover:text-ink" title={`Open ${issue.key} in Jira`}>
-            <Icon name="jira" size={11} className="text-dim" /><span className="text-mut">{issue.key}</span><span className="truncate">{issue.summary}</span><span className="shrink-0 text-dim">· {issue.statusName}</span>
+          <button onClick={() => window.open(issue.url)} className="flex min-w-0 items-center gap-1.5 truncate text-[11px] text-body hover:text-ink" title={`Open ${issue.key}`}>
+            <Icon name="issue" size={11} className="text-dim" /><span className="text-mut">{issue.key}</span><span className="truncate">{issue.summary}</span><span className="shrink-0 text-dim">· {issue.statusName}</span>
           </button>
         )}
         {reviewed && <span className={`text-[11px] ${reviewed.event === "APPROVE" ? "text-green" : "text-red"}`}>{reviewed.event === "APPROVE" ? "✓ approved" : "✗ changes requested"} — next…</span>}
@@ -138,7 +138,7 @@ export function ReviewsView({ visible }: { visible: boolean }) {
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {current ? (
-            <PrScreen key={prKey(current)} embedded hidden={!visible} pr={toIssuePr(current)} issue={issue} jiraBaseUrl={jiraBaseUrl} onClose={() => {}} onReviewed={onReviewed} />
+            <PrScreen key={prKey(current)} embedded hidden={!visible} pr={toIssuePr(current)} issue={issue} onClose={() => {}} onReviewed={onReviewed} />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[12px] text-dim">
               <Icon name="check" size={20} className="text-green" />

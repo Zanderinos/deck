@@ -39,7 +39,7 @@ const paths = {
   play: "M5 3.5v9l7-4.5z",
   dots: "M3.5 8h.01M8 8h.01M12.5 8h.01",
   sparkle: "M8 2v12M2 8h12M4 4l8 8M12 4l-8 8",
-  jira: "M8 2l3 3-3 3-3-3zM5 8l3 3-3 3-3-3zM11 8l3 3-3 3-3-3z",
+  issue: "M8 2l3 3-3 3-3-3zM5 8l3 3-3 3-3-3zM11 8l3 3-3 3-3-3z",
 } as const;
 
 const filled = new Set<IconName>(["play", "dot"]);

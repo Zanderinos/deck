@@ -57,7 +57,7 @@ Deck's orchestrator, front and centre. Every question gets the live sessions, yo
 
 - start Claude or Codex agents in Deck terminals, answer or steer running ones, and read their transcripts
 - put an agent on a broken PR
-- search the Jira backlog and create issues, only after you agree
+- search the tracker's backlog and create issues, only after you agree
 
 The rail lists what needs you and every live session. The sidebar badge counts it. Make it the start page from its header or **Settings → General**.
 
@@ -100,7 +100,7 @@ Install and authenticate [`claude`](https://docs.anthropic.com/en/docs/claude-co
 
 **History.** Indexed from `~/.claude/projects`, plus `$CODEX_HOME/sessions` and `archived_sessions` (default `~/.codex`). Codex subagent transcripts and internal environment messages are excluded from results.
 
-**GitHub and Jira.** Pull request tools use the `gh` CLI. The Jira board syncs in the background once configured in Settings.
+**GitHub and the board.** Pull request tools use the `gh` CLI. The board mirrors Jira, Linear or a GitHub Project (pick one in Settings) and syncs in the background once configured. Each tracker is an adapter behind the same board interface (`src/main/board/`).
 
 ## Shortcuts
 

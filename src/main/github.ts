@@ -6,7 +6,7 @@ const exec = promisify(execFile);
 
 // PRs via the gh CLI (the user's own auth), adapted from slate's prSearch.
 // Scoped to the configured owner when set, otherwise searches all of GitHub.
-// This is the fallback for issues Jira has no PR linked to; the cache that
+// This is the fallback for issues the tracker has no PR linked to; the cache that
 // serves the board lives in issuePrs.ts.
 
 export interface IssuePr {
@@ -171,10 +171,12 @@ interface GhFileNode {
   viewerViewedState: "VIEWED" | "UNVIEWED" | "DISMISSED";
 }
 
-async function graphql(query: string, variables: Record<string, string | number | null>) {
+/** GraphQL over the user's gh auth. Strings go raw (-f); numbers and booleans
+ *  typed (-F), so a title that happens to read "123" stays a string. */
+export async function graphql(query: string, variables: Record<string, string | number | boolean | null>) {
   const args = ["api", "graphql", "-f", `query=${query}`];
   for (const [key, value] of Object.entries(variables)) {
-    if (value !== null) args.push("-F", `${key}=${value}`);
+    if (value !== null) args.push(typeof value === "string" ? "-f" : "-F", `${key}=${value}`);
   }
   const { stdout } = await exec("gh", args, { timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
   return JSON.parse(stdout) as { data?: Record<string, unknown> };

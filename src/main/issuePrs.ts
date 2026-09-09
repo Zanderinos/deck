@@ -1,11 +1,11 @@
 import { kvGet, kvSet } from "./db.js";
 import { searchPrsForIssue, type IssuePr } from "./github.js";
-import { linkedPullRequests, onBoardChanged, type BoardIssue } from "./jira.js";
+import { linkedPullRequests, onBoardChanged, type BoardIssue } from "./board/board.js";
 
 // PRs per board issue, kept warm in the background so opening a card never
-// waits on a network round trip. Jira's own PR links (the GitHub-for-Jira
-// integration) are the source; GitHub search is the fallback for issues the
-// integration missed. Adapted from slate's prSearch warmer.
+// waits on a network round trip. The tracker's own PR links are the source;
+// GitHub search is the fallback for issues its integration missed. Adapted
+// from slate's prSearch warmer.
 
 interface Entry {
   prs: IssuePr[];
@@ -31,7 +31,7 @@ export function onPrsChanged(
   return () => listeners.delete(cb);
 }
 
-const jiraState: Record<string, { state: string; isDraft: boolean }> = {
+const linkedState: Record<string, { state: string; isDraft: boolean }> = {
   OPEN: { state: "OPEN", isDraft: false },
   DRAFT: { state: "OPEN", isDraft: true },
   MERGED: { state: "MERGED", isDraft: false },
@@ -39,16 +39,16 @@ const jiraState: Record<string, { state: string; isDraft: boolean }> = {
 };
 
 async function fetchPrs(issue: BoardIssue): Promise<IssuePr[]> {
-  const linked = await linkedPullRequests(issue.id).catch(() => []);
+  const linked = await linkedPullRequests(issue).catch(() => []);
   if (linked.length === 0) return searchPrsForIssue(issue.key);
   return linked
     .map((pr) => ({
       repo: pr.repo,
       number: pr.number,
       title: pr.title,
-      ...(jiraState[pr.status] ?? { state: pr.status, isDraft: false }),
+      ...(linkedState[pr.status] ?? { state: pr.status, isDraft: false }),
       url: pr.url,
-      // Jira anonymises PR authors; the detail screen shows the real one.
+      // Trackers anonymise PR authors; the detail screen shows the real one.
       author: "",
       updatedAt: pr.lastUpdate,
     }))

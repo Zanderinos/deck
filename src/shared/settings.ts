@@ -5,11 +5,12 @@ import type { TerminalAppearanceSettings } from "./terminal.js";
 // Settings shape shared between main and renderer. Everything user-tunable
 // lives here — deck ships no hardcoded personal or company config.
 
-export interface JiraSettings {
-  baseUrl: string;
-  email: string;
-  apiToken: string;
-  boardId: string;
+/** Which issue tracker the board mirrors. Each is an adapter behind the same
+ *  board interface; only the connection block for the chosen one is used. */
+export type BoardProviderKind = "jira" | "linear" | "github";
+
+export interface BoardSettings {
+  provider: BoardProviderKind;
   /** Status names matching this (case-insensitive) get the rejected treatment. */
   rejectedPattern: string;
   /** How many days of Done issues stay on the board. */
@@ -22,10 +23,30 @@ export interface JiraSettings {
   onMerge: OnMergeSettings;
 }
 
+export interface JiraSettings {
+  baseUrl: string;
+  email: string;
+  apiToken: string;
+  boardId: string;
+}
+
+export interface LinearSettings {
+  apiKey: string;
+  /** Team key as in issue identifiers, e.g. ENG for ENG-123. */
+  teamKey: string;
+}
+
+export interface GithubProjectsSettings {
+  /** Organisation or user that owns the project. */
+  owner: string;
+  /** The number in the project's URL. */
+  projectNumber: string;
+}
+
 /** - "local": the card shows in the target column on deck's board only, until
- *    Jira catches up (its own automation) or the issue moves elsewhere.
- *  - "jira": deck fires the Jira transition itself. */
-export type OnMergeMode = "local" | "jira";
+ *    the tracker catches up (its own automation) or the issue moves elsewhere.
+ *  - "remote": deck moves the issue in the tracker itself. */
+export type OnMergeMode = "local" | "remote";
 
 export interface OnMergeSettings {
   enabled: boolean;
@@ -89,7 +110,10 @@ export interface DeckSettings {
   askModel: string;
   defaultView: DefaultView;
   autoFix: AutoFixSettings;
+  board: BoardSettings;
   jira: JiraSettings;
+  linear: LinearSettings;
+  githubProjects: GithubProjectsSettings;
   github: GithubSettings;
   windowMode: WindowMode;
   /** With a separate hotkey window: keep its tabs apart from the regular window's. */
@@ -124,16 +148,16 @@ export const defaultSettings: DeckSettings = {
   askModel: "sonnet",
   defaultView: "terminal",
   autoFix: { enabled: false, ci: true, conflicts: true, push: "review" },
-  jira: {
-    baseUrl: "",
-    email: "",
-    apiToken: "",
-    boardId: "",
+  board: {
+    provider: "jira",
     rejectedPattern: "reject",
     doneWindowDays: 7,
     reviewColumns: [],
     onMerge: { enabled: false, column: "", mode: "local" },
   },
+  jira: { baseUrl: "", email: "", apiToken: "", boardId: "" },
+  linear: { apiKey: "", teamKey: "" },
+  githubProjects: { owner: "", projectNumber: "" },
   github: { owner: "" },
   windowMode: "shared",
   hotkeyOwnTabs: false,

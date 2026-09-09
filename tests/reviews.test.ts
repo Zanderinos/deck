@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BoardCache } from "../src/main/jira.js";
+import type { BoardCache } from "../src/main/board/types.js";
 import type { InboxPr } from "../src/main/prInbox.js";
 import { issueFor, reviewQueue } from "../src/renderer/src/lib/reviews.js";
 
@@ -9,11 +9,11 @@ const pr = (number: number, title: string, extra: Partial<InboxPr> = {}): InboxP
 });
 
 const board: BoardCache = {
-  boardName: "INI", at: 0,
+  provider: "jira", boardName: "INI", at: 0,
   columns: [{ name: "In Progress", statusIds: ["3"] }, { name: "Review", statusIds: ["4", "5"] }],
   issues: [
-    { id: "1", key: "INI-1", summary: "", statusId: "4", statusName: "Review", assignee: null, assigneeId: null, updated: "" },
-    { id: "2", key: "INI-2", summary: "", statusId: "3", statusName: "In Progress", assignee: null, assigneeId: null, updated: "" },
+    { id: "1", key: "INI-1", summary: "", statusId: "4", statusName: "Review", assignee: null, assigneeId: null, updated: "", url: "" },
+    { id: "2", key: "INI-2", summary: "", statusId: "3", statusName: "In Progress", assignee: null, assigneeId: null, updated: "", url: "" },
   ],
 };
 
@@ -41,5 +41,16 @@ describe("issueFor", () => {
   it("finds the card by key in the title or branch", () => {
     expect(issueFor(pr(9, "fix it", { headRefName: "INI-2-fix" }), board)?.key).toBe("INI-2");
     expect(issueFor(pr(9, "fix it"), board)).toBeUndefined();
+  });
+
+  it("matches GitHub cards by repo and issue number", () => {
+    const github: BoardCache = {
+      ...board, provider: "github",
+      issues: [{ id: "i1", key: "api#12", summary: "", statusId: "4", statusName: "Review", assignee: null, assigneeId: null, updated: "", url: "" }],
+    };
+    expect(issueFor(pr(9, "Fix login (#12)"), github)?.key).toBe("api#12");
+    expect(issueFor(pr(9, "fix it", { headRefName: "12-fix-login" }), github)?.key).toBe("api#12");
+    expect(issueFor(pr(9, "Bump to v12"), github)).toBeUndefined();
+    expect(issueFor(pr(9, "Fix #12", { repo: "acme/web" }), github)).toBeUndefined();
   });
 });
