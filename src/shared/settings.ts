@@ -38,7 +38,8 @@ export interface GithubSettings {
   owner: string;
 }
 
-/** How the entry points (hotkey, tray, manual open) map to windows.
+/** How the entry points (hotkey, tray, manual open) map to windows. Windows
+ *  are views onto the same tabs; this never partitions terminals.
  *  - "shared": one window for everything.
  *  - "panel": the hotkey gets its own quake panel; tray and manual share a main window.
  *  - "per-entry": hotkey, tray and manual open each get their own window. */
