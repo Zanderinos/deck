@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
   Decoration,
   Diff,
@@ -32,6 +32,7 @@ import {
 } from "./PrComments.js";
 import { Icon } from "./icons.js";
 import { ExtBadge, FileName, relativeTime, Stat } from "./prUi.js";
+import { useTerminalAppearance } from "../lib/useTerminalAppearance.js";
 
 const EXPAND_STEP = 20;
 // Highlighting is synchronous; past this many changes it would freeze the UI.
@@ -645,6 +646,8 @@ export interface PrDiffTabProps {
 
 export function PrDiffTab(props: PrDiffTabProps) {
   const { repo, detail, files, diffText, viewType, viewed, activePath } = props;
+  // Code reads at the same size in the diff as in the terminal.
+  const { fontSize } = useTerminalAppearance();
   const [subTab, setSubTab] = useState<"files" | "commits">("files");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(viewed));
   const sources = useRef(new Map<string, Promise<string[] | null>>());
@@ -733,7 +736,7 @@ export function PrDiffTab(props: PrDiffTabProps) {
           ))}
         </div>
       ) : (
-        <div ref={scrollRef} className="deck-diff min-h-0 flex-1 select-text overflow-auto py-2">
+        <div ref={scrollRef} className="deck-diff min-h-0 flex-1 select-text overflow-auto py-2" style={{ "--diff-font-size": `${fontSize}px` } as CSSProperties}>
           {diffText === undefined && <div className="px-4 py-3 text-[11px] text-dim">loading diff…</div>}
           {diffText?.startsWith("diff unavailable") && (
             <div className="px-4 py-3 text-[11px] text-red">{diffText}</div>
