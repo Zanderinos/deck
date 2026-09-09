@@ -61,7 +61,14 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon((_event, url) => window.open(url)));
     term.open(host);
-    term.attachCustomKeyEventHandler((event) => !((event.metaKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) || boundChords.current.has(chordOf(event) ?? "")));
+    term.attachCustomKeyEventHandler((event) => {
+      // Cmd+Backspace clears the line, as in Terminal.app and iTerm2; xterm would send a single delete.
+      if (event.type === "keydown" && event.metaKey && event.key === "Backspace") {
+        window.deck.term.input(termId, "\x15");
+        return false;
+      }
+      return !((event.metaKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) || boundChords.current.has(chordOf(event) ?? ""));
+    });
 
     try {
       term.loadAddon(new WebglAddon());
