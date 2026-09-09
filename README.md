@@ -47,11 +47,11 @@ Summon it with **⌥ Space**. Code, review and orchestrate without leaving the s
 - **Splits and panes**: resizable nested splits, find in terminal, export, multiline input, and a local file explorer with text editing and Markdown preview.
 - **Zen and Presentation** on every page, WebStorm style. Both go fullscreen and hide the chrome; Presentation also enlarges the terminal font and zooms the other pages by the same ratio.
 
-### Board <kbd>⌘⇧2</kbd>
+### Board <kbd>⌘⌥2</kbd>
 
 Your Jira board as a Kanban view inside Deck. Cards carry the agents that have touched them; opening a card shows the ticket, its sessions and its pull requests, and starts a new Claude Code or Codex session on it. Dragging a card to another column fires the matching Jira transition, optimistically, with the sync catching up in the background.
 
-### Agent page <kbd>⌘⇧3</kbd>
+### Agent page <kbd>⌘⌥3</kbd>
 
 Deck's orchestrator, front and centre. Every question gets the live sessions, your PR inbox and the synced Jira board as context. Through Deck's own MCP tools it can:
 
@@ -61,7 +61,7 @@ Deck's orchestrator, front and centre. Every question gets the live sessions, yo
 
 The rail lists what needs you and every live session. The sidebar badge counts it. Make it the start page from its header or **Settings → General**.
 
-### Reviews page <kbd>⌘⇧4</kbd>
+### Reviews page <kbd>⌘⌥4</kbd>
 
 Every pull request waiting on your review, one at a time like a mail client. Each shows the linked Jira task, the overview, the diff and a pinned agent helper (<kbd>a</kbd>). Approve or request changes and the queue moves on. <kbd>n</kbd> / <kbd>p</kbd> step through without leaving. Review threads collapse to one line like GitHub's, and resolved or outdated threads start collapsed.
 
@@ -101,7 +101,7 @@ Install and authenticate [`claude`](https://docs.anthropic.com/en/docs/claude-co
 | <kbd>⌘T</kbd> / <kbd>⌘W</kbd> | New / close terminal |
 | <kbd>⌘1</kbd>–<kbd>⌘9</kbd> | Switch terminal |
 | <kbd>⌘B</kbd> | Toggle sidebar |
-| <kbd>⌘⇧1</kbd> <kbd>⌘⇧2</kbd> <kbd>⌘⇧3</kbd> <kbd>⌘⇧4</kbd> | Terminal / Board / Agent / Reviews |
+| <kbd>⌘⌥1</kbd> <kbd>⌘⌥2</kbd> <kbd>⌘⌥3</kbd> <kbd>⌘⌥4</kbd> | Terminal / Board / Agent / Reviews |
 | <kbd>⌘D</kbd> / <kbd>⌘⇧D</kbd> | Split right / down |
 | <kbd>⌘F</kbd> | Find in terminal |
 | <kbd>⌘J</kbd> | Toggle multiline input |

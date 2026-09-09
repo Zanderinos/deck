@@ -127,10 +127,12 @@ function Shell() {
       } else if (meta && e.key.toLowerCase() === "b") {
         setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; });
       } else if (meta && e.key === ",") setView("settings");
-      else if (meta && e.shiftKey && e.key === "1") setView("terminal");
-      else if (meta && e.shiftKey && e.key === "2") setView("board");
-      else if (meta && e.shiftKey && e.key === "3") setView("agent");
-      else if (meta && e.shiftKey && e.key === "4") setView("reviews");
+      // Option instead of Shift: ⌘⇧3/4 are the macOS screenshot keys. Match on
+      // the physical key because ⌥+digit types a symbol (⌥3 is "£") on a Mac.
+      else if (meta && e.altKey && e.code === "Digit1") setView("terminal");
+      else if (meta && e.altKey && e.code === "Digit2") setView("board");
+      else if (meta && e.altKey && e.code === "Digit3") setView("agent");
+      else if (meta && e.altKey && e.code === "Digit4") setView("reviews");
       else if (meta && e.key === "t") {
         e.preventDefault();
         setView("terminal");

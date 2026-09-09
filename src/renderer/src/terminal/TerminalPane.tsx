@@ -41,7 +41,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    term.attachCustomKeyEventHandler((event) => !(event.metaKey && /^(?:[1-9]|[bdefjkpstw]|,)$/i.test(event.key)));
+    term.attachCustomKeyEventHandler((event) => !(event.metaKey && (/^Digit[1-9]$/.test(event.code) || /^(?:[bdefjkpstw]|,)$/i.test(event.key))));
 
     try {
       term.loadAddon(new WebglAddon());
