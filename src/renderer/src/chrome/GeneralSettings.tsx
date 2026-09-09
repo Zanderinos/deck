@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { askModels, type DeckSettings, type OnMergeMode, type OnMergeSettings, type StartCwd } from "../../../shared/settings.js";
 import { AgentSelect } from "../agents/AgentSelect.js";
+import { JiraConnectionFields } from "./JiraConnectionFields.js";
 import { Card, control, Field, Toggle } from "./settingsUi.js";
 import type { BoardColumnStatuses } from "../../../main/jira.js";
 
@@ -137,17 +138,7 @@ export function GeneralSettings() {
         <Card title="Jira" description="Credentials for the board Deck syncs, and how its columns drive the reviews queue and merges." className="lg:col-span-2">
           <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
             <div className="grid grid-cols-2 gap-4">
-              {([
-                ["baseUrl", "Base URL", "https://yourorg.atlassian.net"],
-                ["email", "Email", "you@example.com"],
-                ["apiToken", "API token", ""],
-                ["boardId", "Board id", "25"],
-              ] as const).map(([field, label, placeholder]) => (
-                <Field key={field} label={label}>
-                  <input type={field === "apiToken" ? "password" : "text"} placeholder={placeholder} className={`w-full ${control}`} defaultValue={settings.jira[field]}
-                    onBlur={onBlurText(settings.jira[field], (v) => void updateJira({ [field]: v }))} />
-                </Field>
-              ))}
+              <JiraConnectionFields jira={settings.jira} onChange={updateJira} />
               <Field label="Done column window" hint="days">
                 <input type="number" min={1} className={`w-full ${control}`} defaultValue={settings.jira.doneWindowDays}
                   onBlur={(e) => { const v = Math.max(1, Number(e.target.value) || 7); if (v !== settings.jira.doneWindowDays) void updateJira({ doneWindowDays: v }); }} />

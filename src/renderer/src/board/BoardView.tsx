@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IssuePr } from "../../../main/github.js";
 import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { DeckSettings } from "../../../shared/settings.js";
+import { JiraConnectionFields, TOKEN_PAGE } from "../chrome/JiraConnectionFields.js";
 import { onNavBack } from "../lib/bus.js";
 import { useTabs } from "../store.js";
 import { PrScreen } from "./PrScreen.js";
+import { Icon } from "./icons.js";
 import { IssuePanel } from "./IssuePanel.js";
 
 const columnDots = ["text-body", "text-orange", "text-blue", "text-green", "text-accent"];
@@ -40,6 +42,7 @@ export function BoardView() {
   const [selected, setSelected] = useState<BoardIssue>();
   const [diffPr, setDiffPr] = useState<IssuePr>();
   const [mineOnly, setMineOnly] = useState(false);
+  const saveSettings = async (patch: Partial<DeckSettings>) => setSettings(await window.deck.updateSettings(patch));
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [dragKey, setDragKey] = useState<string>();
   const [dropTarget, setDropTarget] = useState<string>();
@@ -86,7 +89,7 @@ export function BoardView() {
     }
   }, [settings]);
 
-  const configured = Boolean(settings && settings.jira.baseUrl && settings.jira.boardId);
+  const configured = Boolean(settings && settings.jira.baseUrl && settings.jira.email && settings.jira.apiToken && settings.jira.boardId);
 
   // Older caches have no account id, so "mine" can only be honoured once a
   // sync has recorded who we are.
@@ -140,9 +143,32 @@ export function BoardView() {
   if (!configured) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <Header title="Board" sub="not configured" />
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-xs text-dim">
-          <div>Fill in Jira base URL, email, API token and board id in Settings.</div>
+        <Header title="Board" sub="not connected" />
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-8 font-sans">
+          <div className="mx-auto max-w-[560px]">
+            <h2 className="text-base font-semibold text-ink">Connect your board</h2>
+            <p className="mt-1 text-xs leading-5 text-mut">
+              Your board appears here as a Kanban view. Cards launch a Claude Code or Codex session
+              on their ticket, and dragging one between columns moves the ticket itself.
+            </p>
+            {settings && <div className="mt-6 rounded-xl border border-edge2 bg-panel p-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-card2 text-accent"><Icon name="jira" size={17} /></span>
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-soft">Jira</div>
+                  <p className="mt-0.5 text-[11px] text-mut">Sync a board, drag cards to fire its transitions.</p>
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <JiraConnectionFields jira={settings.jira} onChange={(patch) => void saveSettings({ jira: { ...settings.jira, ...patch } })} />
+              </div>
+              <p className="mt-4 text-[11px] text-mut">
+                The token comes from{" "}
+                <button onClick={() => window.open(TOKEN_PAGE)} className="text-accent hover:underline">your Atlassian account</button>
+                . The board id is the number in your board&apos;s URL.
+              </p>
+            </div>}
+          </div>
         </div>
       </div>
     );
