@@ -69,6 +69,9 @@ type WindowRole = "main" | "panel" | "tray";
 const wins = new Map<WindowRole, BrowserWindow>();
 /** Windows currently shown as a quake panel; they hide again on blur. */
 const quakeWins = new WeakSet<BrowserWindow>();
+/** Regular bounds of a window while it is docked as a quake panel, so a Dock
+ *  or tray open brings back a normal window instead of the panel. */
+const normalBounds = new WeakMap<BrowserWindow, Electron.Rectangle>();
 /** Height the user dragged the quake panel to, kept until the app quits so a
  *  resize survives hide/summon but every launch starts from the setting. */
 let quakeHeightRatio: number | undefined;
@@ -161,8 +164,19 @@ function createWindow(role: WindowRole): BrowserWindow {
   return win;
 }
 
-function showWindow(role: WindowRole): void {
+/** Shows the role's window either docked as a quake panel (hotkey) or as a
+ *  regular window (Dock, tray, second launch), like Warp's Dock click never
+ *  opening its dedicated hotkey window. */
+function showWindow(role: WindowRole, quake = false): void {
   const w = wins.get(role) ?? createWindow(role);
+  if (quake) {
+    dockToTop(w);
+    quakeWins.add(w);
+  } else if (quakeWins.has(w)) {
+    quakeWins.delete(w);
+    const bounds = normalBounds.get(w);
+    if (bounds) w.setBounds(bounds);
+  }
   if (w.isMinimized()) w.restore();
   w.show();
   w.focus();
@@ -184,6 +198,7 @@ function hideWindow(w: BrowserWindow): void {
 /** Warp-style quake panel: full width, docked to the top of the screen the
  *  cursor is on. The window itself persists, so it reopens where you left. */
 function dockToTop(w: BrowserWindow): void {
+  if (!quakeWins.has(w)) normalBounds.set(w, w.getBounds());
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const ratio = quakeHeightRatio ?? getSettings().summonHeightRatio;
   w.setBounds({
@@ -200,10 +215,7 @@ function toggleWindow(entry: EntryPoint): void {
   if (win?.isVisible() && win.isFocused()) {
     hideWindow(win);
   } else {
-    const w = win ?? createWindow(role);
-    const quake = entry === "hotkey" && getSettings().summonDockToTop;
-    if (quake) { dockToTop(w); quakeWins.add(w); } else quakeWins.delete(w);
-    showWindow(role);
+    showWindow(role, entry === "hotkey" && getSettings().summonDockToTop);
   }
 }
 
