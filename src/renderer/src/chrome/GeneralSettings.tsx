@@ -109,6 +109,7 @@ export function GeneralSettings() {
           </Field>
           <Toggle checked={settings.hotkeyOwnTabs} disabled={settings.windowMode !== "panel"} onChange={(hotkeyOwnTabs) => void update({ hotkeyOwnTabs })}>Hotkey window keeps its own tabs, hidden from the Dock window</Toggle>
           <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab</Toggle>
+          <Toggle checked={settings.showTips} onChange={(showTips) => void update({ showTips })}>Show one-off tips about shortcuts you could use</Toggle>
         </Card>
         </div>
 

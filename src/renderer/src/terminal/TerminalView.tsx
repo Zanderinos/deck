@@ -2,9 +2,11 @@ import { useDisplayMode } from "../chrome/DisplayMode.js";
 import { useEffect, useRef, useState } from "react";
 import { agentLabels } from "../../../shared/agents.js";
 import { onOpenTerminalTab } from "../lib/bus.js";
+import { useTips } from "../tips/TipsProvider.js";
 import { useAgentSessions } from "../lib/useSessions.js";
 import { shortPath, useGitSummary } from "../lib/useGitSummary.js";
 import { useSettings } from "../lib/useSettings.js";
+import { matchKeybind, resolveKeybinds } from "../../../shared/keybinds.js";
 import { useTabs } from "../store.js";
 import { Icon } from "../board/icons.js";
 import { ChangesPanel } from "./ChangesPanel.js";
@@ -35,6 +37,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
   const cwd = session?.cwd || activeTab?.cwd;
   const git = useGitSummary(cwd);
   const settings = useSettings();
+  const { report } = useTips();
   const defaultAgent = settings?.defaultAgent ?? "claude";
   const needsReview = session?.status === "needs_review";
   const currentLayout = layouts.find((layout) => paneIds(layout).includes(activeId ?? ""));
@@ -85,12 +88,12 @@ export function TerminalView({ visible }: { visible: boolean }) {
   }, [visible]);
   useEffect(() => {
     if (!visible) return;
+    const keybinds = resolveKeybinds(settings?.keybinds);
     const onKey = (event: KeyboardEvent) => {
-      if (!event.metaKey) return;
-      if (event.key.toLowerCase() === "d") { event.preventDefault(); void split(event.shiftKey ? "column" : "row"); }
-      if (event.key.toLowerCase() === "e") { event.preventDefault(); terminalAction("changes"); }
-      if (event.key.toLowerCase() === "f") { event.preventDefault(); terminalAction("find"); }
-      if (event.key.toLowerCase() === "j") { event.preventDefault(); terminalAction("composer"); }
+      const command = matchKeybind(keybinds, event);
+      if (command === "split.right") { event.preventDefault(); void split("row"); }
+      if (command === "split.down") { event.preventDefault(); void split("column"); }
+      if (command === "changes" || command === "find" || command === "composer") { event.preventDefault(); terminalAction(command); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -109,8 +112,8 @@ export function TerminalView({ visible }: { visible: boolean }) {
           <div className="flex items-center gap-2 text-[11px] text-mut"><span className="truncate">{shortPath(cwd)}</span>{git && <><Icon name="branch" size={11} /><span>{git.branch}</span><span className="text-dim">· {git.changedFiles} changed</span></>}</div>
           <div className="mt-1 truncate text-[13px] font-semibold text-soft">{activeTab?.customTitle || session?.title || activeTab?.agent || activeTab?.title || "Terminal"}</div>
         </div>
-        <button title="Split right (⌘D)" aria-label="Split right" onClick={() => void split("row")} className="toolbar-button"><Icon name="splitRight" size={15} /></button>
-        <button title="Split down (⌘⇧D)" aria-label="Split down" onClick={() => void split("column")} className="toolbar-button"><Icon name="splitDown" size={15} /></button>
+        <button title="Split right (⌘D)" aria-label="Split right" onClick={() => { report({ action: "split-button" }); void split("row"); }} className="toolbar-button"><Icon name="splitRight" size={15} /></button>
+        <button title="Split down (⌘⇧D)" aria-label="Split down" onClick={() => { report({ action: "split-button" }); void split("column"); }} className="toolbar-button"><Icon name="splitDown" size={15} /></button>
         <button title="Find in terminal (⌘F)" aria-label="Find in terminal" onClick={() => terminalAction("find")} className="toolbar-button"><Icon name="search" size={15} /></button>
         <button title="Export terminal output" aria-label="Export terminal output" onClick={() => terminalAction("export")} className="toolbar-button"><Icon name="download" size={15} /></button>
       </div>
@@ -123,7 +126,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
             style={rect ? { left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%`, display: shown ? "flex" : "none", flexDirection: "column" } : { display: "none" }}
             onMouseDown={() => { if (activeId !== tab.termId) focusTab(tab.termId); }}>
             {rects.length > 1 && <div className="flex h-6 shrink-0 items-center gap-2 bg-panel px-3 font-sans text-[10px] text-mut"><Icon name="terminal" size={10} /><span className="truncate">{tab.customTitle || tab.title}</span><button className="ml-auto" title="Close pane" onClick={() => closeTab(tab.termId)}><Icon name="x" size={10} /></button></div>}
-            <div className="min-h-0 flex-1"><TerminalPane termId={tab.termId} active={shown} focused={shown && tab.termId === activeId} onTitle={(title) => setTitle(tab.termId, title)} /></div>
+            <div className="min-h-0 flex-1"><TerminalPane termId={tab.termId} active={shown} focused={shown && tab.termId === activeId} onTitle={(title) => setTitle(tab.termId, title)} onCommand={(command) => report({ command })} /></div>
           </div>;
         })}
         {dividers.map((divider) => <div key={divider.path.join("/") || "root"} role="separator" tabIndex={0} aria-label="Resize terminal panes" aria-orientation={divider.direction === "row" ? "vertical" : "horizontal"} aria-valuenow={Math.round(divider.ratio * 100)}
@@ -149,7 +152,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
         <div className="flex items-center gap-2 font-sans text-[10px] text-dim"><span>Send to active terminal</span><button className="ml-auto text-mut" onClick={() => setComposer(false)}>Close</button><button disabled={!command.trim()} onClick={submit} className="rounded border border-edge3 px-2 py-1 text-soft disabled:opacity-30">Send ⌘↵</button></div>
       </div>}
       <footer className="workbench-chrome flex h-9 shrink-0 items-center gap-2 border-t border-edge px-4 font-sans text-[11px] text-mut">
-        <button title="New terminal (⌘T)" onClick={() => void newTab()} className="toolbar-button"><Icon name="plus" size={13} /></button>
+        <button title="New terminal (⌘T)" onClick={() => { report({ action: "new-tab-button" }); void newTab(); }} className="toolbar-button"><Icon name="plus" size={13} /></button>
         <button title={`New ${agentLabels[defaultAgent]} tab (⌘⇧T)`} onClick={() => void newTab({ agent: defaultAgent })} className="toolbar-button"><Icon name="sparkle" size={13} /></button>
         {git && <button onClick={() => terminalAction("changes")} className="flex items-center gap-1.5 rounded border border-edge2 px-1.5 py-0.5"><Icon name="file" size={11} /><span>{git.changedFiles}</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
         <button onClick={() => terminalAction("files")} className={`flex items-center gap-1.5 rounded px-2 py-1 ${panel === "files" ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="folder" size={12} />File explorer</button>

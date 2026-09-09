@@ -1,3 +1,4 @@
+import type { Keybinds } from "./keybinds.js";
 import type { Agent } from "./agents.js";
 import type { TerminalAppearanceSettings } from "./terminal.js";
 
@@ -81,6 +82,8 @@ export const askModels = [
 ] as const;
 
 export interface DeckSettings {
+  /** Shortcut overrides by command; missing commands use the defaults. */
+  keybinds: Partial<Keybinds>;
   defaultAgent: Agent;
   /** Claude model alias or id used by deck's own orchestrator turns. */
   askModel: string;
@@ -110,10 +113,13 @@ export interface DeckSettings {
   newTerminalCwd: NewTerminalCwdSettings;
   /** Built-in id, custom:<id>, or <plugin-id>:<theme-id>. */
   theme: string;
+  /** One-off hints about shortcuts and features deck notices you could use. */
+  showTips: boolean;
   terminalAppearance: TerminalAppearanceSettings;
 }
 
 export const defaultSettings: DeckSettings = {
+  keybinds: {},
   defaultAgent: "claude",
   askModel: "sonnet",
   defaultView: "terminal",
@@ -141,6 +147,7 @@ export const defaultSettings: DeckSettings = {
   defaultCwd: "~",
   newTerminalCwd: { tab: "current", split: "current" },
   theme: "dark",
+  showTips: true,
   terminalAppearance: {
     fontFamily: "",
     fontSize: 13,

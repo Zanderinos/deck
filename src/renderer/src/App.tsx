@@ -8,7 +8,10 @@ import { ChatProvider } from "./agents/ChatStore.js";
 import { BoardView } from "./board/BoardView.js";
 import { ReviewsView } from "./board/ReviewsView.js";
 import { GeneralSettings } from "./chrome/GeneralSettings.js";
+import { KeybindsSettings } from "./chrome/KeybindsSettings.js";
 import { useSettings } from "./lib/useSettings.js";
+import { isRecordingKeys } from "./lib/useKeybinds.js";
+import { matchKeybind, resolveKeybinds } from "../../shared/keybinds.js";
 import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
@@ -17,6 +20,7 @@ import { SearchOverlay } from "./search/SearchOverlay.js";
 import { SearchView } from "./search/SearchView.js";
 import { TabProvider, useTabs } from "./store.js";
 import { TerminalView } from "./terminal/TerminalView.js";
+import { TipsProvider } from "./tips/TipsProvider.js";
 
 export type View = "terminal" | "board" | "agent" | "reviews" | "search" | "settings";
 
@@ -24,7 +28,7 @@ export default function App() {
   return (
     <DisplayModeProvider>
       <TabProvider>
-        <ExtensionProvider><ChatProvider><Shell /></ChatProvider></ExtensionProvider>
+        <ExtensionProvider><ChatProvider><TipsProvider><Shell /></TipsProvider></ChatProvider></ExtensionProvider>
       </TabProvider>
     </DisplayModeProvider>
   );
@@ -45,6 +49,7 @@ function Shell() {
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
   const { tabs, focusTab, newTab, closeTab, activeId } = useTabs();
   const settings = useSettings();
+  const keybinds = resolveKeybinds(settings?.keybinds);
 
   // View history for the mouse back/forward buttons.
   const history = useRef({ stack: ["terminal"] as View[], index: 0 });
@@ -67,19 +72,20 @@ function Shell() {
   }, [mode]);
   useEffect(() => {
     const onModeKey = (event: KeyboardEvent) => {
-      if (searchOpen) return;
+      if (searchOpen || isRecordingKeys(event)) return;
+      const command = matchKeybind(keybinds, event);
       // Other pages use Escape themselves (closing composers and menus).
       if (event.key === "Escape" && mode !== "normal" && view === "terminal") {
         event.preventDefault(); event.stopImmediatePropagation(); setMode("normal");
-      } else if (event.metaKey && event.shiftKey && event.key === "Enter") {
+      } else if (command === "zen") {
         event.preventDefault(); event.stopImmediatePropagation(); setMode(mode === "zen" ? "normal" : "zen");
-      } else if (event.metaKey && event.shiftKey && event.key.toLowerCase() === "p") {
+      } else if (command === "presentation") {
         event.preventDefault(); event.stopImmediatePropagation(); setMode(mode === "presentation" ? "normal" : "presentation");
       }
     };
     window.addEventListener("keydown", onModeKey, true);
     return () => window.removeEventListener("keydown", onModeKey, true);
-  }, [mode, setMode, searchOpen, view]);
+  }, [mode, setMode, searchOpen, view, keybinds]);
 
   const goBack = useCallback(() => {
     if (requestNavBack()) return; // an overlay consumed it
@@ -116,32 +122,28 @@ function Shell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey;
-      if (meta && !e.shiftKey && ["k", "p"].includes(e.key.toLowerCase())) {
+      if (isRecordingKeys(e)) return;
+      const command = matchKeybind(keybinds, e);
+      if (command === "search") {
         e.preventDefault();
         setSearchOpen((o) => !o);
         return;
       }
       if (searchOpen) return; // the overlay handles its own keys
-      if (e.metaKey && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+      if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         const tab = tabs[Number(e.key) - 1];
         if (tab) { focusTab(tab.termId); setView("terminal"); }
-      } else if (meta && e.key.toLowerCase() === "b") {
+      } else if (command === "sidebar") {
         setSidebarOpen((open) => { localStorage.setItem("deck.sidebar", open ? "hidden" : "visible"); return !open; });
-      } else if (meta && e.key === ",") setView("settings");
-      // Option instead of Shift: ⌘⇧3/4 are the macOS screenshot keys. Match on
-      // the physical key because ⌥+digit types a symbol (⌥3 is "£") on a Mac.
-      else if (meta && e.altKey && e.code === "Digit1") setView("terminal");
-      else if (meta && e.altKey && e.code === "Digit2") setView("board");
-      else if (meta && e.altKey && e.code === "Digit3") setView("agent");
-      else if (meta && e.altKey && e.code === "Digit4") setView("reviews");
-      // Shift starts the tab in the default agent instead of a bare shell.
-      else if (meta && e.key.toLowerCase() === "t") {
-        e.preventDefault();
+      } else if (command === "settings") setView("settings");
+      else if (command === "view.terminal") setView("terminal");
+      else if (command === "view.board") setView("board");
+      else if (command === "view.agent") setView("agent");
+      else if (command === "view.reviews") setView("reviews");
+      else if (command === "tab.new" || command === "tab.newAgent") {
         setView("terminal");
-        void newTab(e.shiftKey ? { agent: settings?.defaultAgent } : undefined);
-      } else if (meta && e.key === "w" && view === "terminal" && activeId) {
-        e.preventDefault();
+        void newTab(command === "tab.newAgent" ? { agent: settings?.defaultAgent } : undefined);
+      } else if (command === "tab.close" && view === "terminal" && activeId) {
         closeTab(activeId);
       } else {
         return;
@@ -150,7 +152,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings]);
+  }, [searchOpen, view, activeId, newTab, closeTab, tabs, focusTab, settings, keybinds]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
@@ -186,16 +188,17 @@ function Shell() {
 }
 
 function SettingsView() {
-  const [section, setSection] = useState<"appearance" | "plugins" | "general">("appearance");
-  const labels = { appearance: "Appearance", plugins: "Plugins", general: "General & integrations" } as const;
+  const [section, setSection] = useState<"appearance" | "plugins" | "keybinds" | "general">("appearance");
+  const labels = { appearance: "Appearance", plugins: "Plugins", keybinds: "Keybinds", general: "General & integrations" } as const;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-baseline gap-3 border-b border-edge px-6 py-3.5">
         <span className="font-bold text-ink">Settings</span>
-        <div className="ml-4 flex gap-1 font-sans text-xs">{(["appearance", "plugins", "general"] as const).map((tab) => <button key={tab} onClick={() => setSection(tab)} className={`rounded-md px-3 py-1.5 ${section === tab ? "bg-card2 text-soft" : "text-mut hover:text-soft"}`}>{labels[tab]}</button>)}</div>
+        <div className="ml-4 flex gap-1 font-sans text-xs">{(["appearance", "plugins", "keybinds", "general"] as const).map((tab) => <button key={tab} onClick={() => setSection(tab)} className={`rounded-md px-3 py-1.5 ${section === tab ? "bg-card2 text-soft" : "text-mut hover:text-soft"}`}>{labels[tab]}</button>)}</div>
       </div>
       {section === "appearance" && <AppearanceSettings />}
       {section === "plugins" && <PluginsSettings />}
+      {section === "keybinds" && <KeybindsSettings />}
       {section === "general" && <GeneralSettings />}
     </div>
   );

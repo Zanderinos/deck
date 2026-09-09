@@ -3,15 +3,17 @@ import { Icon } from "../board/icons.js";
 import { useTabs } from "../store.js";
 import { useGitSummary } from "../lib/useGitSummary.js";
 import { terminalAction } from "../terminal/actions.js";
+import { useTips } from "../tips/TipsProvider.js";
 import type { View } from "../App.js";
 
 export function Titlebar({ onSearch, onSidebar, onView, sidebarOpen }: { onSearch: () => void; onSidebar: () => void; onView: (view: View) => void; sidebarOpen: boolean }) {
   const { setMode } = useDisplayMode();
+  const { report } = useTips();
   const { tabs, activeId } = useTabs();
   const git = useGitSummary(tabs.find((tab) => tab.termId === activeId)?.cwd);
   return <header className="drag-region flex h-[44px] shrink-0 items-center gap-1 border-b border-edge bg-bg pl-[100px] pr-3 font-sans">
-    <button onClick={onSidebar} aria-label="Toggle sidebar" aria-pressed={sidebarOpen} title="Toggle sidebar (⌘B)" className={`toolbar-button ${sidebarOpen ? "bg-card2 text-soft" : ""}`}><Icon name="sidebar" size={17} /></button>
-    <button onClick={() => onView("settings")} title="Settings" aria-label="Settings" className="toolbar-button"><Icon name="settings" size={17} /></button>
+    <button onClick={() => { report({ action: "sidebar-button" }); onSidebar(); }} aria-label="Toggle sidebar" aria-pressed={sidebarOpen} title="Toggle sidebar (⌘B)" className={`toolbar-button ${sidebarOpen ? "bg-card2 text-soft" : ""}`}><Icon name="sidebar" size={17} /></button>
+    <button onClick={() => { report({ action: "settings-button" }); onView("settings"); }} title="Settings" aria-label="Settings" className="toolbar-button"><Icon name="settings" size={17} /></button>
     <button onClick={() => onView("board")} title="Board" aria-label="Board" className="toolbar-button"><Icon name="grid" size={16} /></button>
     <div className="flex min-w-0 flex-1 justify-center px-8">
       <button onClick={onSearch} className="flex h-7 w-full max-w-[390px] items-center gap-2 rounded-md bg-card px-3 text-[12px] text-mut hover:bg-card2 hover:text-soft">

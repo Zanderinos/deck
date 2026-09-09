@@ -8,6 +8,7 @@ import { Icon } from "../board/icons.js";
 import { useSessionSuggestions } from "./useSessionSuggestions.js";
 import { useReviewQueue } from "../lib/reviews.js";
 import { useAttentionCount } from "../agents/attention.js";
+import { useTips } from "../tips/TipsProvider.js";
 import type { View } from "../App.js";
 
 const statusLabels: Record<AgentSession["status"], string> = {
@@ -26,6 +27,7 @@ function SessionIcon({ agent, status }: { agent?: Agent; status?: AgentSession["
 
 function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: AgentSession; index: number; onOpen: () => void }) {
   const { activeId, closeTab, renameTab } = useTabs();
+  const { report } = useTips();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
   const cwd = session?.cwd || tab.cwd;
@@ -36,7 +38,7 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
   const waiting = session && ["needs_input", "needs_review"].includes(session.status);
   return <div className="border-b border-edge/80 px-2 py-2">
     <div role="button" tabIndex={0} aria-label={`${title}${agent ? ` (${agentLabels[agent]})` : ""}`} aria-current={active ? "page" : undefined}
-      onClick={onOpen} onKeyDown={(event) => { if (event.target === event.currentTarget && event.key === "Enter") onOpen(); }}
+      onClick={() => { report({ action: "tab-click" }); onOpen(); }} onKeyDown={(event) => { if (event.target === event.currentTarget && event.key === "Enter") onOpen(); }}
       onDoubleClick={() => { setName(title); setRenaming(true); }}
       className={`group flex min-h-[56px] cursor-pointer items-center gap-2.5 rounded-md border px-2.5 py-2 outline-none focus-visible:border-mut ${active ? "border-edge3 bg-card2" : "border-transparent hover:bg-card"}`}>
       <SessionIcon agent={agent} status={session?.status} />
@@ -54,7 +56,7 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
       </div>
       <span className="self-start pt-0.5 text-[10px] text-dim group-hover:hidden">{index < 9 ? `⌘${index + 1}` : ""}</span>
       <button aria-label={`Close ${title}`} title="Close session" className="hidden self-start text-mut hover:text-ink group-hover:block"
-        onClick={(event) => { event.stopPropagation(); closeTab(tab.termId); }}><Icon name="x" size={11} /></button>
+        onClick={(event) => { event.stopPropagation(); report({ action: "close-tab-button" }); closeTab(tab.termId); }}><Icon name="x" size={11} /></button>
     </div>
   </div>;
 }

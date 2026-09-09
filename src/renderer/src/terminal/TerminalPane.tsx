@@ -1,7 +1,10 @@
 import { useExtensions } from "../extensions/ExtensionProvider.js";
 import { useDisplayMode } from "../chrome/DisplayMode.js";
 import { useTerminalAppearance } from "../lib/useTerminalAppearance.js";
+import { useSettings } from "../lib/useSettings.js";
+import { chordOf, resolveKeybinds } from "../../../shared/keybinds.js";
 import { onTerminalAction } from "./actions.js";
+import { trackTypedInput } from "../../../shared/tips.js";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -14,14 +17,20 @@ export interface TerminalPaneProps {
   active: boolean;
   focused?: boolean;
   onTitle: (title: string) => void;
+  /** A line the user typed and submitted, as far as the keystrokes reveal it. */
+  onCommand?: (command: string) => void;
 }
 
 // One xterm instance per pty, mounted once and kept alive across tab
 // switches (hidden, not unmounted) so scrollback survives.
-export function TerminalPane({ termId, active, focused = active, onTitle }: TerminalPaneProps) {
+export function TerminalPane({ termId, active, focused = active, onTitle, onCommand }: TerminalPaneProps) {
   const { theme } = useExtensions();
   const { mode, presentationSize } = useDisplayMode();
   const appearance = useTerminalAppearance();
+  // Chords Deck handles itself; the terminal must let them bubble instead of typing them.
+  const boundChords = useRef(new Set<string>());
+  const keybinds = useSettings()?.keybinds;
+  useEffect(() => { boundChords.current = new Set(Object.values(resolveKeybinds(keybinds))); }, [keybinds]);
   const [finding, setFinding] = useState(false);
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState("");
@@ -29,6 +38,9 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
   const hostRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon>();
   const termRef = useRef<Terminal>();
+  const typed = useRef("");
+  const onCommandRef = useRef(onCommand);
+  onCommandRef.current = onCommand;
 
   useEffect(() => {
     const host = hostRef.current!;
@@ -41,7 +53,7 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
-    term.attachCustomKeyEventHandler((event) => !(event.metaKey && (/^Digit[1-9]$/.test(event.code) || /^(?:[bdefjkpstw]|,)$/i.test(event.key))));
+    term.attachCustomKeyEventHandler((event) => !((event.metaKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) || boundChords.current.has(chordOf(event) ?? "")));
 
     try {
       term.loadAddon(new WebglAddon());
@@ -59,7 +71,12 @@ export function TerminalPane({ termId, active, focused = active, onTitle }: Term
       if (id !== termId) return;
       if (restored) term.write(data); else live.push({ data, sequence });
     });
-    const onInput = term.onData((data) => window.deck.term.input(termId, data));
+    const onInput = term.onData((data) => {
+      window.deck.term.input(termId, data);
+      const input = trackTypedInput(typed.current, data);
+      typed.current = input.typed;
+      if (input.submitted) onCommandRef.current?.(input.submitted);
+    });
     const onTitleChange = term.onTitleChange(onTitle);
     const onResize = term.onResize(({ cols, rows }) => window.deck.term.resize(termId, cols, rows));
     // One pty can be shown by two panes (a PR's agent panel and its terminal
