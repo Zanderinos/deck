@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BoardCache, BoardIssue } from "../../../main/jira.js";
 import type { InboxPr } from "../../../main/prInbox.js";
+import { prKey } from "../../../shared/prs.js";
 import type { JiraSettings } from "../../../shared/settings.js";
 import { usePrInbox } from "./useInbox.js";
 
@@ -44,6 +45,23 @@ export function useReviewQueue(done = new Set<string>()) {
     return () => { offBoard(); offSettings(); };
   }, []);
 
-  const queue = useMemo(() => reviewQueue(inbox?.reviewRequested ?? [], board, jira?.reviewColumns ?? [], done), [inbox, board, jira, done]);
-  return { queue, board, jiraBaseUrl: jira?.baseUrl, loaded: inbox !== undefined };
+  const waiting = useMemo(() => {
+    const reviewed = inbox?.reviewed ?? [];
+    return [
+      ...(inbox?.reviewRequested ?? []),
+      ...reviewed.filter((pr) => pr.newSinceReview),
+      ...reviewed.filter((pr) => !pr.newSinceReview),
+    ];
+  }, [inbox]);
+  const queue = useMemo(() => reviewQueue(waiting, board, jira?.reviewColumns ?? [], done), [waiting, board, jira, done]);
+  const reviewed = useMemo(() => new Map((inbox?.reviewed ?? []).map((pr) => [prKey(pr), Boolean(pr.newSinceReview)])), [inbox]);
+  // Every open PR the reviews page can show, queued or not.
+  const lists = useMemo(() => ({
+    waiting: inbox?.reviewRequested ?? [],
+    reviewed: inbox?.reviewed ?? [],
+    mine: inbox?.mine ?? [],
+  }), [inbox]);
+  // Queued PRs awaiting a first review, or with new work since the user's.
+  const actionable = useMemo(() => queue.filter((pr) => reviewed.get(prKey(pr)) !== false).length, [queue, reviewed]);
+  return { queue, board, jiraBaseUrl: jira?.baseUrl, loaded: inbox !== undefined, reviewed, actionable, lists };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { IssuePr, ReviewEvent } from "../../../main/github.js";
 import type { InboxPr } from "../../../main/prInbox.js";
+import { prKey } from "../../../shared/prs.js";
 import { issueFor, useReviewQueue } from "../lib/reviews.js";
 import { Icon } from "./icons.js";
 import { PrScreen } from "./PrScreen.js";
@@ -13,17 +14,73 @@ const isTyping = (e: KeyboardEvent) => ["TEXTAREA", "INPUT", "SELECT"].includes(
 
 const toIssuePr = (pr: InboxPr): IssuePr => ({ repo: pr.repo, number: pr.number, title: pr.title, state: "OPEN", isDraft: pr.isDraft, url: pr.url, author: pr.author, updatedAt: pr.updatedAt });
 
+
+const checkTone: Record<string, string> = { SUCCESS: "text-green", FAILURE: "text-red", ERROR: "text-red", PENDING: "text-orange" };
+const checkLabel: Record<string, string> = { SUCCESS: "Checks passed", FAILURE: "Checks failed", ERROR: "Checks errored", PENDING: "Checks running", EXPECTED: "Checks expected" };
+
+function PrList({ title, prs, current, badge, onPick }: {
+  title: string;
+  prs: InboxPr[];
+  current?: InboxPr;
+  badge?: (pr: InboxPr) => string | undefined;
+  onPick: (pr: InboxPr) => void;
+}) {
+  if (prs.length === 0) return null;
+  return (
+    <section aria-label={title} className="flex flex-col gap-1 px-3 py-2.5">
+      <h3 className="flex items-center gap-2 px-1 text-[10px] tracking-widest text-dim">{title.toUpperCase()}<span className="text-mut">{prs.length}</span></h3>
+      {prs.map((pr) => {
+        const active = current && pr.repo === current.repo && pr.number === current.number;
+        const note = badge?.(pr);
+        return (
+          <button key={prKey(pr)} onClick={() => onPick(pr)} title={`${pr.title}\n${prKey(pr)}`}
+            className={`flex flex-col gap-0.5 rounded-lg border px-2.5 py-1.5 text-left ${active ? "border-accent bg-card" : "border-transparent hover:border-edge2 hover:bg-card"}`}>
+            <span className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-dim">#{pr.number}</span>
+              <span className="min-w-0 flex-1 truncate text-soft">{pr.title}</span>
+              {pr.checks !== "NONE" && (
+                <span title={checkLabel[pr.checks] ?? `Checks: ${pr.checks.toLowerCase()}`} aria-label={checkLabel[pr.checks] ?? pr.checks} className={`shrink-0 ${checkTone[pr.checks] ?? "text-dim"}`}>●</span>
+              )}
+            </span>
+            <span className="flex items-center gap-1.5 truncate text-[10px] text-dim">
+              {pr.repo.split("/")[1] ?? pr.repo}{pr.author && ` · ${pr.author}`}
+              {note && <span className="text-orange">· {note}</span>}
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
 export function ReviewsView({ visible }: { visible: boolean }) {
   const [done, setDone] = useState(new Set<string>());
-  const { queue, board, jiraBaseUrl, loaded } = useReviewQueue(done);
+  const { queue, board, jiraBaseUrl, loaded, reviewed: reviewedPrs, lists } = useReviewQueue(done);
   const [index, setIndex] = useState(0);
+  const [picked, setPicked] = useState<string>();
+  const [rail, setRail] = useState(() => localStorage.getItem("deck.reviews.rail") !== "hidden");
   const [reviewed, setReviewed] = useState<{ key: string; event: ReviewEvent }>();
 
-  const current = queue[Math.min(index, Math.max(queue.length - 1, 0))];
+  const toggleRail = () => setRail((open) => { localStorage.setItem("deck.reviews.rail", open ? "hidden" : "visible"); return !open; });
+
+  const browsable = [...lists.waiting, ...lists.reviewed, ...lists.mine];
+  const fromQueue = queue[Math.min(index, Math.max(queue.length - 1, 0))];
+  const current = (picked && browsable.find((pr) => prKey(pr) === picked)) || fromQueue;
   const position = current ? queue.indexOf(current) : -1;
+
+  // Picking a queued PR moves the queue position to it; anything else is
+  // shown without touching the queue.
+  const pick = (pr: InboxPr) => {
+    const at = queue.indexOf(pr);
+    if (at >= 0) { setIndex(at); setPicked(undefined); } else setPicked(prKey(pr));
+  };
   const issue = current ? issueFor(current, board) : undefined;
 
-  const go = (delta: number) => setIndex(Math.min(Math.max(position + delta, 0), Math.max(queue.length - 1, 0)));
+  const go = (delta: number) => {
+    const from = position >= 0 ? position : index;
+    setPicked(undefined);
+    setIndex(Math.min(Math.max(from + delta, 0), Math.max(queue.length - 1, 0)));
+  };
 
   const onReviewed = (event: ReviewEvent) => {
     if (!current || event === "COMMENT") return;
@@ -52,6 +109,11 @@ export function ReviewsView({ visible }: { visible: boolean }) {
       <div className="flex items-center gap-3 border-b border-edge px-6 py-3 font-sans text-[12px]">
         <span className="font-bold text-ink">Reviews</span>
         <span className="text-[11px] text-dim">{queue.length === 0 ? "nothing waiting on you" : `${position + 1} of ${queue.length}`}</span>
+        {current && reviewedPrs.has(`${current.repo}#${current.number}`) && (
+          reviewedPrs.get(`${current.repo}#${current.number}`)
+            ? <span title="You reviewed this and the author has pushed since" className="rounded border border-orange/40 px-1.5 py-0.5 text-[10px] text-orange">new since your review</span>
+            : <span title="You reviewed this; nothing new since" className="rounded border border-edge3 px-1.5 py-0.5 text-[10px] text-dim">reviewed</span>
+        )}
         {issue && (
           <button onClick={() => jiraBaseUrl && window.open(`${jiraBaseUrl}/browse/${issue.key}`)} className="flex min-w-0 items-center gap-1.5 truncate text-[11px] text-body hover:text-ink" title={`Open ${issue.key} in Jira`}>
             <Icon name="jira" size={11} className="text-dim" /><span className="text-mut">{issue.key}</span><span className="truncate">{issue.summary}</span><span className="shrink-0 text-dim">· {issue.statusName}</span>
@@ -61,16 +123,30 @@ export function ReviewsView({ visible }: { visible: boolean }) {
         <span className="ml-auto flex items-center gap-1 text-[11px] text-dim">
           <button aria-label="Previous review" title="Previous (p)" disabled={position <= 0} onClick={() => go(-1)} className="rounded px-1.5 py-0.5 hover:bg-card2 hover:text-ink disabled:opacity-30">‹ prev</button>
           <button aria-label="Next review" title="Next (n)" disabled={position < 0 || position >= queue.length - 1} onClick={() => go(1)} className="rounded px-1.5 py-0.5 hover:bg-card2 hover:text-ink disabled:opacity-30">next ›</button>
+          <button onClick={toggleRail} aria-pressed={rail} aria-label="Toggle pull request list" title="All open pull requests" className={`rounded p-1 ${rail ? "bg-card2 text-soft" : "text-dim hover:text-ink"}`}><Icon name="sidebar" size={14} /></button>
         </span>
       </div>
-      {current && visible ? (
-        <PrScreen key={`${current.repo}#${current.number}`} embedded pr={toIssuePr(current)} issue={issue} jiraBaseUrl={jiraBaseUrl} onClose={() => {}} onReviewed={onReviewed} />
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[12px] text-dim">
-          <Icon name="check" size={20} className="text-green" />
-          {loaded ? "Inbox zero: no pull requests are waiting on your review." : "Waiting for GitHub…"}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {current && visible ? (
+            <PrScreen key={prKey(current)} embedded pr={toIssuePr(current)} issue={issue} jiraBaseUrl={jiraBaseUrl} onClose={() => {}} onReviewed={onReviewed} />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[12px] text-dim">
+              <Icon name="check" size={20} className="text-green" />
+              {loaded ? "Inbox zero: no pull requests are waiting on your review." : "Waiting for GitHub…"}
+            </div>
+          )}
         </div>
-      )}
+        {rail && (
+          <aside aria-label="Open pull requests" className="flex w-[268px] shrink-0 flex-col overflow-y-auto border-l border-edge font-sans">
+            <PrList title="Needs your review" prs={lists.waiting} current={current} onPick={pick} />
+            <PrList title="You reviewed" prs={lists.reviewed} current={current} onPick={pick}
+              badge={(pr) => (pr.newSinceReview ? "new since your review" : undefined)} />
+            <PrList title="Your PRs" prs={lists.mine} current={current} onPick={pick} />
+            {browsable.length === 0 && <p className="px-4 py-3 text-[11px] text-dim">{loaded ? "No open pull requests." : "Waiting for GitHub…"}</p>}
+          </aside>
+        )}
+      </div>
     </div>
   );
 }
