@@ -72,7 +72,7 @@ let registeredHotkey: string | undefined;
 
 // Dev mode runs the stock Electron binary, which otherwise names the menu
 // bar and dock "Electron".
-app.setName("deck");
+app.setName("Deck");
 
 function roleFor(entry: EntryPoint): WindowRole {
   const mode = getSettings().windowMode;
@@ -205,7 +205,7 @@ function createTray(): void {
   // macOS allows a text-only tray item; an empty image keeps it icon-less.
   tray = new Tray(nativeImage.createEmpty());
   tray.setTitle("▤");
-  tray.setToolTip("deck");
+  tray.setToolTip("Deck");
   tray.on("click", () => toggleWindow("tray"));
 }
 
