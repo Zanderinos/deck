@@ -78,13 +78,14 @@ export function GeneralSettings() {
         </Card>
 
         <Card title="Window & hotkey" description="How Deck appears when you summon it from the keyboard or the tray.">
-          <Field label="Windows" hint="Tabs and terminals are one shared set, visible in every window.">
+          <Field label="Windows">
             <select className={`w-full ${control}`} value={settings.windowMode}
               onChange={(e) => { const v = e.target.value as DeckSettings["windowMode"]; if (v !== settings.windowMode) void update({ windowMode: v }); }}>
               <option value="shared">Shared window</option>
               <option value="panel">Separate window for the hotkey</option>
             </select>
           </Field>
+          <Toggle checked={settings.hotkeyOwnTabs} disabled={settings.windowMode !== "panel"} onChange={(hotkeyOwnTabs) => void update({ hotkeyOwnTabs })}>Hotkey window keeps its own tabs, hidden from the regular window</Toggle>
           <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab (tray and hotkey only)</Toggle>
           <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enable summon hotkey</Toggle>
           <Toggle checked={settings.summonDockToTop} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Hotkey docks the window to the top of the screen (quake style)</Toggle>

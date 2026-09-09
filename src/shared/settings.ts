@@ -42,6 +42,9 @@ export interface GithubSettings {
  *  panel. Windows are views onto the same tabs; this never partitions terminals. */
 export type WindowMode = "shared" | "panel";
 
+/** Which window a terminal was opened from. */
+export type WindowRole = "main" | "panel";
+
 /** What an agent does with a fix it prepared for one of the user's PRs.
  *  - "review": pauses with the diff for the user to approve the push.
  *  - "push": commits and pushes unattended. */
@@ -86,6 +89,8 @@ export interface DeckSettings {
   jira: JiraSettings;
   github: GithubSettings;
   windowMode: WindowMode;
+  /** With a separate hotkey window: keep its tabs apart from the regular window's. */
+  hotkeyOwnTabs: boolean;
   /** Electron accelerator that summons/hides the window from anywhere. */
   summonHotkey: string;
   /** Master switch for the summon hotkey. */
@@ -125,6 +130,7 @@ export const defaultSettings: DeckSettings = {
   },
   github: { owner: "" },
   windowMode: "shared",
+  hotkeyOwnTabs: false,
   summonHotkey: "Alt+Space",
   summonHotkeyEnabled: true,
   summonDockToTop: true,

@@ -8,6 +8,19 @@ import path from "node:path";
 import type { ClientMessage, HostMessage, SpawnRequest, TermMeta } from "./ptyHost.js";
 import { clearTermLinks, linkTermToIssue, registerAgentTerm, endTermSessions } from "./sessions.js";
 import { getSettings } from "./settings.js";
+import type { WindowRole } from "../shared/settings.js";
+
+/** Role of each renderer, so terminals can be tagged with the window that
+ *  opened them and, when the hotkey window keeps its own tabs, filtered. */
+const windowRoles = new WeakMap<WebContents, WindowRole>();
+export function setWindowRole(contents: WebContents, role: WindowRole): void {
+  windowRoles.set(contents, role);
+}
+function visibleTo(contents: WebContents, meta: TermMeta): boolean {
+  const { windowMode, hotkeyOwnTabs } = getSettings();
+  if (windowMode !== "panel" || !hotkeyOwnTabs) return true;
+  return (meta.windowRole ?? "main") === (windowRoles.get(contents) ?? "main");
+}
 
 export type { TermMeta } from "./ptyHost.js";
 
@@ -33,6 +46,7 @@ export interface TermCreateOptions extends AgentLaunch {
   command?: string;
   /** Ticket this terminal was spawned for — links its agent session. */
   issueKey?: string;
+  windowRole?: WindowRole;
 }
 
 function spawnRequest(opts: TermCreateOptions): SpawnRequest {
@@ -69,6 +83,7 @@ function spawnRequest(opts: TermCreateOptions): SpawnRequest {
     sessionId,
     prompt: opts.prompt,
     issueKey: opts.issueKey,
+    windowRole: opts.windowRole,
   };
 }
 
@@ -225,9 +240,10 @@ export async function startPtyHost(): Promise<void> {
   for (const t of terms) if (t.issueKey) linkTermToIssue(t.id, t.issueKey);
   clearTermLinks(terms.map((t) => t.id));
 
-  ipcMain.handle("term:create", (_e, opts: TermCreateOptions = {}) => createTerm(opts));
-  ipcMain.handle("term:list", async (): Promise<TermMeta[]> => {
-    return (await client!.request<"list">({ type: "list" })).terms;
+  ipcMain.handle("term:create", (event, opts: TermCreateOptions = {}) => createTerm({ ...opts, windowRole: windowRoles.get(event.sender) }));
+  ipcMain.handle("term:list", async (event): Promise<TermMeta[]> => {
+    const { terms } = await client!.request<"list">({ type: "list" });
+    return terms.filter((meta) => visibleTo(event.sender, meta));
   });
   ipcMain.handle("term:attach", (event, id: string) => client!.attach(id, event.sender));
   ipcMain.on("term:input", (_e, id: string, data: string) => client!.send({ type: "input", id, data }));
@@ -248,7 +264,7 @@ export async function createTerm(opts: TermCreateOptions = {}): Promise<TermMeta
   const meta = { ...reply.meta, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt };
   if (meta.issueKey) linkTermToIssue(meta.id, meta.issueKey);
   registerAgentTerm(meta);
-  for (const window of BrowserWindow.getAllWindows()) window.webContents.send("term:created", meta);
+  for (const window of BrowserWindow.getAllWindows()) if (visibleTo(window.webContents, meta)) window.webContents.send("term:created", meta);
   return meta;
 }
 

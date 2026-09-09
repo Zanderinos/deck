@@ -28,7 +28,7 @@ import {
   startIndexer,
 } from "./indexer.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
-import { startPtyHost, stopPtyHost } from "./pty.js";
+import { setWindowRole, startPtyHost, stopPtyHost } from "./pty.js";
 import { startServer, stopServer } from "./server.js";
 import { addDrafts, askReview, clearDrafts, getDrafts, onDraftsChanged, removeDraft, resetReview, type ReviewPr } from "./review.js";
 import {
@@ -141,6 +141,7 @@ function createWindow(role: WindowRole): BrowserWindow {
   });
 
   wins.set(role, win);
+  setWindowRole(win.webContents, role);
   win.on("ready-to-show", () => win.show());
   win.on("blur", () => {
     if (quakeWins.has(win) && getSettings().summonHideOnBlur) hideWindow(win);

@@ -70,14 +70,17 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const resuming = useRef(new Set<string>());
 
   // Terminals live in the pty host, so a reload (or a restarted main
-  // process) finds the previous tabs still running.
+  // process) finds the previous tabs still running. The list is re-read when
+  // the window settings change, since they decide which tabs this window sees.
+  const windowMode = settings?.windowMode;
+  const hotkeyOwnTabs = settings?.hotkeyOwnTabs;
   useEffect(() => {
     void window.deck.term.list().then((terms) => {
       setTabs(terms.map(toTab));
-      setActiveId(terms.at(-1)?.id);
+      setActiveId((active) => terms.some((term) => term.id === active) ? active : terms.at(-1)?.id);
       setReady(true);
     });
-  }, []);
+  }, [windowMode, hotkeyOwnTabs]);
 
   useEffect(() => window.deck.sessions.onChanged((sessions) => {
     setTabs((tabs) => tabs.map((tab) => {
