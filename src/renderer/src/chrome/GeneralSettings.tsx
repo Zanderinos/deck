@@ -86,6 +86,7 @@ export function GeneralSettings() {
               <option value="per-entry">Separate windows for hotkey, tray and manual open</option>
             </select>
           </Field>
+          <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab (tray and hotkey only)</Toggle>
           <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enable summon hotkey</Toggle>
           <Toggle checked={settings.summonDockToTop} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Hotkey docks the window to the top of the screen (quake style)</Toggle>
           <Toggle checked={settings.summonHideOnBlur} disabled={!settings.summonDockToTop} onChange={(summonHideOnBlur) => void update({ summonHideOnBlur })}>Hide the quake panel when another app takes focus</Toggle>

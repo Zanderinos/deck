@@ -98,6 +98,8 @@ export interface DeckSettings {
   summonHeightRatio: number;
   /** Hide a hotkey-summoned quake panel as soon as another app takes focus. */
   summonHideOnBlur: boolean;
+  /** Keep Deck out of the Dock and Cmd-Tab; it lives in the tray and the hotkey. */
+  hideFromDock: boolean;
   /** Directories deck treats as repo roots (search fallbacks, repo pickers). */
   repoRoots: string[];
   /** Folder new terminals fall back to. Supports ~. */
@@ -130,6 +132,7 @@ export const defaultSettings: DeckSettings = {
   summonDockToTop: true,
   summonHeightRatio: 0.6,
   summonHideOnBlur: true,
+  hideFromDock: false,
   repoRoots: [],
   defaultCwd: "~",
   newTerminalCwd: { tab: "current", split: "current" },

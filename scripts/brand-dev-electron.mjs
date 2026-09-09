@@ -33,4 +33,8 @@ for (const key of ["CFBundleName", "CFBundleDisplayName"]) {
 }
 copyFileSync(icns, path.join(appDir, "Contents/Resources/electron.icns"));
 run(`codesign --force --deep --sign - '${appDir}'`);
+// LaunchServices caches the bundle icon by path; without a re-register the
+// dock and Cmd-Tab keep showing the stock Electron icon.
+run(`touch '${appDir}'`);
+run(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f '${appDir}'`);
 console.log(`branded dev Electron.app as ${NAME}`);

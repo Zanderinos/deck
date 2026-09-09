@@ -73,7 +73,17 @@ Opt-in, off by default. Once enabled in **Settings → General**, Deck starts a 
 
 Five built-in themes, live custom JSON themes, and local plugins that contribute themes, commands, agent prompts and Markdown panels. See the [extension guide](docs/extensions.md) and the [starter plugin](examples/plugins/workspace-kit).
 
-## Getting started
+## Install
+
+Download the latest `.dmg` for your Mac (Apple Silicon or Intel) from the [releases page](https://github.com/fishuke/deck/releases) and drag Deck into Applications.
+
+The builds are not notarized with Apple yet, so macOS will refuse to open the app the first time. Clear the quarantine flag once:
+
+```sh
+xattr -cr /Applications/Deck.app
+```
+
+## Run from source
 
 ```sh
 git clone https://github.com/fishuke/deck.git

@@ -220,6 +220,14 @@ function applyHotkey(): void {
   }
 }
 
+/** Accessory apps have no Dock tile and are skipped by Cmd-Tab, yet still
+ *  show windows and take focus when summoned. */
+function applyDockVisibility(): void {
+  if (!app.dock) return;
+  if (getSettings().hideFromDock) app.dock.hide();
+  else if (!app.dock.isVisible()) app.dock.show();
+}
+
 function createTray(): void {
   // macOS allows a text-only tray item; an empty image keeps it icon-less.
   tray = new Tray(nativeImage.createEmpty());
@@ -343,12 +351,14 @@ app.whenReady().then(async () => {
     broadcast("settings:changed", next);
     if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch) applyHotkey();
     if ("summonHeightRatio" in patch) quakeHeightRatio = undefined;
+    if ("hideFromDock" in patch) applyDockVisibility();
     return next;
   });
 
   createWindow("main");
   createTray();
   applyHotkey();
+  applyDockVisibility();
 
   app.on("activate", () => showWindow(roleFor("manual")));
 });
