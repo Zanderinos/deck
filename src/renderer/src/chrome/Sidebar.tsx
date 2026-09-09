@@ -83,7 +83,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
   const footerIndex = footerViews.indexOf(view as (typeof footerViews)[number]);
   const sessions = useAgentSessions();
   const attention = useAttentionCount();
-  const reviews = useReviewQueue().queue.length;
+  const reviews = useReviewQueue().actionable;
   const { suggestions, dismissSessions } = useSessionSuggestions(sessions);
   const [showMore, setShowMore] = useState(false);
   const [width, setWidth] = useState(() => Math.min(380, Math.max(220, Number(localStorage.getItem("deck.sidebar.width")) || 252)));

@@ -29,7 +29,7 @@ function requirePr(args: Json): InboxPr {
   const repo = String(args.repo ?? "");
   const number = Number(args.number);
   const inbox = getPrInbox();
-  const pr = [...(inbox?.mine ?? []), ...(inbox?.reviewRequested ?? [])].find((p) => p.repo === repo && p.number === number);
+  const pr = [...(inbox?.mine ?? []), ...(inbox?.reviewRequested ?? []), ...(inbox?.reviewed ?? [])].find((p) => p.repo === repo && p.number === number);
   if (!pr) throw new Error(`PR ${repo}#${number} is not in the inbox; call pr_inbox first`);
   return pr;
 }
@@ -48,6 +48,7 @@ function describeInbox() {
       fixInProgress: fixes.filter((f) => f.repo === pr.repo && f.number === pr.number).map((f) => ({ problem: f.problem, term_id: f.termId })),
     })),
     reviewRequested: inbox.reviewRequested,
+    alreadyReviewed: inbox.reviewed ?? [],
   };
 }
 
