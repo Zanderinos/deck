@@ -77,27 +77,37 @@ export function GeneralSettings() {
           </Field>
         </Card>
 
-        <Card title="Window & hotkey" description="How Deck appears when you summon it from the keyboard or the tray.">
-          <Field label="Windows">
+        <Card title="Summon hotkey" description="Bring Deck up from anywhere with one keystroke.">
+          <div className="flex items-center gap-3">
+            <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enabled</Toggle>
+            <input aria-label="Summon hotkey" title="Electron accelerator, e.g. Alt+Space" disabled={!settings.summonHotkeyEnabled} className={`ml-auto w-44 font-mono ${control} disabled:opacity-50`} defaultValue={settings.summonHotkey}
+              onBlur={onBlurText(settings.summonHotkey, (summonHotkey) => void update({ summonHotkey }), settings.summonHotkey)} />
+          </div>
+          <Toggle checked={settings.summonDockToTop} disabled={!settings.summonHotkeyEnabled} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Open as a quake panel docked to the top of the screen</Toggle>
+          <div className={`ml-5 flex flex-col gap-3 border-l border-edge2 pl-4 ${settings.summonDockToTop && settings.summonHotkeyEnabled ? "" : "opacity-50"}`}>
+            <Toggle checked={settings.summonHideOnBlur} disabled={!settings.summonDockToTop || !settings.summonHotkeyEnabled} onChange={(summonHideOnBlur) => void update({ summonHideOnBlur })}>Hide when another app takes focus</Toggle>
+            <label className="flex items-center gap-3 text-xs text-dim">
+              <span>Panel height</span>
+              <span className="text-[11px] text-mut">a drag resize is kept until Deck quits</span>
+              <span className="ml-auto flex items-center gap-1">
+                <input type="number" min={20} max={100} disabled={!settings.summonDockToTop || !settings.summonHotkeyEnabled} className={`w-16 text-right ${control}`} defaultValue={Math.round(settings.summonHeightRatio * 100)}
+                  onBlur={(e) => { const ratio = Math.min(100, Math.max(20, Number(e.target.value) || 60)) / 100; if (ratio !== settings.summonHeightRatio) void update({ summonHeightRatio: ratio }); }} />
+                <span className="text-mut">%</span>
+              </span>
+            </label>
+          </div>
+        </Card>
+
+        <Card title="Windows" description="Which window the hotkey and the Dock open, and what each one shows.">
+          <Field label="Hotkey window">
             <select className={`w-full ${control}`} value={settings.windowMode}
               onChange={(e) => { const v = e.target.value as DeckSettings["windowMode"]; if (v !== settings.windowMode) void update({ windowMode: v }); }}>
-              <option value="shared">Shared window</option>
-              <option value="panel">Separate window for the hotkey</option>
+              <option value="shared">Shared with the Dock window</option>
+              <option value="panel">Separate window</option>
             </select>
           </Field>
-          <Toggle checked={settings.hotkeyOwnTabs} disabled={settings.windowMode !== "panel"} onChange={(hotkeyOwnTabs) => void update({ hotkeyOwnTabs })}>Hotkey window keeps its own tabs, hidden from the regular window</Toggle>
-          <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab (tray and hotkey only)</Toggle>
-          <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enable summon hotkey</Toggle>
-          <Toggle checked={settings.summonDockToTop} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Hotkey docks the window to the top of the screen (quake style)</Toggle>
-          <Toggle checked={settings.summonHideOnBlur} disabled={!settings.summonDockToTop} onChange={(summonHideOnBlur) => void update({ summonHideOnBlur })}>Hide the quake panel when another app takes focus</Toggle>
-          <Field label="Quake panel height" hint="% of the screen; a resize is kept until deck quits">
-            <input type="number" min={20} max={100} disabled={!settings.summonDockToTop} className={`w-full ${control}`} defaultValue={Math.round(settings.summonHeightRatio * 100)}
-              onBlur={(e) => { const ratio = Math.min(100, Math.max(20, Number(e.target.value) || 60)) / 100; if (ratio !== settings.summonHeightRatio) void update({ summonHeightRatio: ratio }); }} />
-          </Field>
-          <Field label="Summon hotkey" hint="Electron accelerator">
-            <input className={`w-full ${control}`} defaultValue={settings.summonHotkey}
-              onBlur={onBlurText(settings.summonHotkey, (summonHotkey) => void update({ summonHotkey }), settings.summonHotkey)} />
-          </Field>
+          <Toggle checked={settings.hotkeyOwnTabs} disabled={settings.windowMode !== "panel"} onChange={(hotkeyOwnTabs) => void update({ hotkeyOwnTabs })}>Hotkey window keeps its own tabs, hidden from the Dock window</Toggle>
+          <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab</Toggle>
         </Card>
 
         <Card title="Auto-fix my pull requests" description="Start an agent automatically when one of my PRs breaks.">
