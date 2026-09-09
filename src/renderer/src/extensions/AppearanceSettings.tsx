@@ -11,7 +11,9 @@ import { useExtensions } from "./ExtensionProvider.js";
 function TerminalFont() {
   const settings = useSettings();
   const [open, setOpen] = useState(false);
+  const [customFont, setCustomFont] = useState(false);
   const appearance = settings?.terminalAppearance ?? defaultSettings.terminalAppearance;
+  const fontPreset = customFont || (appearance.fontFamily !== "" && appearance.fontFamily !== "JetBrains Mono") ? "custom" : appearance.fontFamily;
   const update = (patch: Partial<DeckSettings["terminalAppearance"]>) =>
     void window.deck.updateSettings({ terminalAppearance: { ...appearance, ...patch } });
   const summary = `${appearance.fontFamily || "Platform monospace"} · ${appearance.fontSize}px`;
@@ -23,9 +25,21 @@ function TerminalFont() {
     </div>
     {open && <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-edge2 bg-panel p-4 lg:grid-cols-4">
       <div className="col-span-2 lg:col-span-2"><Field label="Family">
+        <select aria-label="Terminal font family" className={control} value={fontPreset}
+          onChange={(event) => {
+            const fontFamily = event.target.value;
+            setCustomFont(fontFamily === "custom");
+            if (fontFamily !== "custom") update({ fontFamily });
+          }}>
+          <option value="">Platform monospace</option>
+          <option value="JetBrains Mono">JetBrains Mono</option>
+          <option value="custom">Custom font…</option>
+        </select>
+      </Field></div>
+      {fontPreset === "custom" && <div className="col-span-2"><Field label="Custom font family">
         <input placeholder="FiraCode Nerd Font" className={control} defaultValue={appearance.fontFamily}
           onBlur={(event) => { const fontFamily = event.target.value.trim(); if (fontFamily !== appearance.fontFamily) update({ fontFamily }); }} />
-      </Field></div>
+      </Field></div>}
       <Field label="Size">
         <input type="number" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} className={control} defaultValue={appearance.fontSize}
           onBlur={(event) => { const fontSize = Number(event.target.value); if (fontSize && fontSize !== appearance.fontSize) update({ fontSize }); }} />

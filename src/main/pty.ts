@@ -6,7 +6,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import type { ClientMessage, HostMessage, SpawnRequest, TermMeta } from "./ptyHost.js";
-import { clearTermLinks, linkTermToIssue, registerAgentTerm, endTermSessions } from "./sessions.js";
+import { clearTermLinks, linkTermToIssue, registerAgentTerm, endTermSessions, updateForegroundSession } from "./sessions.js";
 import { getSettings } from "./settings.js";
 import type { WindowRole } from "../shared/settings.js";
 
@@ -210,6 +210,10 @@ class PtyHostClient {
       resolve?.(msg);
       return;
     }
+    if (msg.type === "foreground") {
+      updateForegroundSession(msg.meta);
+      return;
+    }
     if (msg.type === "exit") {
       endTermSessions(msg.id);
       this.owners.delete(msg.id);
@@ -244,6 +248,7 @@ export async function startPtyHost(): Promise<void> {
   // session rows; only the ones that didn't get unlinked.
   for (const t of terms) if (t.issueKey) linkTermToIssue(t.id, t.issueKey);
   clearTermLinks(terms.map((t) => t.id));
+  for (const term of terms) if (term.foregroundProcess) updateForegroundSession(term);
 
   ipcMain.handle("term:create", (event, opts: TermCreateOptions = {}) => createTerm({ ...opts, windowRole: windowRoles.get(event.sender) }));
   ipcMain.handle("term:list", async (event): Promise<TermMeta[]> => {

@@ -66,23 +66,21 @@ const footerViews = ["terminal", "board", "agent", "reviews"] as const;
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const { tabs, newTab, focusTab, closeTab } = useTabs();
   // Arc-style: a horizontal swipe on the sidebar steps to the next/previous view.
-  // One step per gesture; the accumulator resets once the trackpad goes quiet.
-  const swipe = useRef({ distance: 0, consumed: false, timer: 0 });
+  // A swipe keeps firing momentum events long after the fingers lift, so once a step is
+  // taken the sidebar goes deaf for a moment: one view per swipe, never a jump.
+  const swipe = useRef({ distance: 0, steppedAt: 0 });
   const onWheel = (event: React.WheelEvent) => {
     if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
-    const state = swipe.current;
-    window.clearTimeout(state.timer);
-    state.timer = window.setTimeout(() => { state.distance = 0; state.consumed = false; }, 200);
-    // Reversing direction starts a fresh gesture, so the previous swipe's momentum tail
-    // does not have to die down before the opposite step registers.
-    if (Math.sign(event.deltaX) !== Math.sign(state.distance)) { state.distance = 0; state.consumed = false; }
-    if (state.consumed) return;
-    state.distance += event.deltaX;
-    if (Math.abs(state.distance) < 60) return;
-    state.consumed = true;
-    const index = footerViews.indexOf(view as (typeof footerViews)[number]);
-    const next = footerViews[Math.min(footerViews.length - 1, Math.max(0, (index < 0 ? 0 : index) + Math.sign(state.distance)))];
-    if (next !== view) onView(next);
+    const gesture = swipe.current;
+    if (event.timeStamp - gesture.steppedAt < 350) return;
+    const sameWay = Math.sign(event.deltaX) === Math.sign(gesture.distance);
+    gesture.distance = sameWay ? gesture.distance + event.deltaX : event.deltaX;
+    if (Math.abs(gesture.distance) < 60) return;
+    const step = Math.sign(gesture.distance);
+    gesture.distance = 0;
+    gesture.steppedAt = event.timeStamp;
+    const index = Math.max(0, footerViews.indexOf(view as (typeof footerViews)[number]));
+    onView(footerViews[Math.min(footerViews.length - 1, Math.max(0, index + step))]);
   };
   const footerIndex = footerViews.indexOf(view as (typeof footerViews)[number]);
   const sessions = useAgentSessions();

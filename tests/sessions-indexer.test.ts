@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({ directory: "" }));
 vi.mock("electron", () => ({ app: { getPath: () => state.directory } }));
 state.directory = fs.mkdtempSync(path.join(os.tmpdir(), "deck-test-"));
 const { openDb } = await import("../src/main/db.js");
-const { applyHook, listSessions, linkTermToIssue, registerAgentTerm, requestReview, endTermSessions } = await import("../src/main/sessions.js");
+const { applyHook, listSessions, linkTermToIssue, registerAgentTerm, requestReview, endTermSessions, updateForegroundSession } = await import("../src/main/sessions.js");
 const { indexFile, searchConversations, sessionMessages } = await import("../src/main/indexer.js");
 
 beforeEach(() => {
@@ -18,6 +18,28 @@ afterAll(() => { openDb().close(); fs.rmSync(state.directory, { recursive: true,
 const record = (type: string, payload: unknown, timestamp = "2026-09-07T10:00:00Z") => JSON.stringify({ type, payload, timestamp }) + "\n";
 
 describe("provider session lifecycle", () => {
+  it("identifies a manually launched Codex before the first prompt and clears it on exit", () => {
+    const term = { id: "shell", cwd: "/repo" };
+    updateForegroundSession({ ...term, foregroundProcess: "zsh" });
+    expect(listSessions()).toEqual([]);
+    updateForegroundSession({ ...term, foregroundProcess: "codex" });
+    expect(listSessions()).toEqual([expect.objectContaining({ session_id: "pending:shell", agent: "codex", title: null, status: "idle", term_id: "shell" })]);
+    updateForegroundSession({ ...term, foregroundProcess: "zsh" });
+    expect(listSessions()).toEqual([]);
+  });
+  it("lets hooks replace foreground detection without resetting the real session", () => {
+    const term = { id: "shell", cwd: "/repo", foregroundProcess: "codex" };
+    updateForegroundSession(term);
+    applyHook({ session_id: "started", hook_event_name: "UserPromptSubmit", prompt: "Fix startup" }, term.id, "codex");
+    updateForegroundSession(term);
+    updateForegroundSession({ ...term, foregroundProcess: "zsh" });
+    expect(listSessions()).toEqual([expect.objectContaining({ session_id: "codex:started", title: "Fix startup", status: "working", term_id: "shell" })]);
+  });
+  it("updates the provider when another agent replaces a pre-hook process", () => {
+    updateForegroundSession({ id: "shell", cwd: "/repo", foregroundProcess: "/usr/local/bin/codex" });
+    updateForegroundSession({ id: "shell", cwd: "/repo", foregroundProcess: "claude" });
+    expect(listSessions()).toEqual([expect.objectContaining({ agent: "claude", status: "idle" })]);
+  });
   it("links Codex to its terminal and ticket without duplicating the pending row", () => {
     registerAgentTerm({ id: "term", cwd: "/repo", agent: "codex", issueKey: "ABC-1" });
     linkTermToIssue("term", "ABC-1");

@@ -12,6 +12,18 @@ module.exports = async function checkSidebar({ window, run, click, wait, screens
     await wait(150);
   };
 
+  const shell = await run('window.deck.term.create({ cwd: "/tmp/codex-startup" })');
+  const pending = { ...session(`pending:${shell.id}`, null, 0), cwd: shell.cwd, term_id: shell.id, status: 'idle' };
+  await update([pending]);
+  if (!(await run(`Boolean(document.querySelector('[aria-label="codex-startup (Codex)"] [title="Ready"]'))`))) throw Error('Idle Codex should be identified before its first prompt');
+  await update([]);
+  if (!(await run(`Boolean(document.querySelector('[aria-label="codex-startup"]'))`))) throw Error('Exiting before the first prompt should restore the shell tab');
+  await update([pending]);
+  await update([{ ...pending, session_id: 'codex:startup', title: 'First Codex prompt', status: 'working' }]);
+  if (!(await run(`Boolean(document.querySelector('[aria-label="First Codex prompt (Codex)"] [title="Working"]'))`))) throw Error('The first hook should replace the idle Codex placeholder');
+  await run(`window.deck.term.kill(${JSON.stringify(shell.id)})`);
+  await update([]);
+
   await update([older, previous, latest]);
   await click('Build a better terminal (Codex)');
   const text = await sidebarText();

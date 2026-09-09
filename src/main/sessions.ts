@@ -185,9 +185,21 @@ export function registerAgentTerm(term: { id: string; cwd: string; agent?: Agent
   const id = term.sessionId ?? `pending:${term.id}`;
   openDb().prepare(`INSERT INTO agent_sessions (session_id, agent, cwd, title, status, term_id, issue_key, started_at, updated_at)
     VALUES (?, ?, ?, ?, 'idle', ?, ?, ?, ?)
-    ON CONFLICT(session_id) DO UPDATE SET term_id = excluded.term_id, status = 'idle', updated_at = excluded.updated_at`)
+    ON CONFLICT(session_id) DO UPDATE SET agent = excluded.agent, term_id = excluded.term_id, status = 'idle', updated_at = excluded.updated_at`)
     .run(id, term.agent, term.cwd, term.prompt?.slice(0, 120) ?? null, term.id, term.issueKey ?? null, Date.now(), Date.now());
   notify();
+}
+
+export function updateForegroundSession(term: { id: string; cwd: string; foregroundProcess?: string; issueKey?: string }): void {
+  const processName = term.foregroundProcess?.split("/").pop();
+  if (processName === "codex" || processName === "claude") {
+    registerAgentTerm({ id: term.id, cwd: term.cwd, agent: processName, issueKey: term.issueKey });
+    return;
+  }
+  // Hooks own real session status. Only remove the pre-hook placeholder
+  // when the agent gives the terminal back to another process.
+  const changed = openDb().prepare("DELETE FROM agent_sessions WHERE session_id = ?").run(`pending:${term.id}`).changes;
+  if (changed > 0) notify();
 }
 
 export function endTermSessions(termId: string): void {

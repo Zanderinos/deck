@@ -12,6 +12,7 @@ import pty, { type IPty } from "node-pty";
 export interface TermMeta extends AgentLaunch {
   id: string;
   cwd: string;
+  foregroundProcess?: string;
   command?: string;
   issueKey?: string;
   windowRole?: WindowRole;
@@ -41,6 +42,7 @@ export type HostMessage =
   | { type: "list"; req: number; terms: TermMeta[] }
   | { type: "attached"; req: number; id: string; buffer: string }
   | { type: "data"; id: string; data: string }
+  | { type: "foreground"; meta: TermMeta }
   | { type: "exit"; id: string; code: number };
 
 // Enough to rebuild a busy TUI's screen on reattach without holding whole
@@ -89,7 +91,7 @@ function create(spawn: SpawnRequest): TermMeta {
     cwd: spawn.cwd,
     env: { ...spawn.env, DECK_TERM_ID: id },
   });
-  const meta: TermMeta = { id, cwd: spawn.cwd, command: spawn.command, issueKey: spawn.issueKey, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt, windowRole: spawn.windowRole };
+  const meta: TermMeta = { id, cwd: spawn.cwd, foregroundProcess: proc.process, command: spawn.command, issueKey: spawn.issueKey, agent: spawn.agent, sessionId: spawn.sessionId, prompt: spawn.prompt, windowRole: spawn.windowRole };
   const term: Term = { proc, meta, chunks: [], buffered: 0 };
 
   proc.onData((data) => {
@@ -110,6 +112,17 @@ function create(spawn: SpawnRequest): TermMeta {
   terms.set(id, term);
   return meta;
 }
+
+// An agent can sit at its welcome screen before its first session hook.
+// Poll the PTY's foreground process even when it produces no output.
+setInterval(() => {
+  for (const term of terms.values()) {
+    const foregroundProcess = term.proc.process;
+    if (foregroundProcess === term.meta.foregroundProcess) continue;
+    term.meta.foregroundProcess = foregroundProcess;
+    broadcast({ type: "foreground", meta: term.meta });
+  }
+}, 500).unref();
 
 function handle(socket: net.Socket, msg: ClientMessage): void {
   switch (msg.type) {
