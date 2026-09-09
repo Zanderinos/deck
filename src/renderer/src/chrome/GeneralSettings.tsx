@@ -77,6 +77,7 @@ export function GeneralSettings() {
           </Field>
         </Card>
 
+        <div className="flex flex-col gap-4">
         <Card title="Summon hotkey" description="Bring Deck up from anywhere with one keystroke.">
           <div className="flex items-center gap-3">
             <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enabled</Toggle>
@@ -109,6 +110,7 @@ export function GeneralSettings() {
           <Toggle checked={settings.hotkeyOwnTabs} disabled={settings.windowMode !== "panel"} onChange={(hotkeyOwnTabs) => void update({ hotkeyOwnTabs })}>Hotkey window keeps its own tabs, hidden from the Dock window</Toggle>
           <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab</Toggle>
         </Card>
+        </div>
 
         <Card title="Auto-fix my pull requests" description="Start an agent automatically when one of my PRs breaks.">
           {([["enabled", "Auto-fix enabled"], ["ci", "…when CI fails"], ["conflicts", "…when it gets merge conflicts"]] as const).map(([field, text]) => (
