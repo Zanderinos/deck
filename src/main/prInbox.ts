@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { prKey } from "../shared/prs.js";
 import { kvGet, kvSet } from "./db.js";
 import { getSettings } from "./settings.js";
 
@@ -26,12 +27,17 @@ export interface InboxPr {
   mergeable: string;
   /** SUCCESS, FAILURE, ERROR, PENDING, EXPECTED or NONE. */
   checks: string;
+  /** The head commit is newer than the user's last review on this PR. */
+  newSinceReview?: boolean;
 }
 
 export interface PrInbox {
   viewer: string;
   mine: InboxPr[];
   reviewRequested: InboxPr[];
+  /** Open PRs the user has already reviewed, excluding their own and any
+   *  still in reviewRequested. */
+  reviewed: InboxPr[];
   at: number;
 }
 
@@ -58,7 +64,8 @@ interface SearchNode {
   mergeable: string;
   author: { login: string } | null;
   repository: { nameWithOwner: string };
-  commits: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+  commits: { nodes: { commit: { committedDate?: string; statusCheckRollup: { state: string } | null } }[] };
+  reviews?: { nodes: { state: string; submittedAt: string; author: { login: string } | null }[] };
 }
 
 const QUERY = `query($q: String!) {
@@ -67,7 +74,8 @@ const QUERY = `query($q: String!) {
     nodes { ... on PullRequest {
       number title url isDraft updatedAt headRefName baseRefName reviewDecision mergeable
       author { login } repository { nameWithOwner }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
+      reviews(last: 20) { nodes { state submittedAt author { login } } }
     } }
   }
 }`;
@@ -89,14 +97,33 @@ function toPr(node: SearchNode): InboxPr {
   };
 }
 
-async function search(qualifier: string): Promise<{ viewer: string; prs: InboxPr[] }> {
+/** Whether the head commit is newer than the user's last review. False when
+ *  no review of theirs is among the ones fetched. */
+export function hasNewWorkSinceReview(node: SearchNode, viewer: string): boolean {
+  const mine = (node.reviews?.nodes ?? []).filter((review) => review.author?.login === viewer && review.submittedAt);
+  const last = mine[mine.length - 1];
+  const pushed = node.commits.nodes[0]?.commit.committedDate;
+  return Boolean(last && pushed && pushed > last.submittedAt);
+}
+
+const newestFirst = (a: InboxPr, b: InboxPr): number => b.updatedAt.localeCompare(a.updatedAt);
+
+interface SearchResult {
+  viewer: string;
+  nodes: SearchNode[];
+  prs: InboxPr[];
+}
+
+async function search(qualifier: string): Promise<SearchResult> {
   const owner = getSettings().github.owner;
   const q = `is:pr is:open archived:false ${qualifier}${owner ? ` user:${owner}` : ""}`;
   const { stdout } = await exec("gh", ["api", "graphql", "-f", `query=${QUERY}`, "-f", `q=${q}`], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
   const data = (JSON.parse(stdout) as { data: { viewer: { login: string }; search: { nodes: SearchNode[] } } }).data;
+  const nodes = data.search.nodes.filter((node) => node.number);
   return {
     viewer: data.viewer.login,
-    prs: data.search.nodes.filter((n) => n.number).map(toPr).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    nodes,
+    prs: nodes.map(toPr).sort(newestFirst),
   };
 }
 
@@ -115,14 +142,31 @@ export function getPrInbox(): PrInbox | undefined {
   return kvGet<PrInbox>(CACHE_KEY);
 }
 
+/** The PRs the user has reviewed, minus their own and the ones still sitting
+ *  in reviewRequested. */
+function reviewedByUser(reviewed: SearchResult, viewer: string, requested: InboxPr[]): InboxPr[] {
+  const alreadyQueued = new Set(requested.map(prKey));
+  return reviewed.nodes
+    .map((node) => ({ ...toPr(node), newSinceReview: hasNewWorkSinceReview(node, viewer) }))
+    .filter((pr) => pr.author !== viewer && !alreadyQueued.has(prKey(pr)))
+    .sort(newestFirst);
+}
+
+function publish(inbox: PrInbox): PrInbox {
+  kvSet(CACHE_KEY, inbox);
+  for (const cb of listeners) cb(inbox);
+  return inbox;
+}
+
 export function refreshPrInbox(): Promise<PrInbox> {
-  inflight ??= Promise.all([search("author:@me"), search("review-requested:@me")])
-    .then(([mine, requested]) => {
-      const inbox: PrInbox = { viewer: mine.viewer, mine: mine.prs, reviewRequested: requested.prs, at: Date.now() };
-      kvSet(CACHE_KEY, inbox);
-      for (const cb of listeners) cb(inbox);
-      return inbox;
-    })
+  inflight ??= Promise.all([search("author:@me"), search("review-requested:@me"), search("reviewed-by:@me")])
+    .then(([mine, requested, reviewed]) => publish({
+      viewer: mine.viewer,
+      mine: mine.prs,
+      reviewRequested: requested.prs,
+      reviewed: reviewedByUser(reviewed, mine.viewer, requested.prs),
+      at: Date.now(),
+    }))
     .finally(() => (inflight = undefined));
   return inflight;
 }

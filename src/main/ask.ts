@@ -130,6 +130,7 @@ export function inboxSnapshot(): string {
       fixInProgress: fixes.filter((f) => f.repo === pr.repo && f.number === pr.number).map((f) => f.problem),
     })),
     reviewRequested: inbox.reviewRequested.map((pr) => ({ repo: pr.repo, number: pr.number, title: pr.title, url: pr.url, author: pr.author, draft: pr.isDraft, checks: pr.checks, updatedAt: pr.updatedAt })),
+    alreadyReviewed: (inbox.reviewed ?? []).map((pr) => ({ repo: pr.repo, number: pr.number, title: pr.title, url: pr.url, author: pr.author, checks: pr.checks, updatedAt: pr.updatedAt, newSinceReview: Boolean(pr.newSinceReview) })),
   });
 }
 
