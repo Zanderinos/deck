@@ -81,8 +81,8 @@ export function GeneralSettings() {
           <Field label="Windows" hint="Tabs and terminals are one shared set, visible in every window.">
             <select className={`w-full ${control}`} value={settings.windowMode}
               onChange={(e) => { const v = e.target.value as DeckSettings["windowMode"]; if (v !== settings.windowMode) void update({ windowMode: v }); }}>
-              <option value="shared">One window for both the hotkey and the Dock</option>
-              <option value="panel">Hotkey gets its own panel, the Dock a regular window</option>
+              <option value="shared">Shared window</option>
+              <option value="panel">Separate window for the hotkey</option>
             </select>
           </Field>
           <Toggle checked={settings.hideFromDock} onChange={(hideFromDock) => void update({ hideFromDock })}>Hide Deck from the Dock and Cmd-Tab (tray and hotkey only)</Toggle>
