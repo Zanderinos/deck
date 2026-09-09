@@ -19,11 +19,12 @@ export interface TerminalPaneProps {
   onTitle: (title: string) => void;
   /** A line the user typed and submitted, as far as the keystrokes reveal it. */
   onCommand?: (command: string) => void;
+  onFileDrop?: () => void;
 }
 
 // One xterm instance per pty, mounted once and kept alive across tab
 // switches (hidden, not unmounted) so scrollback survives.
-export function TerminalPane({ termId, active, focused = active, onTitle, onCommand }: TerminalPaneProps) {
+export function TerminalPane({ termId, active, focused = active, onTitle, onCommand, onFileDrop }: TerminalPaneProps) {
   const { theme } = useExtensions();
   const { mode, presentationSize } = useDisplayMode();
   const appearance = useTerminalAppearance();
@@ -167,9 +168,19 @@ export function TerminalPane({ termId, active, focused = active, onTitle, onComm
     event.preventDefault();
     const paths = Array.from(event.dataTransfer.files, (file) => window.deck.term.pathForFile(file)).filter(Boolean);
     if (!paths.length) return;
+    onFileDrop?.();
     const quoted = paths.map((path) => /[^\w./-]/.test(path) ? `'${path.replace(/'/g, "'\\''")}'` : path).join(" ");
     window.deck.term.input(termId, `\x1b[200~${quoted} \x1b[201~`);
+    setFinding(false);
     termRef.current?.focus();
+    // A Finder drop can leave the app inactive. Reclaim keyboard focus after
+    // the native drag finishes, then focus the pane that received the files.
+    requestAnimationFrame(() => {
+      if (!hostRef.current?.clientWidth) return;
+      void window.deck.window.focus().then(() => {
+        if (hostRef.current?.clientWidth) termRef.current?.focus();
+      }).catch((error) => console.error("Could not focus terminal after file drop:", error));
+    });
   };
 
   useEffect(() => onTerminalAction((action) => {

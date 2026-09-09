@@ -417,6 +417,13 @@ app.whenReady().then(async () => {
   startPrInbox();
   onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
   ipcMain.handle("inbox:get", () => getPrInbox());
+  ipcMain.handle("window:focus", (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win || !win.isVisible()) return;
+    win.focus();
+    app.focus({ steal: true });
+    win.webContents.focus();
+  });
   ipcMain.handle("window:fullscreen", (e, on: boolean) =>
     BrowserWindow.fromWebContents(e.sender)?.setFullScreen(on),
   );

@@ -20,6 +20,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('test:enable', (_event, enabled) => { plugin.enabled = enabled; });
   ipcMain.handle('test:save-theme', (_event, input) => { const theme = { ...parseTheme(input), id: 'custom:' + input.id, source: 'Custom' }; customThemes.push(theme); return theme; });
   const window = new BrowserWindow({ width: 1440, height: 900, show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true }, backgroundColor: '#080808' });
+  let focusRequests = 0;
+  ipcMain.handle('test:focus-window', () => { focusRequests++; });
   const errors = [];
   window.webContents.on('console-message', (event) => { if (event.level === 'error') errors.push(event.message); });
   await window.loadFile(path.join(root, 'out/renderer/index.html'));
@@ -38,6 +40,32 @@ app.whenReady().then(async () => {
   await click('Split right');
   if (await visiblePanes() !== 2) throw Error('Split did not show two panes');
   await screenshot('split');
+  await run(`(() => {
+    const panes = [...document.querySelectorAll('.xterm')].filter(element => element.offsetWidth > 0);
+    window.dropTarget = panes.find(pane => !pane.contains(document.activeElement));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['image'], 'focus test.png', {type:'image/png'}));
+    window.dropTarget.dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:transfer}));
+    // Simulate focus being lost as the native drag ends.
+    document.activeElement.blur();
+  })()`);
+  await wait(200);
+  if (focusRequests !== 1) throw Error('File drop did not request window focus');
+  if (!(await run(`window.dropTarget.contains(document.activeElement)`))) throw Error('File drop did not restore focus to the receiving pane');
+  await run(`window.dispatchEvent(new Event('focus'))`);
+  if (!(await run(`window.dropTarget.contains(document.activeElement)`))) throw Error('File drop did not select the receiving split pane');
+  const pasted = await run(`window.deck.terminalInputs().at(-1)`);
+  if (pasted.data !== "\x1b[200~'/tmp/focus test.png' \x1b[201~") throw Error('File drop changed the pasted image path');
+  await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'x',code:'KeyX',keyCode:88,which:88,bubbles:true,cancelable:true}))`);
+  const typed = await run(`window.deck.terminalInputs().at(-1)`);
+  if (typed.id !== pasted.id || typed.data !== 'x') throw Error('Typing after a file drop did not reach the receiving terminal');
+  if (process.argv.includes('--terminal-drop-only')) {
+    if (errors.length) throw Error(errors.join('\n'));
+    console.log('Terminal drop passed: window focus requested, receiving split selected, image path pasted, typing resumed.');
+    window.destroy();
+    app.quit();
+    return;
+  }
   await click('File explorer');
   if (!(await run(`document.body.innerText.includes('package.json')`))) throw Error('File explorer failed');
   await screenshot('files');

@@ -9,6 +9,7 @@ import type { ClientMessage, HostMessage, SpawnRequest, TermMeta } from "./ptyHo
 import { clearTermLinks, linkTermToIssue, registerAgentTerm, endTermSessions, updateForegroundSession } from "./sessions.js";
 import { getSettings } from "./settings.js";
 import type { WindowRole } from "../shared/settings.js";
+import { LegacyAgentDetector } from "./legacyAgentDetection.js";
 
 /** Role of each renderer, so terminals can be tagged with the window that
  *  opened them and, when the hotkey window keeps its own tabs, filtered. */
@@ -233,7 +234,31 @@ class PtyHostClient {
 }
 
 let client: PtyHostClient | undefined;
+let stopLegacyDetection: (() => void) | undefined;
 const exitListeners = new Set<(id: string) => void>();
+
+function startLegacyDetection(host: PtyHostClient): () => void {
+  const detector = new LegacyAgentDetector();
+  let stopped = false;
+  let failed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scan = async () => {
+    try {
+      const { terms } = await host.request<"list">({ type: "list" });
+      const changes = await detector.scan(terms);
+      if (!stopped) for (const term of changes) updateForegroundSession(term);
+      failed = false;
+    } catch {
+      // Do not log process output: it may contain environment values.
+      if (!failed) console.warn("Could not inspect agents in the older terminal host.");
+      failed = true;
+    } finally {
+      if (!stopped) timer = setTimeout(() => void scan(), 1000);
+    }
+  };
+  void scan();
+  return () => { stopped = true; clearTimeout(timer); };
+}
 
 /** Fires when a terminal's process exits (or the host goes away with it). */
 export function onTermExit(cb: (id: string) => void): () => void {
@@ -249,6 +274,7 @@ export async function startPtyHost(): Promise<void> {
   for (const t of terms) if (t.issueKey) linkTermToIssue(t.id, t.issueKey);
   clearTermLinks(terms.map((t) => t.id));
   for (const term of terms) if (term.foregroundProcess) updateForegroundSession(term);
+  stopLegacyDetection = startLegacyDetection(client);
 
   ipcMain.handle("term:create", (event, opts: TermCreateOptions = {}) => createTerm({ ...opts, windowRole: windowRoles.get(event.sender) }));
   ipcMain.handle("term:list", async (event): Promise<TermMeta[]> => {
@@ -287,5 +313,6 @@ export function sendToTerm(id: string, text: string): void {
 
 /** Packaged quit takes the shells along; in dev they stay for the restart. */
 export function stopPtyHost(): void {
+  stopLegacyDetection?.();
   if (app.isPackaged) client?.send({ type: "shutdown" });
 }

@@ -164,6 +164,7 @@ const api = {
     },
   },
   window: {
+    focus: (): Promise<void> => ipcRenderer.invoke("window:focus"),
     /** Opens another regular Deck window. */
     open: (): Promise<void> => ipcRenderer.invoke("window:new"),
     setFullScreen: (on: boolean): Promise<void> => ipcRenderer.invoke("window:fullscreen", on),

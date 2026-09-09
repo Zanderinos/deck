@@ -126,7 +126,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
             style={rect ? { left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%`, display: shown ? "flex" : "none", flexDirection: "column" } : { display: "none" }}
             onMouseDown={() => { if (activeId !== tab.termId) focusTab(tab.termId); }}>
             {rects.length > 1 && <div className="flex h-6 shrink-0 items-center gap-2 bg-panel px-3 font-sans text-[10px] text-mut"><Icon name="terminal" size={10} /><span className="truncate">{tab.customTitle || tab.title}</span><button className="ml-auto" title="Close pane" onClick={() => closeTab(tab.termId)}><Icon name="x" size={10} /></button></div>}
-            <div className="min-h-0 flex-1"><TerminalPane termId={tab.termId} active={shown} focused={shown && tab.termId === activeId} onTitle={(title) => setTitle(tab.termId, title)} onCommand={(command) => report({ command })} /></div>
+            <div className="min-h-0 flex-1"><TerminalPane termId={tab.termId} active={shown} focused={shown && tab.termId === activeId} onTitle={(title) => setTitle(tab.termId, title)} onCommand={(command) => report({ command })} onFileDrop={() => focusTab(tab.termId)} /></div>
           </div>;
         })}
         {dividers.map((divider) => <div key={divider.path.join("/") || "root"} role="separator" tabIndex={0} aria-label="Resize terminal panes" aria-orientation={divider.direction === "row" ? "vertical" : "horizontal"} aria-valuenow={Math.round(divider.ratio * 100)}
