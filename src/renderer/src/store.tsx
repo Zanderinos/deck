@@ -1,5 +1,6 @@
 import { sessionAgent, sessionKey, type AgentLaunch } from "../../shared/agents.js";
 import type { TermMeta } from "../../main/pty.js";
+import { useSettings } from "./lib/useSettings.js";
 import {
   createContext,
   useCallback,
@@ -49,6 +50,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<TermTab[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const [ready, setReady] = useState(false);
+  const settings = useSettings();
 
   const toTab = (meta: TermMeta): TermTab => ({
     termId: meta.id,
@@ -63,6 +65,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
   // here until its tab exists so a double click can't open it twice.
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+  const activeCwd = useRef<string>();
+  activeCwd.current = settings?.newTerminalCwd.tab === "current" ? tabs.find((tab) => tab.termId === activeId)?.cwd : undefined;
   const resuming = useRef(new Set<string>());
 
   // Terminals live in the pty host, so a reload (or a restarted main
@@ -85,7 +89,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const newTab = useCallback(async (opts: OpenOptions = {}) => {
     const agent = opts.agent ?? (opts.sessionId ? sessionAgent(opts.sessionId) : undefined);
     const sessionId = opts.sessionId ? sessionKey(agent!, opts.sessionId) : undefined;
-    const create = { ...opts, agent, sessionId };
+    const create = { ...opts, cwd: opts.cwd ?? activeCwd.current, agent, sessionId };
     if (sessionId && resuming.current.has(sessionId)) return;
     if (sessionId) resuming.current.add(sessionId);
     try {

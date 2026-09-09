@@ -13,6 +13,7 @@ export function getSettings(): DeckSettings {
     jira: { ...defaultSettings.jira, ...stored.jira },
     github: { ...defaultSettings.github, ...stored.github },
     autoFix: { ...defaultSettings.autoFix, ...stored.autoFix },
+    newTerminalCwd: { ...defaultSettings.newTerminalCwd, ...stored.newTerminalCwd },
     terminalAppearance: { ...defaultSettings.terminalAppearance, ...stored.terminalAppearance },
   };
 }

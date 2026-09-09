@@ -69,6 +69,9 @@ type WindowRole = "main" | "panel" | "tray";
 const wins = new Map<WindowRole, BrowserWindow>();
 /** Windows currently shown as a quake panel; they hide again on blur. */
 const quakeWins = new WeakSet<BrowserWindow>();
+/** Height the user dragged the quake panel to, kept until the app quits so a
+ *  resize survives hide/summon but every launch starts from the setting. */
+let quakeHeightRatio: number | undefined;
 let tray: Tray | undefined;
 let registeredHotkey: string | undefined;
 
@@ -168,6 +171,10 @@ function showWindow(role: WindowRole): void {
 }
 
 function hideWindow(w: BrowserWindow): void {
+  if (quakeWins.has(w)) {
+    const bounds = w.getBounds();
+    quakeHeightRatio = bounds.height / screen.getDisplayMatching(bounds).workArea.height;
+  }
   quakeWins.delete(w);
   w.hide();
   // Only leave the app when no other deck window stays visible.
@@ -178,7 +185,7 @@ function hideWindow(w: BrowserWindow): void {
  *  cursor is on. The window itself persists, so it reopens where you left. */
 function dockToTop(w: BrowserWindow): void {
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const ratio = getSettings().summonHeightRatio;
+  const ratio = quakeHeightRatio ?? getSettings().summonHeightRatio;
   w.setBounds({
     x: workArea.x,
     y: workArea.y,
@@ -335,6 +342,7 @@ app.whenReady().then(async () => {
     const next = updateSettings(patch);
     broadcast("settings:changed", next);
     if ("summonHotkey" in patch || "summonHotkeyEnabled" in patch) applyHotkey();
+    if ("summonHeightRatio" in patch) quakeHeightRatio = undefined;
     return next;
   });
 

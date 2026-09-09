@@ -34,7 +34,11 @@ export function TerminalView({ visible }: { visible: boolean }) {
   const session = sessions.find((session) => session.term_id === activeId && session.status !== "ended");
   const cwd = session?.cwd || activeTab?.cwd;
   const git = useGitSummary(cwd);
+<<<<<<< Updated upstream
   const defaultAgent = useSettings()?.defaultAgent ?? "claude";
+=======
+  const settings = useSettings();
+>>>>>>> Stashed changes
   const needsReview = session?.status === "needs_review";
   const currentLayout = layouts.find((layout) => paneIds(layout).includes(activeId ?? ""));
   const dividers = currentLayout && mode === "normal" ? paneDividers(currentLayout) : [];
@@ -57,7 +61,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
     if (!activeId || splitting.current) return;
     splitting.current = true;
     try {
-      const meta = await window.deck.term.create({ cwd });
+      const meta = await window.deck.term.create({ cwd: settings?.newTerminalCwd.split === "default" ? undefined : cwd });
       setLayouts((layouts) => {
         const withoutNew = layouts.filter((layout) => !("termId" in layout && layout.termId === meta.id));
         const found = withoutNew.some((layout) => paneIds(layout).includes(activeId));
@@ -74,7 +78,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
     if (action === "composer") setComposer((open) => !open);
     if (action === "split-right") void split("row");
     if (action === "split-down") void split("column");
-  }), [activeId, cwd]);
+  }), [activeId, cwd, settings]);
   // Summoning the window back restores keyboard focus to the active terminal.
   useEffect(() => {
     if (!visible) return;
@@ -93,7 +97,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, activeId, cwd]);
+  }, [visible, activeId, cwd, settings]);
   const resize = (divider: PaneDivider, ratio: number) => setLayouts((layouts) => layouts.map((layout) => paneIds(layout).includes(activeId ?? "") ? resizePane(layout, divider.path, ratio) : layout));
   const submit = () => {
     if (!activeId || !command.trim()) return;
@@ -148,8 +152,12 @@ export function TerminalView({ visible }: { visible: boolean }) {
         <div className="flex items-center gap-2 font-sans text-[10px] text-dim"><span>Send to active terminal</span><button className="ml-auto text-mut" onClick={() => setComposer(false)}>Close</button><button disabled={!command.trim()} onClick={submit} className="rounded border border-edge3 px-2 py-1 text-soft disabled:opacity-30">Send ⌘↵</button></div>
       </div>}
       <footer className="workbench-chrome flex h-9 shrink-0 items-center gap-2 border-t border-edge px-4 font-sans text-[11px] text-mut">
+<<<<<<< Updated upstream
         <button title="New terminal (⌘T)" onClick={() => void newTab({ cwd })} className="toolbar-button"><Icon name="plus" size={13} /></button>
         <button title={`New ${agentLabels[defaultAgent]} tab (⌘⇧T)`} onClick={() => void newTab({ cwd, agent: defaultAgent })} className="toolbar-button"><Icon name="sparkle" size={13} /></button>
+=======
+        <button title="New terminal (⌘T)" onClick={() => void newTab()} className="toolbar-button"><Icon name="plus" size={13} /></button>
+>>>>>>> Stashed changes
         {git && <button onClick={() => terminalAction("changes")} className="flex items-center gap-1.5 rounded border border-edge2 px-1.5 py-0.5"><Icon name="file" size={11} /><span>{git.changedFiles}</span><span className="text-green">+{git.added}</span><span className="text-red">−{git.removed}</span></button>}
         <button onClick={() => terminalAction("files")} className={`flex items-center gap-1.5 rounded px-2 py-1 ${panel === "files" ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="folder" size={12} />File explorer</button>
         <button onClick={() => setComposer(!composer)} className={`flex items-center gap-1.5 rounded px-2 py-1 ${composer ? "bg-card2 text-soft" : "hover:text-soft"}`}><Icon name="pencil" size={12} />Rich input <kbd className="text-dim">⌘J</kbd></button>

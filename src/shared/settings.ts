@@ -58,6 +58,16 @@ export interface AutoFixSettings {
   push: AutoFixPush;
 }
 
+/** Where a new terminal starts.
+ *  - "current": the active terminal's folder, falling back to `defaultCwd`.
+ *  - "default": always `defaultCwd`. */
+export type StartCwd = "current" | "default";
+
+export interface NewTerminalCwdSettings {
+  tab: StartCwd;
+  split: StartCwd;
+}
+
 /** The page deck opens on. */
 export type DefaultView = "terminal" | "board" | "agent" | "reviews";
 
@@ -90,8 +100,9 @@ export interface DeckSettings {
   summonHideOnBlur: boolean;
   /** Directories deck treats as repo roots (search fallbacks, repo pickers). */
   repoRoots: string[];
-  /** Where a new terminal tab starts. Supports ~. */
+  /** Folder new terminals fall back to. Supports ~. */
   defaultCwd: string;
+  newTerminalCwd: NewTerminalCwdSettings;
   /** Built-in id, custom:<id>, or <plugin-id>:<theme-id>. */
   theme: string;
   terminalAppearance: TerminalAppearanceSettings;
@@ -121,6 +132,7 @@ export const defaultSettings: DeckSettings = {
   summonHideOnBlur: true,
   repoRoots: [],
   defaultCwd: "~",
+  newTerminalCwd: { tab: "current", split: "current" },
   theme: "dark",
   terminalAppearance: {
     fontFamily: "",

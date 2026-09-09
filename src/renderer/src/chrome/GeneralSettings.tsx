@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { askModels, type DeckSettings, type OnMergeMode, type OnMergeSettings } from "../../../shared/settings.js";
+import { askModels, type DeckSettings, type OnMergeMode, type OnMergeSettings, type StartCwd } from "../../../shared/settings.js";
 import { AgentSelect } from "../agents/AgentSelect.js";
 import { Card, control, Field, Toggle } from "./settingsUi.js";
 import type { BoardColumnStatuses } from "../../../main/jira.js";
@@ -53,10 +53,21 @@ export function GeneralSettings() {
               </select>
             </Field>
           </div>
-          <Field label="New terminals start in">
+          <Field label="Default folder" hint="where terminals start when nothing else applies">
             <input placeholder="~" className={`w-full ${control}`} defaultValue={settings.defaultCwd}
               onBlur={onBlurText(settings.defaultCwd, (defaultCwd) => void update({ defaultCwd }), "~")} />
           </Field>
+          <div className="grid grid-cols-2 gap-4">
+            {([["tab", "New tab starts in"], ["split", "Split pane starts in"]] as const).map(([action, label]) => (
+              <Field key={action} label={label}>
+                <select aria-label={label} className={`w-full ${control}`} value={settings.newTerminalCwd[action]}
+                  onChange={(e) => void update({ newTerminalCwd: { ...settings.newTerminalCwd, [action]: e.target.value as StartCwd } })}>
+                  <option value="current">Active terminal's folder</option>
+                  <option value="default">Default folder</option>
+                </select>
+              </Field>
+            ))}
+          </div>
           <Field label="Repo roots" hint="searched by ⌘K and the repos fallback, one per line">
             <textarea rows={3} placeholder="~/www" className={`w-full resize-none ${control}`} defaultValue={settings.repoRoots.join("\n")}
               onBlur={(e) => {
@@ -78,6 +89,10 @@ export function GeneralSettings() {
           <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enable summon hotkey</Toggle>
           <Toggle checked={settings.summonDockToTop} onChange={(summonDockToTop) => void update({ summonDockToTop })}>Hotkey docks the window to the top of the screen (quake style)</Toggle>
           <Toggle checked={settings.summonHideOnBlur} disabled={!settings.summonDockToTop} onChange={(summonHideOnBlur) => void update({ summonHideOnBlur })}>Hide the quake panel when another app takes focus</Toggle>
+          <Field label="Quake panel height" hint="% of the screen; a resize is kept until deck quits">
+            <input type="number" min={20} max={100} disabled={!settings.summonDockToTop} className={`w-full ${control}`} defaultValue={Math.round(settings.summonHeightRatio * 100)}
+              onBlur={(e) => { const ratio = Math.min(100, Math.max(20, Number(e.target.value) || 60)) / 100; if (ratio !== settings.summonHeightRatio) void update({ summonHeightRatio: ratio }); }} />
+          </Field>
           <Field label="Summon hotkey" hint="Electron accelerator">
             <input className={`w-full ${control}`} defaultValue={settings.summonHotkey}
               onBlur={onBlurText(settings.summonHotkey, (summonHotkey) => void update({ summonHotkey }), settings.summonHotkey)} />
