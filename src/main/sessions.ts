@@ -61,6 +61,7 @@ export interface HookPayload {
   prompt?: string;
   tool_name?: string;
   source?: string;
+  notification_type?: string;
 }
 
 // Sessions deck itself runs (the "Ask deck" assistant) fire the same hooks
@@ -94,6 +95,11 @@ export function listSessions(limit = 100): AgentSession[] {
     .all(limit) as AgentSession[];
 }
 
+// Only notifications that block the turn on the user count as waiting.
+// Claude also sends idle_prompt (a minute after a turn ended) and
+// auth_success, which say nothing about the agent needing anything.
+const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog"]);
+
 const eventStatus: Record<string, SessionStatus> = {
   SessionStart: "idle",
   UserPromptSubmit: "working",
@@ -115,6 +121,7 @@ export function applyHook(payload: HookPayload, termId: string | null, agent: Ag
     : payload.hook_event_name ? eventStatus[payload.hook_event_name] : undefined;
   if (!id || !status || internalSessions.has(id)) return;
   if (payload.hook_event_name === "SessionStart" && payload.source === "compact") return;
+  if (payload.hook_event_name === "Notification" && !BLOCKING_NOTIFICATIONS.has(payload.notification_type ?? "")) return;
 
   const db = openDb();
   const now = Date.now();

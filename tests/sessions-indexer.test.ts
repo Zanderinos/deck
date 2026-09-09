@@ -48,6 +48,16 @@ describe("provider session lifecycle", () => {
     expect(listSessions()).toHaveLength(2);
     expect(listSessions().find((s) => s.agent === "codex")).toMatchObject({ session_id: "codex:same", term_id: "term", issue_key: "ABC-1", title: "Fix issue", status: "working" });
   });
+  it("only treats blocking notifications as needing input", () => {
+    const notify = (notification_type: string) => applyHook({ session_id: "n", hook_event_name: "Notification", notification_type }, "term");
+    applyHook({ session_id: "n", hook_event_name: "Stop" }, "term");
+    notify("idle_prompt");
+    expect(listSessions()[0].status).toBe("idle");
+    notify("auth_success");
+    expect(listSessions()[0].status).toBe("idle");
+    notify("permission_prompt");
+    expect(listSessions()[0].status).toBe("needs_input");
+  });
   it("tracks approval, recovery, review, interruption and termination", () => {
     const hook = (event: string) => applyHook({ session_id: "test", hook_event_name: event }, "term", "codex");
     hook("PermissionRequest");
