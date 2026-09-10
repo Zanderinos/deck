@@ -2,6 +2,7 @@ import type { DeckTheme } from "../shared/themes.js";
 import type { DeckPlugin, ExtensionCatalog } from "../shared/extensions.js";
 import type { FileEntry, LocalFile } from "../main/files.js";
 import type { Agent } from "../shared/agents.js";
+import type { KeybindCommand } from "../shared/keybinds.js";
 import type { TermCreateOptions } from "../main/pty.js";
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import type { ConvMessage, IndexProgress, SearchHit } from "../main/indexer.js";
@@ -28,6 +29,12 @@ import type { AgentSession } from "../main/sessions.js";
 import type { DeckSettings } from "../shared/settings.js";
 
 const api = {
+  /** A menu item the user picked, as the command id the keybinds use. */
+  onMenuCommand: (cb: (command: KeybindCommand) => void): (() => void) => {
+    const listener = (_e: unknown, command: KeybindCommand) => cb(command);
+    ipcRenderer.on("menu:command", listener);
+    return () => ipcRenderer.removeListener("menu:command", listener);
+  },
   onSettingsChanged: (cb: (settings: DeckSettings) => void): (() => void) => {
     const listener = (_e: unknown, settings: DeckSettings) => cb(settings);
     ipcRenderer.on("settings:changed", listener);

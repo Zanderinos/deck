@@ -139,7 +139,7 @@ export function SearchView({ initialQuery, initialSessionId }: SearchViewProps) 
                   Resume in terminal →
                 </button>
               </div>
-              <div className="min-h-0 flex-1 select-text overflow-y-auto px-4 py-3">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                 {messages.map((m, i) => (
                   <div key={i} className="mb-3">
                     <div

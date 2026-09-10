@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { BoardCache, BoardIssue } from "../../../main/board/types.js";
 import type { InboxPr } from "../../../main/prInbox.js";
 import { prKey } from "../../../shared/prs.js";
-import type { BoardSettings } from "../../../shared/settings.js";
 import { usePrInbox } from "./useInbox.js";
+import { useSettings } from "./useSettings.js";
 
 // The review queue behind both the sidebar badge and the reviews page, so the
 // two never disagree about how many PRs are waiting.
@@ -44,14 +44,11 @@ export function reviewQueue(requested: InboxPr[], board: BoardCache | undefined,
 export function useReviewQueue(done = new Set<string>()) {
   const inbox = usePrInbox();
   const [board, setBoard] = useState<BoardCache>();
-  const [boardSettings, setBoardSettings] = useState<BoardSettings>();
+  const boardSettings = useSettings()?.board;
 
   useEffect(() => {
     void window.deck.board.get().then(setBoard);
-    void window.deck.getSettings().then((s) => setBoardSettings(s.board));
-    const offBoard = window.deck.board.onChanged(setBoard);
-    const offSettings = window.deck.onSettingsChanged((s) => setBoardSettings(s.board));
-    return () => { offBoard(); offSettings(); };
+    return window.deck.board.onChanged(setBoard);
   }, []);
 
   const waiting = useMemo(() => {

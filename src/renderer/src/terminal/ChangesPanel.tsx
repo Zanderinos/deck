@@ -113,7 +113,7 @@ export function ChangesPanel({
                 <span className="text-red">−{del}</span>
               </button>
               {open && (
-                <div className="deck-diff select-text overflow-x-auto text-[11px]">
+                <div className="deck-diff overflow-x-auto text-[11px]">
                   <Diff viewType="unified" diffType={file.type} hunks={file.hunks}>
                     {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
                   </Diff>

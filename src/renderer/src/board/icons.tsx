@@ -12,7 +12,8 @@ const paths = {
   file: "M4 2h5l3 3v9H4zM9 2v4h3",
   splitRight: "M2 2h12v12H2zM8 2v12",
   splitDown: "M2 2h12v12H2zM2 8h12",
-  settings: "M3 4h10M3 8h10M3 12h10M6 2v4M10 6v4M6 10v4",
+  sliders: "M3 4h10M3 8h10M3 12h10M6 2v4M10 6v4M6 10v4",
+  cog: "M8 3.4a4.6 4.6 0 110 9.2 4.6 4.6 0 010-9.2M8 6a2 2 0 110 4 2 2 0 010-4M12.6 8h1.3M3.4 8h-1.3M8 3.4v-1.3M8 12.6v1.3M11.25 4.75l.92-.92M4.75 4.75l-.92-.92M4.75 11.25l-.92.92M11.25 11.25l.92.92",
   download: "M8 2v8M5 7l3 3 3-3M3 11v3h10v-3",
 
   branch:

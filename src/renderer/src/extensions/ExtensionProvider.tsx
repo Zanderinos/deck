@@ -4,6 +4,7 @@ import { builtInThemes, parseTheme, type DeckTheme } from "../../../shared/theme
 import { parsePluginAction, parsePluginCommand, type ExtensionCatalog, type PluginAction, type PluginCommand, type PluginContext } from "../../../shared/extensions.js";
 import { useTabs } from "../store.js";
 import { openTerminalTab } from "../lib/bus.js";
+import { useSettings } from "../lib/useSettings.js";
 import { Icon } from "../board/icons.js";
 
 export interface ExtensionCommand extends PluginCommand { key: string; pluginId: string; pluginName: string }
@@ -25,7 +26,7 @@ const emptyCatalog: ExtensionCatalog = { themes: builtInThemes, plugins: [], err
 export function ExtensionProvider({ children }: { children: ReactNode }) {
   const { tabs, activeId } = useTabs();
   const [catalog, setCatalog] = useState(emptyCatalog);
-  const [selected, setSelected] = useState("dark");
+  const selected = useSettings()?.theme ?? "dark";
   const [preview, setPreview] = useState<DeckTheme>();
   const [commands, setCommands] = useState<ExtensionCommand[]>([]);
   const [runtimeThemes, setRuntimeThemes] = useState<DeckTheme[]>([]);
@@ -40,10 +41,8 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     void reload();
-    void window.deck.getSettings().then((settings) => setSelected(settings.theme));
     const offCatalog = window.deck.extensions.onChanged(() => void reload());
-    const offSettings = window.deck.onSettingsChanged((settings) => setSelected(settings.theme));
-    return () => { offCatalog(); offSettings(); };
+    return offCatalog;
   }, [reload]);
   const themes = useMemo(() => [...new Map([...catalog.themes, ...runtimeThemes].map((theme) => [theme.id, theme])).values()], [catalog.themes, runtimeThemes]);
   const theme = preview ?? themes.find((theme) => theme.id === selected) ?? builtInThemes[0];
@@ -55,7 +54,7 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   }, [theme]);
   const selectTheme = useCallback(async (id: string) => {
     await window.deck.updateSettings({ theme: id });
-    setSelected(id); setPreview(undefined);
+    setPreview(undefined);
   }, []);
   const active = tabs.find((tab) => tab.termId === activeId);
   const pluginContext: PluginContext = { cwd: active?.cwd, agent: active?.agent, sessionTitle: active?.customTitle || active?.title, theme: theme.id };
@@ -131,7 +130,7 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
     {children}
     {panel && <div className="fixed bottom-4 right-4 top-14 z-50 flex w-[440px] max-w-[90vw] flex-col rounded-xl border border-edge3 bg-panel font-sans shadow-2xl">
       <div className="flex items-center gap-2 border-b border-edge px-4 py-3 text-sm text-soft"><Icon name="grid" />{panel.title}<button title="Close plugin panel" className="ml-auto" onClick={() => setPanel(undefined)}><Icon name="x" /></button></div>
-      <div className="md min-h-0 flex-1 select-text overflow-auto p-4 text-sm leading-6 text-body"><ReactMarkdown>{panel.markdown}</ReactMarkdown></div>
+      <div className="md min-h-0 flex-1 overflow-auto p-4 text-sm leading-6 text-body"><ReactMarkdown>{panel.markdown}</ReactMarkdown></div>
     </div>}
     {notice && <div role="status" className="fixed bottom-12 right-4 z-[60] flex max-w-md items-center gap-3 rounded-lg border border-edge3 bg-overlay px-4 py-3 font-sans text-xs text-soft shadow-xl">{notice}<button title="Dismiss notification" onClick={() => setNotice("")}><Icon name="x" size={11} /></button></div>}
   </Context.Provider>;

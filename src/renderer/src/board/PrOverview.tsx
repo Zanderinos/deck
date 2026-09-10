@@ -138,7 +138,7 @@ export function PrOverview({
   return (
     <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="flex w-full max-w-[1400px] gap-12 px-10 py-8">
-        <div className="min-w-0 flex-1 select-text">
+        <div className="min-w-0 flex-1">
           <h1 className="font-sans text-[22px] font-semibold leading-tight text-ink">{pr.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 font-sans text-[12px] text-mut">
             <Avatar name={detail?.author || pr.author} />

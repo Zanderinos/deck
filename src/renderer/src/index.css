@@ -35,7 +35,6 @@ body {
   font-family: var(--font-mono);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
-  user-select: none;
   overflow: hidden;
 }
 
@@ -234,6 +233,7 @@ body {
 /* The frameless top strip stays draggable. */
 .drag-region {
   -webkit-app-region: drag;
+  user-select: none;
 }
 .drag-region button,
 .drag-region input,

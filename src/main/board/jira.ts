@@ -140,6 +140,7 @@ async function fetchBoard() {
       id: i.id,
       key: i.key,
       summary: i.fields.summary,
+      type: t?.name,
       statusId: i.fields.status.id,
       statusName: i.fields.status.name,
       assignee: i.fields.assignee?.displayName ?? null,
