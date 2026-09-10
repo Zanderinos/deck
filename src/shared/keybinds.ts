@@ -68,6 +68,14 @@ export function matchKeybind(keybinds: Keybinds, event: KeyPress): KeybindComman
 
 const symbols: Record<string, string> = { Meta: "⌘", Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Enter: "⏎", Escape: "esc", Backspace: "⌫", Tab: "⇥", Space: "space", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" };
 
+const acceleratorParts: Record<string, string> = { Meta: "CommandOrControl", Ctrl: "Control", Enter: "Return", Escape: "Esc" };
+
+/** "Meta+Alt+Digit1" as the electron accelerator "CommandOrControl+Alt+1". */
+export function acceleratorOf(chord: string): string | undefined {
+  const parts = chord.split("+").map((part) => acceleratorParts[part] ?? part.replace(/^Digit/, ""));
+  return parts.length > 1 ? parts.join("+") : undefined;
+}
+
 /** "Meta+Shift+Enter" as "⌘⇧⏎" for display. */
 export function formatChord(chord: string): string {
   return chord.split("+").map((part) => symbols[part] ?? part.replace(/^Digit/, "")).join("");

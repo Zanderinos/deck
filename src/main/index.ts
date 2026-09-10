@@ -50,6 +50,7 @@ import {
   sessionMessages,
   startIndexer,
 } from "./indexer.js";
+import { installAppMenu } from "./menu.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import {
   setWindowRole,
@@ -556,9 +557,11 @@ app.whenReady().then(async () => {
       applyHotkey();
     if ("summonHeightRatio" in patch) quakeHeightRatio = undefined;
     if ("hideFromDock" in patch) applyDockVisibility();
+    if ("keybinds" in patch) installAppMenu();
     return next;
   });
 
+  installAppMenu();
   createWindow("main");
   createTray();
   applyHotkey();
