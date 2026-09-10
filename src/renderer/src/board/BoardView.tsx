@@ -5,6 +5,7 @@ import { boardProviderLabels } from "../../../shared/board.js";
 import type { DeckSettings } from "../../../shared/settings.js";
 import { BoardConnectionFields, boardConnected, boardConnectionHelp } from "../chrome/BoardConnectionFields.js";
 import { onNavBack } from "../lib/bus.js";
+import { BoardFilterBar, filterBoardIssues, noBoardFilters, type BoardFilters } from "./BoardFilters.js";
 import { useTabs } from "../store.js";
 import { PrScreen } from "./PrScreen.js";
 import { Icon } from "./icons.js";
@@ -43,7 +44,10 @@ export function BoardView() {
   const [syncing, setSyncing] = useState(false);
   const [selected, setSelected] = useState<BoardIssue>();
   const [diffPr, setDiffPr] = useState<IssuePr>();
-  const [mineOnly, setMineOnly] = useState(() => localStorage.getItem(MINE_ONLY_KEY) === "true");
+  const [filters, setFilters] = useState<BoardFilters>(() => ({
+    ...noBoardFilters,
+    mineOnly: localStorage.getItem(MINE_ONLY_KEY) === "true",
+  }));
   const saveSettings = async (patch: Partial<DeckSettings>) => setSettings(await window.deck.updateSettings(patch));
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [dragKey, setDragKey] = useState<string>();
@@ -96,11 +100,15 @@ export function BoardView() {
   // Older caches have no account id, so "mine" can only be honoured once a
   // sync has recorded who we are.
   const canFilterMine = Boolean(board?.myAccountId);
-  const issues = useMemo(() => {
-    if (!board) return [];
-    if (!mineOnly || !board.myAccountId) return board.issues;
-    return board.issues.filter((i) => i.assigneeId === board.myAccountId);
-  }, [board, mineOnly]);
+  const issues = useMemo(
+    () => (board ? filterBoardIssues(board.issues, filters, board.myAccountId) : []),
+    [board, filters],
+  );
+
+  const updateFilters = (patch: Partial<BoardFilters>) => {
+    if (patch.mineOnly !== undefined) localStorage.setItem(MINE_ONLY_KEY, String(patch.mineOnly));
+    setFilters((prev) => ({ ...prev, ...patch }));
+  };
 
   // Optimistic: the card lands in the column at once; a failed transition
   // puts the real board back and says why.
@@ -181,18 +189,9 @@ export function BoardView() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Header
         title="Board"
-        sub={board ? `${board.boardName} · ${issues.length} issues` : "syncing…"}
+        sub={board ? `${board.boardName} · ${board.issues.length} issues` : "syncing…"}
         right={
           <div className="flex items-center gap-4">
-            {canFilterMine && (
-              <button
-                onClick={() => setMineOnly((v) => { localStorage.setItem(MINE_ONLY_KEY, String(!v)); return !v; })}
-                className={`text-[11px] ${mineOnly ? "text-accent" : "text-dim hover:text-ink"}`}
-                title="Show only issues assigned to me"
-              >
-                {mineOnly ? "● my tasks" : "○ my tasks"}
-              </button>
-            )}
             <button
               onClick={async () => {
                 setSyncing(true);
@@ -206,6 +205,15 @@ export function BoardView() {
           </div>
         }
       />
+      {board && (
+        <BoardFilterBar
+          issues={board.issues}
+          filters={filters}
+          onChange={updateFilters}
+          canFilterMine={canFilterMine}
+          shown={issues.length}
+        />
+      )}
       {moveError && (
         <div className="flex items-center gap-3 border-b border-red/30 bg-red/10 px-6 py-1.5 text-[11px] text-red">
           <span className="min-w-0 flex-1 truncate">{moveError}</span>
