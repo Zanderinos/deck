@@ -135,14 +135,14 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     try { await newTab({ agent }); onView("terminal"); }
     catch (error) { setError(String(error)); }
   };
-  return <aside style={{ width }} onWheel={onWheel} className="relative flex shrink-0 flex-col border-r border-edge bg-panel font-sans">
+  return <aside style={{ width }} onWheel={onWheel} className="relative flex shrink-0 select-none flex-col border-r border-edge bg-panel font-sans">
     <div role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabIndex={0}
       onDoubleClick={() => { setWidth(252); localStorage.setItem("deck.sidebar.width", "252"); }}
       onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); setWidth((width) => Math.min(380, Math.max(220, width + (event.key === "ArrowRight" ? 10 : -10)))); } }}
       onPointerDown={(event) => { resizing.current = { x: event.clientX, width }; event.currentTarget.setPointerCapture(event.pointerId); }}
       onPointerMove={(event) => { if (resizing.current) setWidth(Math.min(380, Math.max(220, resizing.current.width + event.clientX - resizing.current.x))); }}
       onPointerUp={() => { resizing.current = undefined; localStorage.setItem("deck.sidebar.width", String(width)); }}
-      className="absolute -right-0.5 bottom-0 top-0 z-40 w-1 cursor-col-resize hover:bg-edge3" />
+      className="absolute -right-0.5 bottom-0 top-0 z-40 w-1 cursor-col-resize select-none hover:bg-edge3" />
     <div className="relative flex h-10 shrink-0 items-center gap-2 border-b border-edge px-3" ref={menuRef}>
       <Icon name="search" size={12} className="text-mut" />
       <input aria-label="Search tabs" placeholder="Search tabs…" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-[12px] text-soft outline-none placeholder:text-dim" />

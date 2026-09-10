@@ -280,7 +280,7 @@ export function BoardView() {
                         setDropTarget(undefined);
                       }}
                       onClick={() => setSelected(card)}
-                      className={`cursor-pointer rounded-lg border bg-card p-3 hover:border-edge3 ${
+                      className={`cursor-pointer select-none rounded-lg border bg-card p-3 hover:border-edge3 ${
                         selected?.key === card.key ? "border-accent/50" : "border-edge2"
                       } ${dragKey === card.key ? "opacity-40" : ""}`}
                     >

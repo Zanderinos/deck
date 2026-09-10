@@ -130,7 +130,7 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
     {children}
     {panel && <div className="fixed bottom-4 right-4 top-14 z-50 flex w-[440px] max-w-[90vw] flex-col rounded-xl border border-edge3 bg-panel font-sans shadow-2xl">
       <div className="flex items-center gap-2 border-b border-edge px-4 py-3 text-sm text-soft"><Icon name="grid" />{panel.title}<button title="Close plugin panel" className="ml-auto" onClick={() => setPanel(undefined)}><Icon name="x" /></button></div>
-      <div className="md min-h-0 flex-1 select-text overflow-auto p-4 text-sm leading-6 text-body"><ReactMarkdown>{panel.markdown}</ReactMarkdown></div>
+      <div className="md min-h-0 flex-1 overflow-auto p-4 text-sm leading-6 text-body"><ReactMarkdown>{panel.markdown}</ReactMarkdown></div>
     </div>}
     {notice && <div role="status" className="fixed bottom-12 right-4 z-[60] flex max-w-md items-center gap-3 rounded-lg border border-edge3 bg-overlay px-4 py-3 font-sans text-xs text-soft shadow-xl">{notice}<button title="Dismiss notification" onClick={() => setNotice("")}><Icon name="x" size={11} /></button></div>}
   </Context.Provider>;

@@ -147,7 +147,7 @@ export function TerminalView({ visible }: { visible: boolean }) {
           }}
           onPointerUp={() => { dragging.current = undefined; }}
           style={divider.direction === "row" ? { left: `calc(${divider.area.left + divider.area.width * divider.ratio}% - 3px)`, top: `${divider.area.top}%`, width: 6, height: `${divider.area.height}%`, cursor: "col-resize" } : { top: `calc(${divider.area.top + divider.area.height * divider.ratio}% - 3px)`, left: `${divider.area.left}%`, height: 6, width: `${divider.area.width}%`, cursor: "row-resize" }}
-          className="absolute z-10 outline-none hover:bg-edge3 focus-visible:bg-accent" />)}
+          className="absolute z-10 select-none outline-none hover:bg-edge3 focus-visible:bg-accent" />)}
         {!tabs.length && <div className="flex h-full items-center justify-center font-sans text-xs text-dim">⌘T to open a terminal</div>}
       </div>
       {composer && <div className="workbench-chrome mx-4 mb-3 rounded-lg border border-edge3 bg-card px-3 py-2">

@@ -736,7 +736,7 @@ export function PrDiffTab(props: PrDiffTabProps) {
           ))}
         </div>
       ) : (
-        <div ref={scrollRef} className="deck-diff min-h-0 flex-1 select-text overflow-auto py-2" style={{ "--diff-font-size": `${fontSize}px` } as CSSProperties}>
+        <div ref={scrollRef} className="deck-diff min-h-0 flex-1 overflow-auto py-2" style={{ "--diff-font-size": `${fontSize}px` } as CSSProperties}>
           {diffText === undefined && <div className="px-4 py-3 text-[11px] text-dim">loading diff…</div>}
           {diffText?.startsWith("diff unavailable") && (
             <div className="px-4 py-3 text-[11px] text-red">{diffText}</div>
