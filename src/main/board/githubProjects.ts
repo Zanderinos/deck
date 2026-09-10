@@ -11,6 +11,10 @@ import type { BoardColumn, BoardColumnStatuses, BoardIssue, IssueHit, LinkedPull
 
 const NO_STATUS: BoardColumn = { name: "No Status", statusIds: [""] };
 
+// Epics hold other issues rather than being work themselves, so they are not
+// cards; jira.ts drops its own parent level for the same reason.
+const PARENT_TYPE = /^epic$/i;
+
 function config() {
   return getSettings().githubProjects;
 }
@@ -45,6 +49,7 @@ interface Item {
     updatedAt: string;
     state: "OPEN" | "CLOSED";
     closedAt: string | null;
+    issueType: { name: string } | null;
     repository: { name: string };
     assignees: { nodes: { login: string }[] };
   } | null;
@@ -83,7 +88,7 @@ async function fetchBoard() {
       `query($owner: String!, $number: Int!, $after: String) { viewer { login } ${PROJECT}
         items(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { id updatedAt
           fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { optionId } }
-          content { ... on Issue { number title url updatedAt state closedAt repository { name } assignees(first: 3) { nodes { login } } } } } } } } } }`,
+          content { ... on Issue { number title url updatedAt state closedAt issueType { name } repository { name } assignees(first: 3) { nodes { login } } } } } } } } } }`,
       { owner, number, after },
     );
     const page = data.repositoryOwner?.projectV2;
@@ -93,12 +98,14 @@ async function fetchBoard() {
     for (const item of page.items.nodes) {
       const issue = item.content;
       if (!issue || (issue.state === "CLOSED" && issue.closedAt && Date.parse(issue.closedAt) < doneBefore)) continue;
+      if (PARENT_TYPE.test(issue.issueType?.name ?? "")) continue;
       const optionId = item.fieldValueByName?.optionId ?? "";
       const login = issue.assignees.nodes[0]?.login ?? null;
       issues.push({
         id: item.id,
         key: `${issue.repository.name}#${issue.number}`,
         summary: issue.title,
+        type: issue.issueType?.name,
         statusId: optionId,
         statusName: page.field?.options.find((o) => o.id === optionId)?.name ?? NO_STATUS.name,
         assignee: login,

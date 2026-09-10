@@ -16,6 +16,8 @@ export interface BoardIssue {
   /** Human identifier: APP-12 in Jira and Linear, repo#12 in GitHub. */
   key: string;
   summary: string;
+  /** Tracker's own issue type where it has one; absent on trackers without. */
+  type?: string;
   statusId: string;
   statusName: string;
   assignee: string | null;
