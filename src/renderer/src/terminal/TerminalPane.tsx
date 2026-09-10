@@ -67,6 +67,12 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
         window.deck.term.input(termId, "\x15");
         return false;
       }
+      // macOptionIsMeta turns every Option combo into ESC+key, but non-US layouts
+      // type symbols such as @ { } [ ] | with Option. Send those as text.
+      if (event.type === "keydown" && event.altKey && !event.metaKey && !event.ctrlKey && /^[!-\/:-@\[-`{-~]$/.test(event.key)) {
+        window.deck.term.input(termId, event.key);
+        return false;
+      }
       return !((event.metaKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) || boundChords.current.has(chordOf(event) ?? ""));
     });
 
@@ -93,11 +99,20 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
       if (input.submitted) onCommandRef.current?.(input.submitted);
     });
     const onTitleChange = term.onTitleChange(onTitle);
-    const onResize = term.onResize(({ cols, rows }) => window.deck.term.resize(termId, cols, rows));
     // One pty can be shown by two panes (a PR's agent panel and its terminal
     // tab). Only a visible pane may size the pty; a hidden one cannot measure
     // itself and would push a bogus size to the process.
-    const claimSize = () => { if (host.clientWidth > 0) window.deck.term.resize(termId, term.cols, term.rows); };
+    // Layout also settles in steps (pane drags, sidebar toggles, window
+    // resizes) and the fit addon clamps a momentarily tiny host to 2 columns.
+    // A TUI that redraws at such a width leaves wrapped frames in the
+    // scrollback that later redraws overlap, so xterm fits at once but the
+    // process only hears a size that has held for a moment.
+    let claim: ReturnType<typeof setTimeout> | undefined;
+    const claimSize = () => {
+      clearTimeout(claim);
+      claim = setTimeout(() => { if (!disposed && host.clientWidth > 0) window.deck.term.resize(termId, term.cols, term.rows); }, 100);
+    };
+    const onResize = term.onResize(claimSize);
     claimSize();
     void window.deck.term.attach(termId).then(({ buffer, sequence, cols, rows }) => {
       if (disposed) return;
@@ -125,6 +140,7 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
 
     return () => {
       disposed = true;
+      clearTimeout(claim);
       observer.disconnect();
       offData();
       onInput.dispose();
@@ -210,7 +226,13 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
     const term = termRef.current;
     if (!term) return;
     if (action === "find") setFinding((open) => !open);
-    if (action === "clear") term.clear();
+    if (action === "clear") {
+      term.clear();
+      // A full-screen TUI only repaints on a size change, so nudge the pty or
+      // the cleared viewport stays blank until the program's next update.
+      window.deck.term.resize(termId, term.cols - 1, term.rows);
+      window.deck.term.resize(termId, term.cols, term.rows);
+    }
     if (action === "focus") term.focus();
     if (action === "export") {
       const lines = Array.from({ length: term.buffer.active.length }, (_, index) => term.buffer.active.getLine(index)?.translateToString(true) ?? "");
