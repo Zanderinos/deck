@@ -28,6 +28,7 @@ export function getSettings(): DeckSettings {
     linear: { ...defaultSettings.linear, ...stored.linear },
     githubProjects: { ...defaultSettings.githubProjects, ...stored.githubProjects },
     github: { ...defaultSettings.github, ...stored.github },
+    agentSharing: { ...defaultSettings.agentSharing, ...stored.agentSharing },
     autoFix: { ...defaultSettings.autoFix, ...stored.autoFix },
     newTerminalCwd: { ...defaultSettings.newTerminalCwd, ...stored.newTerminalCwd },
     terminalAppearance: { ...defaultSettings.terminalAppearance, ...stored.terminalAppearance },

@@ -8,6 +8,16 @@ const exec = promisify(execFile);
 // Working-tree changes for the review panel: everything not yet pushed to a
 // commit — staged, unstaged, and untracked — as one unified diff.
 
+/** The repository a directory belongs to, or undefined when it is not in one. */
+export async function repoRoot(cwd: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, timeout: 5_000 });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface WorkingChanges {
   /** Unified diff text, empty when the tree is clean. */
   diff: string;

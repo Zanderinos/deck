@@ -50,6 +50,7 @@ import {
   sessionMessages,
   startIndexer,
 } from "./indexer.js";
+import { sharingSummary, setCurrentProject } from "./sharing.js";
 import { installAppMenu } from "./menu.js";
 import { listRepos, searchGithub, searchRepos } from "./providers.js";
 import {
@@ -88,7 +89,7 @@ import {
   type ReviewEvent,
 } from "./github.js";
 import { installedVersions, projectRuntime } from "./projectRuntime.js";
-import { gitBranches, gitSummary, workingChanges } from "./git.js";
+import { gitBranches, gitSummary, repoRoot, workingChanges } from "./git.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import {
   afterPrMerged,
@@ -359,6 +360,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("repos:list", () => listRepos());
   onSessionsChanged(() => broadcast("sessions:changed", listSessions()));
   ipcMain.handle("sessions:list", () => listSessions());
+  ipcMain.handle("sharing:summary", () => sharingSummary());
+  ipcMain.handle("sharing:current", async (_e, cwd?: string) =>
+    setCurrentProject(cwd ? await repoRoot(cwd) : undefined));
   ipcMain.handle("sessions:remove", (_e, id: string) => removeSession(id));
   ipcMain.handle("files:list", (_e, root: string, directory?: string) =>
     listFiles(root, directory),

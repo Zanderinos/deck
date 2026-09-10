@@ -2,6 +2,7 @@ import type { Agent } from "../shared/agents.js";
 import { checkoutFor, fixPrompt, runningFixes, startFix, type FixProblem } from "./autofix.js";
 import { prDetail } from "./github.js";
 import { lastMessages } from "./indexer.js";
+import { canShareBoard, canSharePullRequests, canShareSession, sharedSessions, WITHHELD } from "./sharing.js";
 import { createIssue, getBoardCache, searchIssues } from "./board/board.js";
 import { boardProvider } from "./board/provider.js";
 import { attentionReasons, getPrInbox, refreshPrInbox, type InboxPr } from "./prInbox.js";
@@ -58,13 +59,17 @@ const tools: Tool[] = [
     name: "list_sessions",
     description: "Live agent sessions deck tracks (Claude Code and Codex), with status, project, ticket and terminal. Statuses: working, needs_input, needs_review, idle.",
     inputSchema: schema({}),
-    run: async () => listSessions().filter((s) => s.status !== "ended"),
+    run: async () => sharedSessions(),
   },
   {
     name: "read_session",
     description: "The last messages of an agent session's transcript, to learn what it did or what it is asking.",
     inputSchema: schema({ session_id: str("Session id from list_sessions"), limit: { type: "integer", description: "Messages to return, default 20" } }, ["session_id"]),
-    run: async (args) => lastMessages(String(args.session_id), Number(args.limit) || 20),
+    run: async (args) => {
+      const sessionId = String(args.session_id);
+      if (!canShareSession(sessionId)) throw new Error(`That session is not shared with you. ${WITHHELD}`);
+      return lastMessages(sessionId, Number(args.limit) || 20);
+    },
   },
   {
     name: "send_to_session",
@@ -106,6 +111,7 @@ const tools: Tool[] = [
     description: "The user's open pull requests (with review decision, CI state, mergeability, what needs attention and whether a fix agent is already on it) and PRs waiting on their review.",
     inputSchema: schema({ refresh: { type: "boolean", description: "Fetch fresh data from GitHub first" } }),
     run: async (args) => {
+      if (!canSharePullRequests()) return { error: WITHHELD };
       if (args.refresh) await refreshPrInbox();
       return describeInbox();
     },
@@ -115,6 +121,7 @@ const tools: Tool[] = [
     description: "Details of one pull request: checks, reviewers, commits, changed files.",
     inputSchema: schema({ repo: str("owner/name"), number: { type: "integer" } }, ["repo", "number"]),
     run: async (args) => {
+      if (!canSharePullRequests()) throw new Error(WITHHELD);
       const detail = await prDetail(String(args.repo), Number(args.number));
       if (!detail) throw new Error("PR not found");
       const { files, commits, ...rest } = detail;
@@ -141,7 +148,10 @@ const tools: Tool[] = [
     name: "search_issues",
     description: "Search the issue tracker beyond the board mirror: backlog, epics, other projects. The query is in the tracker's own language: JQL for Jira, free text for Linear, GitHub issue search syntax for GitHub Projects. Returns key, summary, status, type, assignee, priority, parent, description and url.",
     inputSchema: schema({ query: str('e.g. Jira: project = APP AND statusCategory = "To Do" ORDER BY priority; GitHub: is:open label:bug'), max: { type: "integer", description: "1-50, default 25" } }, ["query"]),
-    run: async (args) => searchIssues(String(args.query), Number(args.max) || 25),
+    run: async (args) => {
+      if (!canShareBoard()) throw new Error(WITHHELD);
+      return searchIssues(String(args.query), Number(args.max) || 25);
+    },
   },
   {
     name: "create_issue",

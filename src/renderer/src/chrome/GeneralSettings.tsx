@@ -80,6 +80,35 @@ export function GeneralSettings() {
           </Field>
         </Card>
 
+        <Card title="What deck may share with the agent" description="The agent page sends your question to Claude or Codex together with context about your work. This is what deck may include.">
+          <Field label="Sessions">
+            <select aria-label="Sessions shared with the agent" className={`w-full ${control}`} value={settings.agentSharing.mode}
+              onChange={(e) => {
+                const mode = e.target.value as DeckSettings["agentSharing"]["mode"];
+                if (mode !== settings.agentSharing.mode) void update({ agentSharing: { ...settings.agentSharing, mode } });
+              }}>
+              <option value="all">Every live session, whichever project it is in</option>
+              <option value="current">Only sessions in the project you are working in</option>
+              <option value="allowlist">Only sessions in the projects listed below</option>
+            </select>
+          </Field>
+          {settings.agentSharing.mode === "current" && (
+            <p className="-mt-2 text-[11px] text-mut">The repository the active terminal tab is in. With no repository open, no session is shared.</p>
+          )}
+          {settings.agentSharing.mode === "allowlist" && (
+            <Field label="Shared projects" hint="one directory per line; sessions inside them may be shared">
+              <textarea rows={3} placeholder="~/www/my-app" className={`w-full resize-none ${control}`} defaultValue={settings.agentSharing.projects.join("\n")}
+                onBlur={(e) => {
+                  const projects = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+                  if (projects.join("\n") !== settings.agentSharing.projects.join("\n")) void update({ agentSharing: { ...settings.agentSharing, projects } });
+                }} />
+            </Field>
+          )}
+          <Toggle checked={settings.agentSharing.transcripts} onChange={(transcripts) => void update({ agentSharing: { ...settings.agentSharing, transcripts } })}>Include the last messages of sessions waiting on you</Toggle>
+          <Toggle checked={settings.agentSharing.board} onChange={(board) => void update({ agentSharing: { ...settings.agentSharing, board } })}>Include your issue board</Toggle>
+          <Toggle checked={settings.agentSharing.pullRequests} onChange={(pullRequests) => void update({ agentSharing: { ...settings.agentSharing, pullRequests } })}>Include your pull request inbox</Toggle>
+        </Card>
+
         <div className="flex flex-col gap-4">
         <Card title="Summon hotkey" description="Bring Deck up from anywhere with one keystroke.">
           <div className="flex items-center gap-3">

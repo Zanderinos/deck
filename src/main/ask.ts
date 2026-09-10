@@ -7,9 +7,10 @@ import { newConversation, runTurn, type AskResult, type Conversation, type OnEve
 import { lastMessages } from "./indexer.js";
 import { runningFixes } from "./autofix.js";
 import { boardLabel, boardProjects, toolNames } from "./orchestrator.js";
+import { sharingSummary, canShareBoard, canSharePullRequests, canShareTranscripts, sharedSessions, WITHHELD } from "./sharing.js";
 import { attentionReasons, getPrInbox } from "./prInbox.js";
 import { MCP_URL } from "./server.js";
-import { listSessions, type AgentSession } from "./sessions.js";
+import { type AgentSession } from "./sessions.js";
 
 // Each turn receives Deck's current session registry, the PR inbox and the
 // same cached issue board shown in the app, plus deck's MCP tools for acting.
@@ -70,7 +71,7 @@ function describe(session: AgentSession, index: number): string {
       : "   not attached to a deck terminal",
     session.review_note ? `   decisions it wants reviewed:\n${session.review_note}` : "",
   ];
-  if (WAITING.includes(session.status)) {
+  if (WAITING.includes(session.status) && canShareTranscripts()) {
     const tail = lastExchange(session.session_id);
     if (tail) lines.push(`   last messages:\n${tail}`);
   }
@@ -79,16 +80,21 @@ function describe(session: AgentSession, index: number): string {
 
 /** The snapshot of the session registry prepended to every turn. */
 export function sessionSnapshot(): string {
-  const sessions = listSessions().filter((s) => s.status !== "ended");
-  if (sessions.length === 0) return "No agent sessions are running right now.";
+  const sessions = sharedSessions();
+  const { shared, total } = sharingSummary();
+  const withheld = total - shared
+    ? `\n\n${total - shared} further live session(s) are not shared with you. ${WITHHELD} Do not guess at them.`
+    : "";
+  if (sessions.length === 0) return `No agent sessions are running right now.${withheld}`;
   const waiting = sessions.filter((s) => WAITING.includes(s.status)).length;
   return [
     `${sessions.length} live agent session(s), ${waiting} waiting on the user. Statuses: working = busy, needs_input = asked the user something, needs_review = paused for the user to verify changes, idle = finished its turn.`,
     ...sessions.map(describe),
-  ].join("\n\n");
+  ].join("\n\n") + withheld;
 }
 
 export function boardSnapshot(): string {
+  if (!canShareBoard()) return WITHHELD;
   const board = getBoardCache();
   const tracker = boardLabel();
   if (!board) return boardConfigured()
@@ -118,6 +124,7 @@ export function boardSnapshot(): string {
 
 /** The user's PRs, with what needs them, and PRs waiting on their review. */
 export function inboxSnapshot(): string {
+  if (!canSharePullRequests()) return WITHHELD;
   const inbox = getPrInbox();
   if (!inbox) return "No PR data yet (gh not authenticated or first refresh pending).";
   const fixes = runningFixes();
@@ -136,7 +143,7 @@ export function inboxSnapshot(): string {
 }
 
 function askContext(): string {
-  const projects = boardProjects();
+  const projects = canShareBoard() ? boardProjects() : [];
   return `<deck_context>\nNow: ${new Date().toISOString()}\nBoard tracker: ${boardLabel()}${projects.length ? `\nProjects on the board: ${projects.join(", ")}` : ""}\n\n<agent_sessions>\n${sessionSnapshot()}\n</agent_sessions>\n\n<pull_requests>\n${inboxSnapshot()}\n</pull_requests>\n\n<issue_board>\n${boardSnapshot()}\n</issue_board>\n</deck_context>`;
 }
 

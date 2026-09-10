@@ -55,6 +55,23 @@ export interface OnMergeSettings {
   mode: OnMergeMode;
 }
 
+/** Which sessions the agent page may be told about: every live one, those in
+ *  the repository being worked in, or those under a listed project. */
+export type SharingMode = "all" | "current" | "allowlist";
+
+export interface AgentSharingSettings {
+  mode: SharingMode;
+  /** Directories whose sessions may be shared in "allowlist" mode. Supports ~;
+   *  a session matches when its cwd is the directory or sits inside it. */
+  projects: string[];
+  /** Whether a shared session may also carry its last messages. */
+  transcripts: boolean;
+  /** Whether the cached issue board is shared at all. */
+  board: boolean;
+  /** Whether the pull request inbox is shared at all. */
+  pullRequests: boolean;
+}
+
 export interface GithubSettings {
   /** Org/user that scopes PR search; empty searches all of GitHub. */
   owner: string;
@@ -115,6 +132,7 @@ export interface DeckSettings {
   linear: LinearSettings;
   githubProjects: GithubProjectsSettings;
   github: GithubSettings;
+  agentSharing: AgentSharingSettings;
   windowMode: WindowMode;
   /** With a separate hotkey window: keep its tabs apart from the regular window's. */
   hotkeyOwnTabs: boolean;
@@ -159,6 +177,7 @@ export const defaultSettings: DeckSettings = {
   linear: { apiKey: "", teamKey: "" },
   githubProjects: { owner: "", projectNumber: "" },
   github: { owner: "" },
+  agentSharing: { mode: "all", projects: [], transcripts: true, board: true, pullRequests: true },
   windowMode: "shared",
   hotkeyOwnTabs: false,
   summonHotkey: "Alt+Space",

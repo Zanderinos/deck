@@ -178,6 +178,11 @@ export function TabProvider({ children }: { children: ReactNode }) {
     setTabs((tabs) => tabs.map((tab) => tab.termId === termId ? { ...tab, cwd } : tab));
   }), []);
 
+  // Tells main which directory the active tab is in, for the "current
+  // project" sharing mode.
+  const activeCwdNow = tabs.find((tab) => tab.termId === activeId)?.cwd;
+  useEffect(() => { void window.deck.sharing.setCurrentProject(activeCwdNow); }, [activeCwdNow]);
+
   useEffect(() => window.deck.term.onBusy((termId, busy) => {
     setTabs((tabs) => tabs.map((tab) => tab.termId === termId ? { ...tab, busy } : tab));
   }), []);
