@@ -9,7 +9,7 @@ import { ReviewsView } from "./board/ReviewsView.js";
 import { SettingsView, type SettingsSection } from "./chrome/SettingsView.js";
 import { useSettings } from "./lib/useSettings.js";
 import { isRecordingKeys } from "./lib/useKeybinds.js";
-import { matchKeybind, resolveKeybinds } from "../../shared/keybinds.js";
+import { matchKeybind, resolveKeybinds, type KeybindCommand } from "../../shared/keybinds.js";
 import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
@@ -123,6 +123,39 @@ function Shell() {
     setView("search");
   }, []);
 
+  // Shared by the keyboard shortcuts and the application menu, which sends the
+  // same command ids. Returns whether the command was handled.
+  const runCommand = useCallback((command: KeybindCommand): boolean => {
+    if (command === "search") setSearchOpen((open) => !open);
+    else if (command === "sidebar") toggleSidebar();
+    else if (command === "settings") setView("settings");
+    else if (command === "view.terminal") setView("terminal");
+    else if (command === "view.board") setView("board");
+    else if (command === "view.agent") setView("agent");
+    else if (command === "view.reviews") setView("reviews");
+    else if (command === "zen") setMode(mode === "zen" ? "normal" : "zen");
+    else if (command === "presentation") setMode(mode === "presentation" ? "normal" : "presentation");
+    else if (command === "tab.new" || command === "tab.newAgent") {
+      setView("terminal");
+      void newTab(command === "tab.newAgent" ? { agent: settings?.defaultAgent } : undefined);
+    } else if (command === "tab.close" && view === "terminal" && activeId) {
+      closeTab(activeId);
+    } else if (command === "tab.reopen") {
+      setView("terminal");
+      void reopenTab();
+    } else if ((command === "tab.next" || command === "tab.prev") && tabs.length) {
+      const index = tabs.findIndex((tab) => tab.termId === activeId);
+      const tab = tabs[(index + (command === "tab.next" ? 1 : -1) + tabs.length) % tabs.length];
+      focusTab(tab.termId);
+      setView("terminal");
+    } else if (command === "window.new") {
+      void window.deck.window.open();
+    } else return false;
+    return true;
+  }, [view, activeId, newTab, closeTab, reopenTab, tabs, focusTab, settings, toggleSidebar, setView, mode, setMode]);
+
+  useEffect(() => window.deck.onMenuCommand(runCommand), [runCommand]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isRecordingKeys(e)) return;
@@ -136,35 +169,14 @@ function Shell() {
       if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         const tab = tabs[Number(e.key) - 1];
         if (tab) { focusTab(tab.termId); setView("terminal"); }
-      } else if (command === "sidebar") toggleSidebar();
-      else if (command === "settings") setView("settings");
-      else if (command === "view.terminal") setView("terminal");
-      else if (command === "view.board") setView("board");
-      else if (command === "view.agent") setView("agent");
-      else if (command === "view.reviews") setView("reviews");
-      else if (command === "tab.new" || command === "tab.newAgent") {
-        setView("terminal");
-        void newTab(command === "tab.newAgent" ? { agent: settings?.defaultAgent } : undefined);
-      } else if (command === "tab.close" && view === "terminal" && activeId) {
-        closeTab(activeId);
-      } else if (command === "tab.reopen") {
-        setView("terminal");
-        void reopenTab();
-      } else if ((command === "tab.next" || command === "tab.prev") && tabs.length) {
-        const index = tabs.findIndex((tab) => tab.termId === activeId);
-        const tab = tabs[(index + (command === "tab.next" ? 1 : -1) + tabs.length) % tabs.length];
-        focusTab(tab.termId);
-        setView("terminal");
-      } else if (command === "window.new") {
-        void window.deck.window.open();
-      } else {
+      } else if (!command || !runCommand(command)) {
         return;
       }
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, view, activeId, newTab, closeTab, reopenTab, tabs, focusTab, settings, keybinds, toggleSidebar]);
+  }, [searchOpen, tabs, focusTab, setView, keybinds, runCommand]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>

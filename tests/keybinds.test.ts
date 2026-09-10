@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chordOf, defaultKeybinds, formatChord, matchKeybind, resolveKeybinds } from "../src/shared/keybinds.js";
+import { acceleratorOf, chordOf, defaultKeybinds, formatChord, matchKeybind, resolveKeybinds } from "../src/shared/keybinds.js";
 
 const press = (over: Partial<Parameters<typeof chordOf>[0]>) => ({ key: "", code: "", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...over });
 
@@ -23,6 +23,14 @@ describe("keybinds", () => {
     expect(matchKeybind(keybinds, press({ key: "t", code: "KeyT", metaKey: true, shiftKey: true }))).toBe("tab.reopen");
     expect(matchKeybind(keybinds, press({ key: "n", code: "KeyN", metaKey: true, shiftKey: true }))).toBe("tab.newAgent");
     expect(matchKeybind(keybinds, press({ key: "n", code: "KeyN", metaKey: true }))).toBe("window.new");
+  });
+
+  it("turns chords into electron accelerators", () => {
+    expect(acceleratorOf("Meta+,")).toBe("CommandOrControl+,");
+    expect(acceleratorOf("Meta+Alt+Digit2")).toBe("CommandOrControl+Alt+2");
+    expect(acceleratorOf(defaultKeybinds.zen)).toBe("CommandOrControl+Shift+Return");
+    expect(acceleratorOf("Ctrl+Tab")).toBe("Control+Tab");
+    expect(acceleratorOf("F5")).toBeUndefined();
   });
 
   it("formats chords with mac symbols", () => {
