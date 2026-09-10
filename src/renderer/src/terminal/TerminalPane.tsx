@@ -106,13 +106,18 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
     // resizes) and the fit addon clamps a momentarily tiny host to 2 columns.
     // A TUI that redraws at such a width leaves wrapped frames in the
     // scrollback that later redraws overlap, so xterm fits at once but the
-    // process only hears a size that has held for a moment.
+    // process only hears a size that has held for a moment. A hidden window
+    // is skipped too: the quake panel follows the display under the cursor,
+    // so a lid close moves it to the laptop screen and back while nobody is
+    // looking, and the process would redraw at each width in between.
     let claim: ReturnType<typeof setTimeout> | undefined;
     const claimSize = () => {
       clearTimeout(claim);
-      claim = setTimeout(() => { if (!disposed && host.clientWidth > 0) window.deck.term.resize(termId, term.cols, term.rows); }, 100);
+      claim = setTimeout(() => { if (!disposed && host.clientWidth > 0 && document.visibilityState === "visible") window.deck.term.resize(termId, term.cols, term.rows); }, 100);
     };
     const onResize = term.onResize(claimSize);
+    const onVisibility = () => { if (document.visibilityState === "visible" && host.clientWidth > 0) { fit.fit(); claimSize(); } };
+    document.addEventListener("visibilitychange", onVisibility);
     claimSize();
     void window.deck.term.attach(termId).then(({ buffer, sequence, cols, rows }) => {
       if (disposed) return;
@@ -141,6 +146,7 @@ export function TerminalPane({ termId, cwd, busy, active, focused = active, onTi
     return () => {
       disposed = true;
       clearTimeout(claim);
+      document.removeEventListener("visibilitychange", onVisibility);
       observer.disconnect();
       offData();
       onInput.dispose();
