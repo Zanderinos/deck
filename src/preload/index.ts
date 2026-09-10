@@ -132,6 +132,10 @@ const api = {
     changes: (cwd: string): Promise<WorkingChanges> => ipcRenderer.invoke("git:changes", cwd),
     branches: (cwd: string): Promise<string[]> => ipcRenderer.invoke("git:branches", cwd),
   },
+  sharing: {
+    summary: (): Promise<{ shared: number; total: number }> => ipcRenderer.invoke("sharing:summary"),
+    setCurrentProject: (cwd?: string): Promise<void> => ipcRenderer.invoke("sharing:current", cwd),
+  },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
     remove: (id: string): Promise<void> => ipcRenderer.invoke("sessions:remove", id),

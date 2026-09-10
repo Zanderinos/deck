@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AgentSession } from "../../../main/sessions.js";
 import { agentLabels } from "../../../shared/agents.js";
 import { Icon } from "../board/icons.js";
@@ -43,6 +43,14 @@ export function AgentPage({ visible }: { visible: boolean }) {
 
   const toggleRail = () => setRail((open) => { localStorage.setItem("deck.agent.rail", open ? "hidden" : "visible"); return !open; });
 
+  // How many sessions the next question will carry, refreshed when the
+  // sessions or the setting change.
+  const [shared, setShared] = useState<{ shared: number; total: number }>();
+  useEffect(() => {
+    void window.deck.sharing.summary().then(setShared);
+    return window.deck.onSettingsChanged(() => void window.deck.sharing.summary().then(setShared));
+  }, [sessions]);
+
   const live = sessions.filter((s) => s.status !== "ended");
   const waiting = live.filter(isWaiting);
   const attention = useAttentionCount();
@@ -57,6 +65,9 @@ export function AgentPage({ visible }: { visible: boolean }) {
           <span className="font-bold text-ink">Agent</span>
           {turns.length > 0 && <button onClick={reset} className="rounded-md border border-edge2 px-2 py-0.5 text-[11px] text-body hover:text-ink">New chat</button>}
           <span className="ml-auto text-[11px] text-dim">
+            {shared && shared.shared < shared.total && (
+              <span title="Restricted in Settings → What deck may share with the agent" className="mr-2 text-orange">sharing {shared.shared} of {shared.total} sessions</span>
+            )}
             {live.filter((s) => s.status === "working").length} running · {attention} need you
           </span>
           <button onClick={toggleRail} aria-pressed={rail} aria-label="Toggle agent rail" title="Sessions and pull requests" className={`rounded p-1 ${rail ? "bg-card2 text-soft" : "text-dim hover:text-ink"}`}><Icon name="sidebar" size={14} /></button>
