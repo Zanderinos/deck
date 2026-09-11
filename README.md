@@ -5,8 +5,8 @@
 <h1 align="center">Deck</h1>
 
 <p align="center">
-  <strong>An AI-native software delivery workflow for teams that run on Jira.</strong><br>
-  Jira, Claude Code, Codex and GitHub on one Kanban board. Pick a card, code it with an agent, review the PR, ship it. One screen.
+  <strong>An AI-native software delivery workflow, wrapped around the tracker you already use.</strong><br>
+  Jira, Linear or GitHub Projects beside Claude Code, Codex and GitHub, on one Kanban board. Pick a card, code it with an agent, review the PR, ship it. One screen.
 </p>
 
 <p align="center">
@@ -26,12 +26,13 @@
 
 ## Why Deck
 
-Most engineering teams run their delivery on Jira. Coding agents have made the writing part fast, but the loop around it is still slow: find the ticket in Jira, open a terminal for Claude Code or Codex, switch to GitHub to review, back to Jira to move the card. Every hop costs the thread you were holding, and none of these tools know about each other.
+Most engineering teams run their delivery from an issue tracker, whether that is Jira, Linear or GitHub Projects. Coding agents have made the writing part fast, but the loop around it is still slow: find the ticket in the tracker, open a terminal for Claude Code or Codex, switch to GitHub to review, go back to the tracker to move the card. Every hop costs the thread you were holding, and none of these tools know about each other.
 
 Deck's answer is a Kanban board that is also your terminal, your review queue and your orchestrator:
 
-- **Start from the card.** Every Jira issue on the board can launch a Claude Code or Codex session bound to that ticket, in the right repository. The agent's live status shows on the card.
-- **Move the card, move the ticket.** Drag between columns and Deck fires the Jira transition. The board syncs in the background, so Jira's slowness stays out of your way.
+- **Bring your own tracker.** Jira, Linear or a GitHub Project, picked in Settings. Each one is an adapter behind the same board, so every feature below works the same whichever you connect.
+- **Start from the card.** Every issue on the board can launch a Claude Code or Codex session bound to that ticket, in the right repository. The agent's live status shows on the card.
+- **Move the card, move the ticket.** Drag between columns and Deck fires the matching transition in your tracker. The board syncs in the background, so a slow tracker stays out of your way.
 - **Review where you code.** Pull requests waiting on you arrive as a queue with the diff, checks and linked ticket. Approve and the next one loads.
 - **Orchestrate the whole loop.** Ask Deck what needs attention and it can start agents, put one on a broken PR, or file the next issue. Every answer sees your sessions, your PR inbox and your board.
 - **Search everything you ever asked.** One palette over live sessions and the full chat history of Claude Code and Codex, so the answer from last week is a ⌘K away.
@@ -49,11 +50,11 @@ Summon it with **⌥ Space**. Code, review and orchestrate without leaving the s
 
 ### Board <kbd>⌘⌥2</kbd>
 
-Your Jira board as a Kanban view inside Deck. Cards carry the agents that have touched them; opening a card shows the ticket, its sessions and its pull requests, and starts a new Claude Code or Codex session on it. Dragging a card to another column fires the matching Jira transition, optimistically, with the sync catching up in the background.
+Your board as a Kanban view inside Deck, mirroring Jira, Linear or a GitHub Project. Cards carry the agents that have touched them; opening a card shows the issue, its sessions and its pull requests, and starts a new Claude Code or Codex session on it. Dragging a card to another column fires the matching transition in the tracker, optimistically, with the sync catching up in the background.
 
 ### Agent page <kbd>⌘⌥3</kbd>
 
-Deck's orchestrator, front and centre. Every question gets the live sessions, your PR inbox and the synced Jira board as context. Through Deck's own MCP tools it can:
+Deck's orchestrator, front and centre. Every question gets the live sessions, your PR inbox and the synced board as context. Through Deck's own MCP tools it can:
 
 - start Claude or Codex agents in Deck terminals, answer or steer running ones, and read their transcripts
 - put an agent on a broken PR
@@ -63,7 +64,7 @@ The rail lists what needs you and every live session. The sidebar badge counts i
 
 ### Reviews page <kbd>⌘⌥4</kbd>
 
-Every pull request waiting on your review, one at a time like a mail client. Each shows the linked Jira task, the overview, the diff and a pinned agent helper (<kbd>a</kbd>). Approve or request changes and the queue moves on. <kbd>n</kbd> / <kbd>p</kbd> step through without leaving. Review threads collapse to one line like GitHub's, and resolved or outdated threads start collapsed.
+Every pull request waiting on your review, one at a time like a mail client. Each shows the linked issue, the overview, the diff and a pinned agent helper (<kbd>a</kbd>). Approve or request changes and the queue moves on. <kbd>n</kbd> / <kbd>p</kbd> step through without leaving. Review threads collapse to one line like GitHub's, and resolved or outdated threads start collapsed.
 
 ### Auto-fix
 
