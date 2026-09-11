@@ -11,10 +11,12 @@ import { SettingsProvider, useSettings } from "./lib/useSettings.js";
 import { isRecordingKeys } from "./lib/useKeybinds.js";
 import { matchKeybind, resolveKeybinds, type KeybindCommand } from "../../shared/keybinds.js";
 import { useTerminalAppearance } from "./lib/useTerminalAppearance.js";
+import { Onboarding } from "./chrome/Onboarding.js";
 import { Sidebar } from "./chrome/Sidebar.js";
 import { Titlebar } from "./chrome/Titlebar.js";
 import { onOpenTerminalTab, requestNavBack } from "./lib/bus.js";
 import { SearchOverlay } from "./search/SearchOverlay.js";
+import { WorktreeClosePrompt } from "./chrome/WorktreeClosePrompt.js";
 import { SearchView } from "./search/SearchView.js";
 import { TabProvider, useTabs } from "./store.js";
 import { TerminalView } from "./terminal/TerminalView.js";
@@ -52,9 +54,11 @@ function Shell() {
   const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => { pageRef.current?.getAnimations().forEach((animation) => { animation.cancel(); animation.play(); }); }, [view]);
   const [preview, setPreview] = useState<{ sessionId: string; query: string }>();
-  const { tabs, focusTab, newTab, closeTab, reopenTab, activeId } = useTabs();
+  const { tabs, focusTab, newTab, requestCloseTab, reopenTab, activeId } = useTabs();
   const settings = useSettings();
   const keybinds = resolveKeybinds(settings?.keybinds);
+  // First run sets the summon hotkey up before the workbench is usable.
+  const onboarding = settings?.onboarded === false;
 
   // View history for the mouse back/forward buttons.
   const history = useRef({ stack: ["terminal"] as View[], index: 0 });
@@ -77,7 +81,7 @@ function Shell() {
   }, [mode]);
   useEffect(() => {
     const onModeKey = (event: KeyboardEvent) => {
-      if (searchOpen || isRecordingKeys(event)) return;
+      if (searchOpen || onboarding || isRecordingKeys(event)) return;
       const command = matchKeybind(keybinds, event);
       // Other pages use Escape themselves (closing composers and menus).
       if (event.key === "Escape" && mode !== "normal" && view === "terminal") {
@@ -90,7 +94,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onModeKey, true);
     return () => window.removeEventListener("keydown", onModeKey, true);
-  }, [mode, setMode, searchOpen, view, keybinds]);
+  }, [mode, setMode, searchOpen, onboarding, view, keybinds]);
 
   const goBack = useCallback(() => {
     if (requestNavBack()) return; // an overlay consumed it
@@ -141,7 +145,7 @@ function Shell() {
       setView("terminal");
       void newTab(command === "tab.newAgent" ? { agent: settings?.defaultAgent } : undefined);
     } else if (command === "tab.close" && view === "terminal" && activeId) {
-      closeTab(activeId);
+      requestCloseTab(activeId);
     } else if (command === "tab.reopen") {
       setView("terminal");
       void reopenTab();
@@ -154,13 +158,13 @@ function Shell() {
       void window.deck.window.open();
     } else return false;
     return true;
-  }, [view, activeId, newTab, closeTab, reopenTab, tabs, focusTab, settings, toggleSidebar, setView, mode, setMode]);
+  }, [view, activeId, newTab, requestCloseTab, reopenTab, tabs, focusTab, settings, toggleSidebar, setView, mode, setMode]);
 
   useEffect(() => window.deck.onMenuCommand(runCommand), [runCommand]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isRecordingKeys(e)) return;
+      if (onboarding || isRecordingKeys(e)) return;
       const command = matchKeybind(keybinds, e);
       if (command === "search") {
         e.preventDefault();
@@ -178,7 +182,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, tabs, focusTab, setView, keybinds, runCommand]);
+  }, [searchOpen, onboarding, tabs, focusTab, setView, keybinds, runCommand]);
 
   return (
     <div className={`flex h-full flex-col ${mode !== "normal" ? "focus-mode" : ""}`} data-display-mode={mode}>
@@ -206,6 +210,8 @@ function Shell() {
         </main>
       </div>
       {view !== "agent" && <div className="workbench-chrome"><AgentDock onView={setView} /></div>}
+      <WorktreeClosePrompt />
+      {onboarding && <Onboarding />}
       {searchOpen && (
         <SearchOverlay onClose={() => setSearchOpen(false)} onPreview={openPreview} onView={setView} onSidebar={toggleSidebar} onSettings={(section) => { setSettingsSection(section); setView("settings"); }} />
       )}

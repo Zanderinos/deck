@@ -1,6 +1,7 @@
 import { sessionAgent, sessionKey, type AgentLaunch } from "../../shared/agents.js";
 import type { TermMeta } from "../../main/pty.js";
 import type { AgentSession } from "../../main/sessions.js";
+import type { Worktree } from "../../main/worktrees.js";
 import { useSettings } from "./lib/useSettings.js";
 import {
   createContext,
@@ -35,6 +36,12 @@ export interface OpenOptions extends AgentLaunch {
   sessionId?: string;
 }
 
+/** A close waiting on the user's answer about the tab's worktree. */
+export interface WorktreeClose {
+  termId: string;
+  worktree: Worktree;
+}
+
 interface TabStore {
   tabs: TermTab[];
   activeId?: string;
@@ -42,6 +49,11 @@ interface TabStore {
   ready: boolean;
   newTab: (opts?: OpenOptions) => Promise<void>;
   closeTab: (termId: string, kill?: boolean) => void;
+  /** Closes a tab, first asking about its worktree when it has one. */
+  requestCloseTab: (termId: string) => void;
+  /** Set while that question is on screen. */
+  worktreeClose?: WorktreeClose;
+  dismissWorktreeClose: () => void;
   /** Reopens the most recently closed tab: the same session for an agent tab, a shell in the same folder otherwise. */
   reopenTab: () => Promise<void>;
   focusTab: (termId: string) => void;
@@ -56,6 +68,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<TermTab[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const [ready, setReady] = useState(false);
+  const [worktreeClose, setWorktreeClose] = useState<WorktreeClose>();
   const settings = useSettings();
 
   const toTab = (meta: TermMeta): TermTab => ({
@@ -149,6 +162,19 @@ export function TabProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Only a tab sitting in a linked worktree raises the question, so an ordinary
+  // tab still closes on the first click.
+  const requestCloseTab = useCallback((termId: string) => {
+    const tab = tabsRef.current.find((tab) => tab.termId === termId);
+    if (!tab?.cwd) { closeTab(termId); return; }
+    void window.deck.worktrees.at(tab.cwd).then((worktree) => {
+      if (!worktree) { closeTab(termId); return; }
+      setWorktreeClose({ termId, worktree });
+    }, () => closeTab(termId));
+  }, [closeTab]);
+
+  const dismissWorktreeClose = useCallback(() => setWorktreeClose(undefined), []);
+
   const reopenTab = useCallback(async () => {
     const tab = closed.current.pop();
     if (tab) await newTab({ agent: tab.agent, cwd: tab.cwd, sessionId: tab.sessionId });
@@ -190,8 +216,8 @@ export function TabProvider({ children }: { children: ReactNode }) {
   useEffect(() => window.deck.term.onExit((id) => closeTab(id, false)), [closeTab]);
 
   const store = useMemo<TabStore>(
-    () => ({ tabs, activeId, ready, newTab, closeTab, reopenTab, focusTab: setActiveId, setTitle, renameTab, moveTab }),
-    [tabs, activeId, ready, newTab, closeTab, reopenTab, setTitle, renameTab, moveTab],
+    () => ({ tabs, activeId, ready, newTab, closeTab, requestCloseTab, worktreeClose, dismissWorktreeClose, reopenTab, focusTab: setActiveId, setTitle, renameTab, moveTab }),
+    [tabs, activeId, ready, newTab, closeTab, requestCloseTab, worktreeClose, dismissWorktreeClose, reopenTab, setTitle, renameTab, moveTab],
   );
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -83,6 +83,8 @@ The builds are not notarized with Apple yet, so macOS will refuse to open the ap
 xattr -cr /Applications/Deck.app
 ```
 
+**First run.** Deck opens on a short setup for the thing it is built around: the summon hotkey. Pick the keystroke, choose whether it drops down as a quake panel over the top of the screen, and press it once to see it work. Skipping is fine, and **Settings → General → run setup again** brings it back.
+
 ## Run from source
 
 ```sh

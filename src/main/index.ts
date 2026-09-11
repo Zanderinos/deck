@@ -90,6 +90,7 @@ import {
 } from "./github.js";
 import { installedVersions, projectRuntime } from "./projectRuntime.js";
 import { gitBranches, gitSummary, repoRoot, workingChanges } from "./git.js";
+import { invalidateSweep, listLinkedWorktrees, pruneWorktrees, removeWorktree, worktreeAt } from "./worktrees.js";
 import { onPrsChanged, prsForIssue, startPrWarmer } from "./issuePrs.js";
 import {
   afterPrMerged,
@@ -307,8 +308,17 @@ function applyHotkey(): void {
   }
   const { summonHotkey, summonHotkeyEnabled } = getSettings();
   if (!summonHotkeyEnabled) return;
-  if (globalShortcut.register(summonHotkey, () => toggleWindow("hotkey"))) {
-    registeredHotkey = summonHotkey;
+  // Onboarding waits for the press to confirm the hotkey reaches deck at all.
+  const summon = () => {
+    broadcast("hotkey:summoned");
+    toggleWindow("hotkey");
+  };
+  // Electron throws on a malformed accelerator; leaving it unregistered lets
+  // the settings update through and shows up as a conflict in onboarding.
+  try {
+    if (globalShortcut.register(summonHotkey, summon)) registeredHotkey = summonHotkey;
+  } catch {
+    // nothing to register
   }
 }
 
@@ -380,6 +390,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("git:branches", (_e, cwd: string) => gitBranches(cwd));
   ipcMain.handle("git:summary", (_e, cwd: string) => gitSummary(cwd));
   ipcMain.handle("git:changes", (_e, cwd: string) => workingChanges(cwd));
+  ipcMain.handle("worktrees:at", (_e, cwd: string) => worktreeAt(cwd));
+  ipcMain.handle("worktrees:list", () => listLinkedWorktrees());
+  ipcMain.handle("worktrees:remove", async (_e, worktree: string, deleteBranch: boolean) => {
+    const result = await removeWorktree(worktree, deleteBranch);
+    if (result.removed) invalidateSweep();
+    return result;
+  });
   ipcMain.handle(
     "ask:send",
     (e, question: string, agent?: Agent, model?: string) =>
@@ -430,6 +447,9 @@ app.whenReady().then(async () => {
   );
   startAutoFix();
   startPrInbox();
+  // Registrations for worktrees whose directory is long gone are pure noise
+  // in every `worktree list`, so they go on startup.
+  void pruneWorktrees();
   onPrInboxChanged((inbox) => broadcast("inbox:changed", inbox));
   ipcMain.handle("inbox:get", () => getPrInbox());
   ipcMain.handle("window:focus", (e) => {
@@ -553,6 +573,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("hooks:install", (_e, agent: Agent = "claude") =>
     installHooks(agent),
   );
+  // Empty when the accelerator is disabled or another app already owns it.
+  ipcMain.handle("hotkey:registered", () => registeredHotkey ?? "");
   ipcMain.handle("settings:get", () => getSettings());
   ipcMain.handle("settings:update", (_e, patch: Partial<DeckSettings>) => {
     const next = updateSettings(patch);

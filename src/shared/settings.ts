@@ -157,6 +157,8 @@ export interface DeckSettings {
   theme: string;
   /** One-off hints about shortcuts and features deck notices you could use. */
   showTips: boolean;
+  /** Whether first-run setup has been through. Until then deck opens on it. */
+  onboarded: boolean;
   terminalAppearance: TerminalAppearanceSettings;
 }
 
@@ -191,6 +193,7 @@ export const defaultSettings: DeckSettings = {
   newTerminalCwd: { tab: "current", split: "current" },
   theme: "dark",
   showTips: true,
+  onboarded: false,
   terminalAppearance: {
     fontFamily: "",
     fontSize: 13,

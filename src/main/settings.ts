@@ -23,6 +23,9 @@ export function getSettings(): DeckSettings {
   return {
     ...defaultSettings,
     ...stored,
+    // Settings saved before onboarding existed belong to an install that is
+    // already set up; only an empty profile gets the first-run flow.
+    onboarded: stored.onboarded ?? Object.keys(stored).length > 0,
     board: { ...board, onMerge: { ...defaultSettings.board.onMerge, ...board.onMerge } },
     jira: { ...defaultSettings.jira, ...stored.jira },
     linear: { ...defaultSettings.linear, ...stored.linear },

@@ -92,7 +92,7 @@ app.whenReady().then(async () => {
   await wait(150);
   if (!(await run(`document.querySelector('[data-display-mode="normal"]')`))) throw Error('Escape did not exit presentation');
   await click('Toggle sidebar');
-  if (await run(`Boolean(document.querySelector('aside'))`)) throw Error('Sidebar did not collapse');
+  if (await run(`Boolean(document.querySelector('aside[aria-label="Sessions"]'))`)) throw Error('Sidebar did not collapse');
   await click('Toggle sidebar');
   await click('New session');
   await click('New Codex');

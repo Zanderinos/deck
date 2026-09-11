@@ -3,6 +3,7 @@ import { agentLabels, type Agent } from "../../../shared/agents.js";
 import type { AgentSession } from "../../../main/sessions.js";
 import { SessionIcon, statusLabels } from "./SessionIcon.js";
 import { SessionArchive } from "./SessionArchive.js";
+import { WorktreeSweep } from "./WorktreeSweep.js";
 import { useAgentSessions } from "../lib/useSessions.js";
 import { shortPath, useGitSummary } from "../lib/useGitSummary.js";
 import { useTabs, type TermTab } from "../store.js";
@@ -14,7 +15,7 @@ import { useTips } from "../tips/TipsProvider.js";
 import type { View } from "../App.js";
 
 function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: AgentSession; index: number; onOpen: () => void }) {
-  const { activeId, closeTab, renameTab, moveTab } = useTabs();
+  const { activeId, requestCloseTab, renameTab, moveTab } = useTabs();
   const { report } = useTips();
   const [renaming, setRenaming] = useState(false);
   const [dropTarget, setDropTarget] = useState(false);
@@ -49,7 +50,7 @@ function SessionRow({ tab, session, index, onOpen }: { tab: TermTab; session?: A
       </div>
       <span className="self-start pt-0.5 text-[10px] text-dim group-hover:hidden">{index < 9 ? `⌘${index + 1}` : ""}</span>
       <button aria-label={`Close ${title}`} title="Close session" className="hidden self-start text-mut hover:text-ink group-hover:block"
-        onClick={(event) => { event.stopPropagation(); report({ action: "close-tab-button" }); closeTab(tab.termId); }}><Icon name="x" size={11} /></button>
+        onClick={(event) => { event.stopPropagation(); report({ action: "close-tab-button" }); requestCloseTab(tab.termId); }}><Icon name="x" size={11} /></button>
     </div>
   </div>;
 }
@@ -59,6 +60,7 @@ const footerViews = ["terminal", "board", "agent", "reviews"] as const;
 export function Sidebar({ view, onView }: { view: View; onView: (view: View) => void }) {
   const { tabs, newTab, focusTab, closeTab } = useTabs();
   const [archive, setArchive] = useState(false);
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
   // Arc-style: a horizontal swipe on the sidebar steps to the next/previous view.
   // A swipe keeps firing momentum events long after the fingers lift, so once a step is
   // taken the sidebar goes deaf for a moment: one view per swipe, never a jump.
@@ -135,7 +137,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     try { await newTab({ agent }); onView("terminal"); }
     catch (error) { setError(String(error)); }
   };
-  return <aside style={{ width }} onWheel={onWheel} className="relative flex shrink-0 select-none flex-col border-r border-edge bg-panel font-sans">
+  return <aside aria-label="Sessions" style={{ width }} onWheel={onWheel} className="relative flex shrink-0 select-none flex-col border-r border-edge bg-panel font-sans">
     <div role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabIndex={0}
       onDoubleClick={() => { setWidth(252); localStorage.setItem("deck.sidebar.width", "252"); }}
       onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); setWidth((width) => Math.min(380, Math.max(220, width + (event.key === "ArrowRight" ? 10 : -10)))); } }}
@@ -154,6 +156,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
         <div className="my-1 border-t border-edge2" />
         <button disabled={!tabs.length} onClick={closeAllTabs} className="menu-item disabled:opacity-40"><Icon name="x" />Close all tabs</button>
         <button onClick={() => { setMenu(false); setArchive(true); }} className="menu-item"><Icon name="terminal" />Session archive</button>
+        <button onClick={() => { setMenu(false); setWorktreesOpen(true); }} className="menu-item"><Icon name="layers" />Worktrees</button>
         <button onClick={() => { setMenu(false); onView("settings"); }} className="menu-item"><Icon name="cog" />Settings</button>
       </div>}
     </div>
@@ -193,6 +196,7 @@ export function Sidebar({ view, onView }: { view: View; onView: (view: View) => 
     }}><Icon name="link" size={11} />Enable {agentLabels[agent]} live status</button>)}
     {setup === "codex" && <div className="flex items-start gap-2 px-4 py-2 text-[11px] text-mut">In Codex, open /hooks and trust Deck’s hooks.<button title="Dismiss" onClick={() => setSetup(undefined)}><Icon name="x" size={11} /></button></div>}
     {archive && <SessionArchive sessions={sessions} onResume={(session) => void resume(session)} onClose={() => setArchive(false)} />}
+    {worktreesOpen && <WorktreeSweep onClose={() => setWorktreesOpen(false)} />}
     <div className="@container relative flex h-10 shrink-0 items-center gap-1 border-t border-edge px-2">
       {footerIndex >= 0 && <span aria-hidden className="absolute bottom-2 top-2 rounded bg-card2 transition-[left] duration-200 ease-out" style={{ width: `calc((100% - 16px - ${(footerViews.length - 1) * 4}px) / ${footerViews.length})`, left: `calc(8px + (100% - 16px + 4px) / ${footerViews.length} * ${footerIndex})` }} />}
       {footerViews.map((target) => {

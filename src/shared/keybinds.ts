@@ -80,3 +80,11 @@ export function acceleratorOf(chord: string): string | undefined {
 export function formatChord(chord: string): string {
   return chord.split("+").map((part) => symbols[part] ?? part.replace(/^Digit/, "")).join("");
 }
+
+const acceleratorSymbols: Record<string, string> = { CommandOrControl: "⌘", Command: "⌘", Cmd: "⌘", Super: "⌘", Control: "⌃", Option: "⌥", Return: "⏎" };
+
+/** "CommandOrControl+Shift+Space" as "⌘⇧space" for display. The summon hotkey
+ *  is stored as an accelerator rather than a chord, so it formats from here. */
+export function formatAccelerator(accelerator: string): string {
+  return accelerator.split("+").map((part) => acceleratorSymbols[part] ?? symbols[part] ?? part).join("");
+}

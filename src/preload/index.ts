@@ -19,6 +19,7 @@ import type {
   ReviewEvent,
 } from "../main/github.js";
 import type { GitSummary, WorkingChanges } from "../main/git.js";
+import type { LinkedWorktree, RemoveResult, Worktree } from "../main/worktrees.js";
 import type { InstalledVersions, ProjectRuntime } from "../main/projectRuntime.js";
 import type { TermMeta, TermReplay } from "../main/pty.js";
 import type { BoardCache, BoardColumnStatuses } from "../main/board/types.js";
@@ -143,6 +144,14 @@ const api = {
     summary: (): Promise<{ shared: number; total: number }> => ipcRenderer.invoke("sharing:summary"),
     setCurrentProject: (cwd?: string): Promise<void> => ipcRenderer.invoke("sharing:current", cwd),
   },
+  worktrees: {
+    /** The linked worktree the directory sits in, or null in a main checkout. */
+    at: (cwd: string): Promise<Worktree | null> => ipcRenderer.invoke("worktrees:at", cwd),
+    /** Every linked worktree under the repo roots, biggest first. */
+    list: (): Promise<LinkedWorktree[]> => ipcRenderer.invoke("worktrees:list"),
+    remove: (worktree: string, deleteBranch = false): Promise<RemoveResult> =>
+      ipcRenderer.invoke("worktrees:remove", worktree, deleteBranch),
+  },
   sessions: {
     list: (): Promise<AgentSession[]> => ipcRenderer.invoke("sessions:list"),
     remove: (id: string): Promise<void> => ipcRenderer.invoke("sessions:remove", id),
@@ -183,6 +192,17 @@ const api = {
       const listener = (_e: unknown, repo: string, number: number, drafts: ReviewDraft[]) => cb(repo, number, drafts);
       ipcRenderer.on("review:drafts", listener);
       return () => ipcRenderer.removeListener("review:drafts", listener);
+    },
+  },
+  hotkey: {
+    /** The summon accelerator deck actually holds, empty when it is disabled
+     *  or another app owns it. */
+    registered: (): Promise<string> => ipcRenderer.invoke("hotkey:registered"),
+    /** The summon hotkey was pressed, whether that showed or hid a window. */
+    onSummoned: (cb: () => void): (() => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("hotkey:summoned", listener);
+      return () => ipcRenderer.removeListener("hotkey:summoned", listener);
     },
   },
   window: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceleratorOf, chordOf, defaultKeybinds, formatChord, matchKeybind, resolveKeybinds } from "../src/shared/keybinds.js";
+import { acceleratorOf, chordOf, defaultKeybinds, formatAccelerator, formatChord, matchKeybind, resolveKeybinds } from "../src/shared/keybinds.js";
 
 const press = (over: Partial<Parameters<typeof chordOf>[0]>) => ({ key: "", code: "", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...over });
 
@@ -37,5 +37,12 @@ describe("keybinds", () => {
     expect(formatChord(defaultKeybinds.zen)).toBe("⌘⇧⏎");
     expect(formatChord("Meta+Alt+Digit1")).toBe("⌘⌥1");
     expect(formatChord("Ctrl+Space")).toBe("⌃space");
+  });
+
+  it("formats the summon accelerator with mac symbols", () => {
+    expect(formatAccelerator("Alt+Space")).toBe("⌥space");
+    expect(formatAccelerator("CommandOrControl+Shift+Space")).toBe("⌘⇧space");
+    expect(formatAccelerator(acceleratorOf("Meta+Alt+Digit1") ?? "")).toBe("⌘⌥1");
+    expect(formatAccelerator("Control+Return")).toBe("⌃⏎");
   });
 });

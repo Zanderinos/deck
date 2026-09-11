@@ -113,6 +113,7 @@ export function GeneralSettings() {
         <Card title="Summon hotkey" description="Bring Deck up from anywhere with one keystroke.">
           <div className="flex items-center gap-3">
             <Toggle checked={settings.summonHotkeyEnabled} onChange={(summonHotkeyEnabled) => void update({ summonHotkeyEnabled })}>Enabled</Toggle>
+            <button className="text-[11px] text-mut hover:text-soft" onClick={() => void update({ onboarded: false })}>run setup again</button>
             <input aria-label="Summon hotkey" title="Electron accelerator, e.g. Alt+Space" disabled={!settings.summonHotkeyEnabled} className={`ml-auto w-44 font-mono ${control} disabled:opacity-50`} defaultValue={settings.summonHotkey}
               onBlur={onBlurText(settings.summonHotkey, (summonHotkey) => void update({ summonHotkey }), settings.summonHotkey)} />
           </div>

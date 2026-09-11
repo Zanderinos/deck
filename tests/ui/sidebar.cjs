@@ -54,4 +54,30 @@ module.exports = async function checkSidebar({ window, run, click, wait, screens
   await click('Close all tabs');
   if ((await run('window.deck.term.list()')).length || await hasSuggestions()) throw Error('Close all should leave a clear sidebar');
   if ((await run('window.deck.sessions.list()')).length !== initial.length + 1) throw Error('Close all deleted session history');
+
+  await click('New session');
+  await click('Worktrees');
+  const sweep = await run(`(() => { const panel = document.querySelector('[role="dialog"][aria-label="Worktrees"]'); return panel ? panel.innerText : ''; })()`);
+  for (const expected of ['2 merged and clean · 3.7 GB', 'Remove all', 'INI-1-feature', 'api · 2.5 GB', 'merged', 'not on the default branch', '3 uncommitted']) {
+    if (!sweep.includes(expected)) throw Error('Worktree sweep missing: ' + expected);
+  }
+  await click('Remove all');
+  if ((await run('window.deck.removedWorktrees()')).length !== 2) throw Error('Remove all should reclaim only the merged and clean worktrees');
+  if (!(await run(`document.querySelector('[role="dialog"][aria-label="Worktrees"]').innerText`)).includes('INI-2-wip')) throw Error('Remove all took the worktree with uncommitted work');
+  await click('Close');
+
+  // A tab in a worktree waits for an answer; an ordinary tab still closes at once.
+  const dirty = await run('window.deck.term.create({ cwd: "/Users/demo/www/.worktrees/INI-2-wip" })');
+  await wait(200);
+  await click('Close INI-2-wip');
+  const prompt = await run(`(() => { const dialog = document.querySelector('[role="dialog"][aria-label="Close tab and its worktree"]'); return dialog ? dialog.innerText : ''; })()`);
+  for (const expected of ['worktree of web', 'INI-2-wip', '3 uncommitted files', 'Keep worktree', 'Remove and delete branch']) {
+    if (!prompt.includes(expected)) throw Error('Worktree close prompt missing: ' + expected);
+  }
+  if (await run('document.activeElement.textContent.trim()') !== 'Keep worktree') throw Error('An uncommitted tree should default to keeping the worktree');
+  if (!(await run('window.deck.term.list()')).some(term => term.id === dirty.id)) throw Error('Tab closed before the worktree question was answered');
+  await click('Keep worktree');
+  if (await run(`Boolean(document.querySelector('[role="dialog"][aria-label="Close tab and its worktree"]'))`)) throw Error('Keep did not dismiss the prompt');
+  if ((await run('window.deck.term.list()')).some(term => term.id === dirty.id)) throw Error('Keep did not close the tab');
+  if ((await run('window.deck.removedWorktrees()')).length !== 2) throw Error('Keep removed a worktree');
 };

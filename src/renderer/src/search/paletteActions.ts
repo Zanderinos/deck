@@ -57,7 +57,7 @@ function item(icon: string, title: string, meta: string, open: () => void, extra
 export function usePaletteActions({ onView, onSettings, onSidebar }: PaletteActionProps): PaletteGroup[] {
   const { commands, runCommand, themes, selectedThemeId, selectTheme } = useExtensions();
   const { mode, setMode, presentationSize, setPresentationSize } = useDisplayMode();
-  const { newTab, closeTab, activeId } = useTabs();
+  const { newTab, requestCloseTab, activeId } = useTabs();
   const settings = useSettings();
   const keybinds = resolveKeybinds(settings?.keybinds);
   const chord = (id: KeybindCommand) => formatChord(keybinds[id]);
@@ -77,7 +77,7 @@ export function usePaletteActions({ onView, onSettings, onSidebar }: PaletteActi
     item("❯", "New terminal", chord("tab.new"), () => { onView("terminal"); void newTab(); }),
     ...agents.map((agent) => item("✳", `New ${agentLabels[agent]} session`, agent === defaultAgent ? chord("tab.newAgent") : agentLabels[agent], () => { onView("terminal"); void newTab({ agent }); })),
   );
-  if (activeId) actions.push(item("×", "Close tab", chord("tab.close"), () => closeTab(activeId)));
+  if (activeId) actions.push(item("×", "Close tab", chord("tab.close"), () => requestCloseTab(activeId)));
   actions.push(
     item("◫", "Split pane right", chord("split.right"), inTerminal("split-right")),
     item("◫", "Split pane down", chord("split.down"), inTerminal("split-down")),
