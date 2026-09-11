@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/deck.gif" width="900" alt="Deck tour: split terminals, the search palette, the Agent page, the review queue, Zen and Presentation views">
+  <img src="docs/media/deck.gif" width="900" alt="Deck tour: summon the panel with ⌥ Space, Claude Code and Codex sessions, the issue board, the pull request review queue">
 </p>
 
 <p align="center"><sub>Screens show fixture data only. Source in <a href="docs/media/motion">docs/media/motion</a>, rendered with <code>npm run demo:gif</code>.</sub></p>
